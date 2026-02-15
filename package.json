@@ -1,0 +1,15 @@
+{
+  "name": "crib",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @crib/web",
+    "build": "npm run build --workspace @crib/web",
+    "preview": "npm run preview --workspace @crib/web",
+    "lint": "npm run lint --workspace @crib/web",
+    "typecheck": "npm run typecheck --workspace @crib/web"
+  }
+}

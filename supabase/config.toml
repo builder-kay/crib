@@ -1,0 +1,13 @@
+project_id = "crib"
+
+[functions.create-payment]
+verify_jwt = false
+
+[functions.paystack-webhook]
+verify_jwt = false
+
+[functions.generate-download]
+verify_jwt = false
+
+[functions.verify-payment]
+verify_jwt = false

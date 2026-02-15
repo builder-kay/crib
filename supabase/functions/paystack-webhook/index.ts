@@ -1,0 +1,184 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { handleCors, jsonResponse } from "../_shared/cors.ts";
+import { verifyPaystackSignature, verifyPaystackTransaction } from "../_shared/paystack.ts";
+
+type PaystackWebhookPayload = {
+  event?: string;
+  data?: {
+    reference?: string;
+    status?: string;
+    amount?: number;
+    currency?: string;
+  };
+};
+
+function parseCommissionBps(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "1000", 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return 1000;
+  }
+  return parsed;
+}
+
+Deno.serve(async (request) => {
+  const corsResponse = handleCors(request);
+  if (corsResponse) {
+    return corsResponse;
+  }
+
+  if (request.method !== "POST") {
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
+  const commissionBps = parseCommissionBps(Deno.env.get("COMMISSION_BPS"));
+
+  if (!supabaseUrl || !serviceRoleKey || !paystackSecretKey) {
+    return jsonResponse({ error: "Missing required environment variables" }, 500);
+  }
+
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-paystack-signature");
+  const signatureValid = await verifyPaystackSignature(signature, paystackSecretKey, rawBody);
+
+  if (!signatureValid) {
+    return jsonResponse({ error: "Invalid signature" }, 401);
+  }
+
+  let payload: PaystackWebhookPayload;
+  try {
+    payload = JSON.parse(rawBody) as PaystackWebhookPayload;
+  } catch {
+    return jsonResponse({ error: "Invalid webhook payload" }, 400);
+  }
+
+  const reference = payload.data?.reference?.trim();
+  if (!reference) {
+    return jsonResponse({ ok: true, ignored: "No reference supplied" }, 200);
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+
+  const { data: payment, error: paymentError } = await supabase
+    .from("payments")
+    .select("id, order_id, status")
+    .eq("reference", reference)
+    .maybeSingle();
+
+  if (paymentError) {
+    return jsonResponse({ error: "Unable to load payment", details: paymentError.message }, 500);
+  }
+
+  if (!payment) {
+    return jsonResponse({ ok: true, ignored: "Unknown payment reference" }, 200);
+  }
+
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("id, amount_kobo, currency, status, asset_id, assets!inner(creator_id)")
+    .eq("id", payment.order_id)
+    .single();
+
+  if (orderError || !order) {
+    return jsonResponse({ error: "Unable to load order for payment", details: orderError?.message }, 500);
+  }
+
+  const creatorId = (order.assets as { creator_id: string }).creator_id;
+
+  const failureEvents = new Set(["charge.failed", "paymentrequest.failed", "invoice.payment_failed"]);
+
+  if (payload.event === "charge.success") {
+    if (payment.status === "paid" && order.status === "paid") {
+      return jsonResponse({ ok: true, idempotent: true }, 200);
+    }
+
+    let verifyResponse;
+    try {
+      verifyResponse = await verifyPaystackTransaction(paystackSecretKey, reference);
+    } catch (error) {
+      await supabase.from("payments").update({ status: "failed", raw: { webhook: payload, error: "verify_failed" } }).eq("id", payment.id);
+      await supabase.from("orders").update({ status: "failed" }).eq("id", order.id).neq("status", "paid");
+      return jsonResponse({ error: "Could not verify Paystack transaction", details: error instanceof Error ? error.message : "Unknown" }, 502);
+    }
+
+    const verified = verifyResponse.status && verifyResponse.data?.status === "success";
+    if (!verified || !verifyResponse.data) {
+      await supabase.from("payments").update({ status: "failed", raw: { webhook: payload, verify: verifyResponse } }).eq("id", payment.id);
+      await supabase.from("orders").update({ status: "failed" }).eq("id", order.id).neq("status", "paid");
+      return jsonResponse({ ok: true, processed: "failed_verification" }, 200);
+    }
+
+    const verifiedAmount = Number(verifyResponse.data.amount ?? 0);
+    if (!Number.isFinite(verifiedAmount) || verifiedAmount < order.amount_kobo) {
+      await supabase.from("payments").update({ status: "failed", raw: { webhook: payload, verify: verifyResponse, reason: "amount_mismatch" } }).eq("id", payment.id);
+      await supabase.from("orders").update({ status: "failed" }).eq("id", order.id).neq("status", "paid");
+      return jsonResponse({ ok: true, processed: "amount_mismatch" }, 200);
+    }
+
+    const { error: paymentUpdateError } = await supabase
+      .from("payments")
+      .update({
+        status: "paid",
+        raw: {
+          webhook: payload,
+          verify: verifyResponse
+        }
+      })
+      .eq("id", payment.id);
+
+    if (paymentUpdateError) {
+      return jsonResponse({ error: "Failed to update payment", details: paymentUpdateError.message }, 500);
+    }
+
+    const { error: orderUpdateError } = await supabase
+      .from("orders")
+      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .eq("id", order.id);
+
+    if (orderUpdateError) {
+      return jsonResponse({ error: "Failed to update order", details: orderUpdateError.message }, 500);
+    }
+
+    const commission = Math.floor((order.amount_kobo * commissionBps) / 10_000);
+    const netPayout = Math.max(order.amount_kobo - commission, 0);
+
+    if (netPayout > 0) {
+      const { data: credited, error: creditError } = await supabase.rpc("credit_wallet", {
+        p_creator_id: creatorId,
+        p_order_id: order.id,
+        p_amount_kobo: netPayout
+      });
+
+      if (creditError) {
+        return jsonResponse({ error: "Failed to credit wallet", details: creditError.message }, 500);
+      }
+
+      return jsonResponse({ ok: true, credited, net_payout: netPayout, commission }, 200);
+    }
+
+    return jsonResponse({ ok: true, credited: false, net_payout: 0, commission }, 200);
+  }
+
+  if (failureEvents.has(payload.event ?? "")) {
+    await supabase
+      .from("payments")
+      .update({
+        status: "failed",
+        raw: {
+          webhook: payload
+        }
+      })
+      .eq("id", payment.id)
+      .neq("status", "paid");
+
+    await supabase.from("orders").update({ status: "failed" }).eq("id", order.id).neq("status", "paid");
+
+    return jsonResponse({ ok: true, processed: "failed" }, 200);
+  }
+
+  return jsonResponse({ ok: true, ignored: payload.event ?? "unknown_event" }, 200);
+});
