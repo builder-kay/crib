@@ -36,6 +36,17 @@ export const profileSchema = z.object({
 
 export type ProfileInput = z.infer<typeof profileSchema>;
 
+export const payoutAccountSchema = z.object({
+  payout_type: z.enum(["bank", "mobile_money"]).default("bank"),
+  country: z.string().min(2).max(40).optional().or(z.literal("")),
+  business_name: z.string().min(2).max(120),
+  settlement_bank_code: z.string().min(2).max(20),
+  settlement_bank_name: z.string().max(120).optional().or(z.literal("")),
+  account_number: z.string().regex(/^\d{6,20}$/, "Account number must be 6 to 20 digits")
+});
+
+export type PayoutAccountInput = z.infer<typeof payoutAccountSchema>;
+
 export const authSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),

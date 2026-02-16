@@ -74,3 +74,22 @@ export type CreatorDirectoryEntry = {
   trending_score: number;
   editor_pick: boolean;
 };
+
+export type PayoutAccount = {
+  provider: "paystack";
+  status: "active" | "inactive";
+  payout_type: "bank" | "mobile_money";
+  country: string;
+  business_name: string;
+  subaccount_code: string;
+  settlement_bank_code: string;
+  settlement_bank_name: string | null;
+  account_number_last4: string;
+  account_name: string | null;
+  updated_at: string;
+};
+
+export type PayoutBank = {
+  code: string;
+  name: string;
+};

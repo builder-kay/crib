@@ -13,18 +13,19 @@ CRIB is a marketplace-first platform where creators list and sell digital assets
 ### Creator flow
 1. Creator signs up with Supabase Auth.
 2. Trigger creates `profiles` and `wallet` records.
-3. Creator uploads asset metadata to `assets` and files to private `assets` bucket.
-4. Creator uploads preview images to public `previews` bucket.
-5. Marketplace lists published assets.
+3. Creator connects payout account via Paystack subaccount (`manage-payout-account`) using bank account or mobile money (where supported).
+4. Creator uploads asset metadata to `assets` and files to private `assets` bucket.
+5. Creator uploads preview images to public `previews` bucket.
+6. Marketplace lists published assets.
 
 ### Buyer flow
 1. Buyer opens asset detail page.
 2. Frontend calls `create-payment` edge function.
-3. Function creates pending `orders` + `payments`, then initializes Paystack transaction.
+3. Function creates pending `orders` + `payments`, then initializes Paystack transaction with creator subaccount + platform commission split.
 4. Buyer completes checkout on Paystack.
 5. Paystack sends webhook to `paystack-webhook`.
 6. Webhook verifies signature and transaction status.
-7. On success: `payments` and `orders` become paid; creator wallet is credited net of commission.
+7. On success: `payments` and `orders` become paid; Paystack settles creator payout while platform keeps commission; internal wallet ledger is credited for creator analytics.
 8. Buyer requests secure download via `generate-download`, receives short-lived signed URL.
 
 ## Data + Security Model
@@ -51,6 +52,13 @@ CRIB is a marketplace-first platform where creators list and sell digital assets
 - Marks payment/order paid or failed
 - Credits wallet using DB RPC `credit_wallet`
 
+### `manage-payout-account`
+- Requires authenticated creator
+- Lists available Paystack banks and mobile money providers per country/currency
+- Resolves account name from bank code + account number
+- Creates/updates creator Paystack subaccount
+- Stores only non-sensitive payout metadata in `creator_payout_accounts`
+
 ### `generate-download`
 - Requires order context + auth or order token
 - Checks paid status (or creator/admin access)
@@ -60,7 +68,7 @@ CRIB is a marketplace-first platform where creators list and sell digital assets
 
 - `COMMISSION_BPS` controls platform commission in basis points.
 - Example: `1000` = 10%
-- `net = order.amount_kobo - floor(order.amount_kobo * COMMISSION_BPS / 10000)`
+- At checkout, Paystack `transaction_charge` is set to this commission amount and routed to the platform account.
 
 ## Frontend Route Map
 

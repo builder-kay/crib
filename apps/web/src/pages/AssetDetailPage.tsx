@@ -66,6 +66,11 @@ export function AssetDetailPage() {
         return;
       }
 
+      if (paymentError.code === "creator_payout_unavailable") {
+        pushToast("This creator has not configured payouts yet. Please try again later.", "info");
+        return;
+      }
+
       if (fallbackMessage.toLowerCase().includes("already purchased")) {
         setShowGuestModal(false);
         setShowPurchasedModal(true);

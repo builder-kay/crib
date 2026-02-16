@@ -54,6 +54,11 @@
 ### `wallet_tx`
 - `SELECT`: creator own transactions or admin
 
+### `creator_payout_accounts`
+- `SELECT`: creator own payout account or admin
+- `INSERT/UPDATE`: creator can manage own payout account
+- `ALL`: admin can manage payout accounts
+
 ## Storage Policies
 
 ### Bucket: `previews` (public)

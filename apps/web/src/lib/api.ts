@@ -9,7 +9,7 @@ import {
   MAX_PRIMARY_ASSET_SIZE_BYTES
 } from "@/lib/uploadLimits";
 import { supabase } from "@/lib/supabaseClient";
-import type { Asset, CreatorDashboard, CreatorDirectoryEntry, Order, Profile } from "@/lib/types";
+import type { Asset, CreatorDashboard, CreatorDirectoryEntry, Order, PayoutAccount, PayoutBank, Profile } from "@/lib/types";
 import type { EditorialPost, EditorialSection } from "@/lib/editorial";
 import type { UploadAssetInput, ProfileInput } from "@/lib/validators/asset";
 
@@ -92,6 +92,13 @@ type CreatorProfileRow = {
 type CreatorAssetStatRow = {
   creator_id: string;
   created_at: string;
+};
+
+type PayoutSetupResponse = {
+  country: string;
+  account: PayoutAccount | null;
+  banks: PayoutBank[];
+  mobile_money_providers: PayoutBank[];
 };
 
 type EditorialSectionRow = {
@@ -392,6 +399,96 @@ export async function uploadProfileAvatar(userId: string, file: File): Promise<s
   }
 
   return data.avatar_url as string;
+}
+
+type UpsertPayoutAccountInput = {
+  country?: string;
+  payout_type: "bank" | "mobile_money";
+  business_name: string;
+  settlement_bank_code: string;
+  settlement_bank_name?: string;
+  account_number: string;
+};
+
+export async function getPayoutAccountSetup(country?: string): Promise<PayoutSetupResponse> {
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("You must be signed in to manage payouts.");
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    apikey: env.VITE_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${accessToken}`
+  };
+
+  const endpoint = new URL(`${env.VITE_SUPABASE_URL}/functions/v1/manage-payout-account`);
+  if (country) {
+    endpoint.searchParams.set("country", country);
+  }
+
+  const response = await fetch(endpoint.toString(), {
+    method: "GET",
+    headers
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  const payload = (await response.json()) as {
+    country?: string;
+    account?: PayoutAccount | null;
+    banks?: PayoutBank[];
+    mobile_money_providers?: PayoutBank[];
+  };
+
+  return {
+    country: payload.country ?? country ?? "ghana",
+    account: payload.account ?? null,
+    banks: payload.banks ?? [],
+    mobile_money_providers: payload.mobile_money_providers ?? []
+  };
+}
+
+export async function upsertPayoutAccount(input: UpsertPayoutAccountInput): Promise<PayoutAccount> {
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("You must be signed in to manage payouts.");
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    apikey: env.VITE_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${accessToken}`
+  };
+
+  const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/manage-payout-account`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    account?: PayoutAccount;
+  };
+
+  if (!payload.account) {
+    throw new Error("Payout account was not returned by server.");
+  }
+
+  return payload.account;
 }
 
 function toTimestamp(value: string | null) {

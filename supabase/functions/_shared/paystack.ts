@@ -53,6 +53,18 @@ export type PaystackInitializeResponse = {
   };
 };
 
+export type PaystackInitializePayload = {
+  email: string;
+  amount: number;
+  currency: string;
+  reference: string;
+  callback_url: string;
+  metadata: Record<string, unknown>;
+  subaccount?: string;
+  transaction_charge?: number;
+  bearer?: "account" | "subaccount";
+};
+
 export type PaystackVerifyResponse = {
   status: boolean;
   message: string;
@@ -67,47 +79,162 @@ export type PaystackVerifyResponse = {
   };
 };
 
-export async function initializePaystackTransaction(
-  secretKey: string,
-  payload: {
-    email: string;
-    amount: number;
-    currency: string;
-    reference: string;
-    callback_url: string;
-    metadata: Record<string, unknown>;
-  }
-): Promise<PaystackInitializeResponse> {
-  const response = await fetch("https://api.paystack.co/transaction/initialize", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secretKey}`
-    },
-    body: JSON.stringify(payload)
+export type PaystackSubaccountResponse = {
+  status: boolean;
+  message: string;
+  data?: {
+    subaccount_code: string;
+    business_name?: string;
+    settlement_bank?: string;
+    account_number?: string;
+    percentage_charge?: number;
+    active?: boolean;
+  };
+};
+
+export type PaystackBankListResponse = {
+  status: boolean;
+  message: string;
+  data?: Array<{
+    id?: number;
+    name: string;
+    slug?: string;
+    code: string;
+    longcode?: string;
+    gateway?: string | null;
+    pay_with_bank?: boolean;
+    active?: boolean;
+    country?: string;
+    currency?: string;
+    type?: string;
+  }>;
+};
+
+export type PaystackResolveAccountResponse = {
+  status: boolean;
+  message: string;
+  data?: {
+    account_number: string;
+    account_name: string;
+    bank_id?: number;
+  };
+};
+
+type ListPaystackBanksOptions = {
+  country?: string;
+  currency?: string;
+  type?: "nuban" | "ghipss" | "mobile_money" | "basa";
+  perPage?: number;
+};
+
+type PaystackSubaccountPayload = {
+  business_name: string;
+  bank_code: string;
+  account_number: string;
+  percentage_charge: number;
+  description?: string;
+  primary_contact_email?: string;
+  active?: boolean;
+};
+
+async function paystackJsonRequest<T>(secretKey: string, url: string, init: RequestInit): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "application/json");
+  headers.set("Authorization", `Bearer ${secretKey}`);
+
+  const response = await fetch(url, {
+    ...init,
+    headers
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Paystack initialize failed: ${response.status} ${text}`);
+    throw new Error(`Paystack request failed: ${response.status} ${text}`);
   }
 
-  return (await response.json()) as PaystackInitializeResponse;
+  return (await response.json()) as T;
+}
+
+export async function initializePaystackTransaction(
+  secretKey: string,
+  payload: PaystackInitializePayload
+): Promise<PaystackInitializeResponse> {
+  return paystackJsonRequest<PaystackInitializeResponse>(secretKey, "https://api.paystack.co/transaction/initialize", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function verifyPaystackTransaction(secretKey: string, reference: string): Promise<PaystackVerifyResponse> {
-  const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${secretKey}`
+  return paystackJsonRequest<PaystackVerifyResponse>(
+    secretKey,
+    `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+    {
+      method: "GET"
     }
-  });
+  );
+}
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Paystack verify failed: ${response.status} ${text}`);
+export async function listPaystackBanks(
+  secretKey: string,
+  options: ListPaystackBanksOptions
+): Promise<PaystackBankListResponse> {
+  const search = new URLSearchParams();
+  if (options.country) {
+    search.set("country", options.country);
   }
+  if (options.currency) {
+    search.set("currency", options.currency);
+  }
+  if (options.type) {
+    search.set("type", options.type);
+  }
+  search.set("perPage", String(options.perPage ?? 500));
 
-  return (await response.json()) as PaystackVerifyResponse;
+  return paystackJsonRequest<PaystackBankListResponse>(
+    secretKey,
+    `https://api.paystack.co/bank?${search.toString()}`,
+    {
+      method: "GET"
+    }
+  );
+}
+
+export async function resolvePaystackAccountNumber(
+  secretKey: string,
+  accountNumber: string,
+  bankCode: string
+): Promise<PaystackResolveAccountResponse> {
+  return paystackJsonRequest<PaystackResolveAccountResponse>(
+    secretKey,
+    `https://api.paystack.co/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
+    {
+      method: "GET"
+    }
+  );
+}
+
+export async function createPaystackSubaccount(
+  secretKey: string,
+  payload: PaystackSubaccountPayload
+): Promise<PaystackSubaccountResponse> {
+  return paystackJsonRequest<PaystackSubaccountResponse>(secretKey, "https://api.paystack.co/subaccount", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updatePaystackSubaccount(
+  secretKey: string,
+  subaccountCode: string,
+  payload: PaystackSubaccountPayload
+): Promise<PaystackSubaccountResponse> {
+  return paystackJsonRequest<PaystackSubaccountResponse>(
+    secretKey,
+    `https://api.paystack.co/subaccount/${encodeURIComponent(subaccountCode)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }
+  );
 }
