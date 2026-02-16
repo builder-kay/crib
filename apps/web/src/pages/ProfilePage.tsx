@@ -245,8 +245,8 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <section className={`grid items-start gap-5 ${isOwnProfile ? "lg:grid-cols-[0.82fr,1.18fr]" : ""}`}>
-        <article className="surface-card profile-summary-panel relative overflow-hidden p-5 md:p-6">
+      <section className={`grid items-start gap-5 ${isOwnProfile ? "xl:grid-cols-[0.82fr,1.18fr]" : ""}`}>
+        <article className="surface-card profile-summary-panel profile-summary-panel-enhanced relative overflow-hidden p-5 md:p-6">
           <div className="pointer-events-none absolute -right-16 top-6 h-36 w-36 rounded-full bg-cobalt-100/55 blur-3xl" />
           <div className="relative z-10 flex items-start gap-4">
             <div className="profile-avatar-frame grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cobalt-50 via-white to-lagoon-50">
@@ -320,20 +320,26 @@ export function ProfilePage() {
         </article>
 
         {isOwnProfile ? (
-          <article className="surface-card profile-edit-panel p-5 md:p-6">
-            <h2 className="font-display text-xl font-semibold text-ink">Edit Profile</h2>
-            <p className="mt-2 text-sm text-sand-600">
+          <article className="surface-card profile-edit-panel profile-edit-panel-enhanced p-5 md:p-6 xl:sticky xl:top-24">
+            <div className="rounded-xl border border-cobalt-100 bg-white/80 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Profile Editor</p>
+              <h2 className="mt-1 font-display text-2xl font-semibold text-ink">Edit Profile</h2>
+              <p className="mt-1 text-sm text-sand-600">
+                Keep your profile complete and consistent for better buyer trust and discovery.
+              </p>
+            </div>
+            <p className="mt-3 text-sm text-sand-600">
               Your public profile powers trust in marketplace listings. Bio and category are required.
             </p>
             <form
-              className="mt-4 space-y-3"
+              className="mt-4 space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 updateProfileMutation.mutate();
               }}
             >
-              <div className="rounded-xl border border-sand-200 bg-white p-3">
-                <p className="text-sm font-medium text-sand-800">Profile photo</p>
+              <div className="rounded-xl border border-sand-200 bg-white p-4">
+                <p className="text-sm font-semibold text-sand-800">Profile photo</p>
                 <p className="mt-1 text-xs text-sand-500">Add a clear headshot or brand avatar for trust and discoverability.</p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -392,17 +398,37 @@ export function ProfilePage() {
                 </p>
               </div>
 
-              <Field label="Display Name" value={displayName} onChange={setDisplayName} required />
-              <Field label="Category" value={creatorCategory} onChange={setCreatorCategory} required />
-              <Field label="Niche (optional)" value={niche} onChange={setNiche} />
-              <Field label="Bio" value={bio} onChange={setBio} multiline required />
-              <Field label="Website" value={website} onChange={setWebsite} />
-              <Field label="Instagram" value={instagram} onChange={setInstagram} />
-              <Field label="X / Twitter" value={xHandle} onChange={setXHandle} />
+              <div className="rounded-xl border border-sand-200 bg-white p-4">
+                <p className="text-sm font-semibold text-sand-800">Identity</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <Field label="Display Name" value={displayName} onChange={setDisplayName} required />
+                  <Field label="Category" value={creatorCategory} onChange={setCreatorCategory} required />
+                </div>
+                <div className="mt-3">
+                  <Field label="Niche (optional)" value={niche} onChange={setNiche} />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-sand-200 bg-white p-4">
+                <p className="text-sm font-semibold text-sand-800">Bio</p>
+                <div className="mt-3">
+                  <Field label="Tell people about your work" value={bio} onChange={setBio} multiline required />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-sand-200 bg-white p-4">
+                <p className="text-sm font-semibold text-sand-800">Social links</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <Field label="Website" value={website} onChange={setWebsite} />
+                  <Field label="Instagram" value={instagram} onChange={setInstagram} />
+                  <Field label="X / Twitter" value={xHandle} onChange={setXHandle} />
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={updateProfileMutation.isPending}
-                className="w-full rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white hover:bg-ink/85 disabled:opacity-60"
+                className="w-full rounded-xl bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cobalt-700 disabled:opacity-60"
               >
                 {updateProfileMutation.isPending ? "Saving..." : "Save profile"}
               </button>
@@ -498,14 +524,14 @@ function Field({
           onChange={(event) => onChange(event.target.value)}
           rows={3}
           required={required}
-          className="w-full rounded-xl border border-sand-300 px-3 py-2 outline-none focus:border-ember-500"
+          className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
         />
       ) : (
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           required={required}
-          className="w-full rounded-xl border border-sand-300 px-3 py-2 outline-none focus:border-ember-500"
+          className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
         />
       )}
     </label>
