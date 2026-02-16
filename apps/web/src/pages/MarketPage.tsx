@@ -5,9 +5,10 @@ import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterBar } from "@/components/FilterBar";
 import { SkeletonCard } from "@/components/SkeletonCard";
-import { getPublishedAssets } from "@/lib/api";
+import { getPublishedAssets, trackAnalyticsEvent } from "@/lib/api";
 import type { Asset } from "@/lib/types";
 import { ASSET_CATEGORIES } from "@/lib/validators/asset";
+import { useAuthStore } from "@/store/authStore";
 
 type FeedMode = "for-you" | "recent";
 
@@ -28,10 +29,12 @@ function sortFeed(assets: Asset[], mode: FeedMode) {
 }
 
 export function MarketPage() {
+  const user = useAuthStore((state) => state.user);
   const [searchParams, setSearchParams] = useSearchParams();
   const querySearch = searchParams.get("q") ?? "";
   const [search, setSearch] = useState(querySearch);
   const [category, setCategory] = useState("all");
+  const [creator, setCreator] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [fileType, setFileType] = useState("all");
@@ -62,11 +65,12 @@ export function MarketPage() {
     () => ({
       search: deferredSearch,
       category,
+      creator,
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       fileType
     }),
-    [deferredSearch, category, minPrice, maxPrice, fileType]
+    [deferredSearch, category, creator, minPrice, maxPrice, fileType]
   );
 
   const assetsQuery = useQuery({
@@ -78,6 +82,7 @@ export function MarketPage() {
   const hasActiveFilters =
     search.trim().length > 0 ||
     category !== "all" ||
+    creator.trim().length > 0 ||
     minPrice.trim().length > 0 ||
     maxPrice.trim().length > 0 ||
     fileType !== "all";
@@ -85,6 +90,7 @@ export function MarketPage() {
   function handleResetFilters() {
     setSearch("");
     setCategory("all");
+    setCreator("");
     setMinPrice("");
     setMaxPrice("");
     setFileType("all");
@@ -93,6 +99,53 @@ export function MarketPage() {
     nextParams.delete("q");
     setSearchParams(nextParams, { replace: true });
   }
+
+  useEffect(() => {
+    if (displayAssets.length === 0 || typeof window === "undefined") {
+      return;
+    }
+
+    const storageKey = "crib.analytics.asset_views";
+    const existing = window.sessionStorage.getItem(storageKey);
+    let parsed: string[] = [];
+    if (existing) {
+      try {
+        const value = JSON.parse(existing) as unknown;
+        if (Array.isArray(value)) {
+          parsed = value.filter((entry): entry is string => typeof entry === "string");
+        }
+      } catch {
+        parsed = [];
+      }
+    }
+
+    const seen = new Set<string>(parsed);
+    const nextSeen = new Set(seen);
+
+    for (const asset of displayAssets.slice(0, 24)) {
+      const key = `${asset.id}:view`;
+      if (seen.has(key)) {
+        continue;
+      }
+
+      nextSeen.add(key);
+      void trackAnalyticsEvent({
+        eventName: "asset_view",
+        assetId: asset.id,
+        creatorId: asset.creator_id,
+        actorUserId: user?.id,
+        actorEmail: user?.email,
+        metadata: {
+          page: "market",
+          feed_mode: feedMode
+        }
+      });
+    }
+
+    if (nextSeen.size !== seen.size) {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(Array.from(nextSeen)));
+    }
+  }, [displayAssets, feedMode, user?.email, user?.id]);
 
   return (
     <div className="discover-shell space-y-5">
@@ -163,11 +216,13 @@ export function MarketPage() {
       <FilterBar
         search={search}
         category={category}
+        creator={creator}
         minPrice={minPrice}
         maxPrice={maxPrice}
         fileType={fileType}
         onSearchChange={setSearch}
         onCategoryChange={setCategory}
+        onCreatorChange={setCreator}
         onMinPriceChange={setMinPrice}
         onMaxPriceChange={setMaxPrice}
         onFileTypeChange={setFileType}
@@ -179,6 +234,7 @@ export function MarketPage() {
         <section className="flex flex-wrap items-center gap-2 px-1 text-xs">
           <span className="font-medium uppercase tracking-[0.1em] text-sand-500">Active filters</span>
           {category !== "all" ? <FilterPill label={category} onClear={() => setCategory("all")} /> : null}
+          {creator.trim() ? <FilterPill label={`Creator ${creator.trim()}`} onClear={() => setCreator("")} /> : null}
           {fileType !== "all" ? <FilterPill label={fileType} onClear={() => setFileType("all")} /> : null}
           {minPrice ? <FilterPill label={`Min ${minPrice}`} onClear={() => setMinPrice("")} /> : null}
           {maxPrice ? <FilterPill label={`Max ${maxPrice}`} onClear={() => setMaxPrice("")} /> : null}

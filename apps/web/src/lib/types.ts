@@ -10,6 +10,11 @@ export type Profile = {
   socials: Record<string, string>;
 };
 
+export type RatingSummary = {
+  average_rating: number;
+  review_count: number;
+};
+
 export type AssetPreview = {
   id: string;
   preview_url: string;
@@ -33,9 +38,33 @@ export type Asset = {
   currency: string;
   status: "draft" | "published" | "archived";
   created_at: string;
+  average_rating?: number;
+  review_count?: number;
   profile?: Pick<Profile, "display_name" | "avatar_url" | "niche" | "creator_category" | "sales_count" | "is_verified"> | null;
   previews?: AssetPreview[];
   files?: AssetFile[];
+};
+
+export type AssetReview = {
+  id: string;
+  asset_id: string;
+  reviewer_id: string;
+  rating: number;
+  review_text: string;
+  created_at: string;
+  updated_at: string;
+  reviewer: Pick<Profile, "id" | "display_name" | "avatar_url"> | null;
+};
+
+export type CreatorReview = {
+  id: string;
+  creator_id: string;
+  reviewer_id: string;
+  rating: number;
+  review_text: string;
+  created_at: string;
+  updated_at: string;
+  reviewer: Pick<Profile, "id" | "display_name" | "avatar_url"> | null;
 };
 
 export type Order = {
@@ -73,6 +102,28 @@ export type CreatorDirectoryEntry = {
   latest_asset_at: string | null;
   trending_score: number;
   editor_pick: boolean;
+  follower_count: number;
+  average_rating: number;
+  review_count: number;
+};
+
+export type ReleaseNotification = {
+  id: string;
+  created_at: string;
+  read_at: string | null;
+  delivery_status: "pending" | "sent" | "dismissed" | "failed";
+  creator_id: string;
+  follower_id: string;
+  asset_id: string;
+  creator_name: string;
+  asset_title: string;
+};
+
+export type CreatorFunnelSummary = {
+  asset_views: number;
+  asset_clicks: number;
+  checkout_starts: number;
+  purchases: number;
 };
 
 export type PayoutAccount = {

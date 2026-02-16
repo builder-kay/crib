@@ -3,8 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
+import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
-import { getCreatorAssets, getPayoutAccountSetup, getProfile, updateProfile, uploadProfileAvatar, upsertPayoutAccount } from "@/lib/api";
+import {
+  deleteCreatorReview,
+  followCreator,
+  getCreatorAssets,
+  getCreatorFollowStats,
+  getCreatorRatingSummary,
+  getCreatorReviews,
+  getPayoutAccountSetup,
+  getProfile,
+  hasPaidOrderWithCreator,
+  unfollowCreator,
+  updateProfile,
+  uploadProfileAvatar,
+  upsertCreatorReview,
+  upsertPayoutAccount
+} from "@/lib/api";
 import { formatFileSize, MAX_PROFILE_AVATAR_SIZE_BYTES } from "@/lib/uploadLimits";
 import { payoutAccountSchema, profileSchema } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
@@ -73,6 +89,33 @@ export function ProfilePage() {
     queryFn: () => getCreatorAssets(profileId),
     enabled: Boolean(profileId)
   });
+
+  const followStatsQuery = useQuery({
+    queryKey: ["creator-follow-stats", profileId, userId],
+    queryFn: () => getCreatorFollowStats(profileId, userId || null),
+    enabled: Boolean(profileId)
+  });
+
+  const creatorRatingSummaryQuery = useQuery({
+    queryKey: ["creator-rating-summary", profileId],
+    queryFn: () => getCreatorRatingSummary(profileId),
+    enabled: Boolean(profileId)
+  });
+
+  const creatorReviewsQuery = useQuery({
+    queryKey: ["creator-reviews", profileId],
+    queryFn: () => getCreatorReviews(profileId),
+    enabled: Boolean(profileId)
+  });
+
+  const purchaseEligibilityQuery = useQuery({
+    queryKey: ["creator-review-eligibility", profileId, user?.id, user?.email],
+    queryFn: () => hasPaidOrderWithCreator(profileId, user!.id, user?.email),
+    enabled: Boolean(user?.id && profileId && !isOwnProfile)
+  });
+
+  const [creatorReviewRating, setCreatorReviewRating] = useState(5);
+  const [creatorReviewText, setCreatorReviewText] = useState("");
 
   const [payoutCountry, setPayoutCountry] = useState<string>("ghana");
   const [payoutType, setPayoutType] = useState<"bank" | "mobile_money">("bank");
@@ -162,6 +205,24 @@ export function ProfilePage() {
     }
   }, [displayName, isOwnProfile, payoutBusinessName]);
 
+  const existingCreatorReview = useMemo(() => {
+    if (!user?.id) {
+      return null;
+    }
+    return (creatorReviewsQuery.data ?? []).find((review) => review.reviewer_id === user.id) ?? null;
+  }, [creatorReviewsQuery.data, user?.id]);
+
+  useEffect(() => {
+    if (existingCreatorReview) {
+      setCreatorReviewRating(existingCreatorReview.rating);
+      setCreatorReviewText(existingCreatorReview.review_text);
+      return;
+    }
+
+    setCreatorReviewRating(5);
+    setCreatorReviewText("");
+  }, [existingCreatorReview, user?.id, profileId]);
+
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id || !isOwnProfile) {
@@ -216,6 +277,82 @@ export function ProfilePage() {
     },
     onError: (error) => {
       pushToast(error instanceof Error ? error.message : "Profile photo upload failed", "error");
+    }
+  });
+
+  const followMutation = useMutation({
+    mutationFn: async (nextState: boolean) => {
+      if (!user?.id || !profileId || isOwnProfile) {
+        throw new Error("You can only follow other creators.");
+      }
+
+      if (nextState) {
+        await followCreator(user.id, profileId);
+      } else {
+        await unfollowCreator(user.id, profileId);
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["creator-follow-stats", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not update follow state.", "error");
+    }
+  });
+
+  const creatorReviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !profileId || isOwnProfile) {
+        throw new Error("You can only review other creators.");
+      }
+
+      if (!Number.isFinite(creatorReviewRating) || creatorReviewRating < 1 || creatorReviewRating > 5) {
+        throw new Error("Choose a rating from 1 to 5 stars.");
+      }
+
+      return upsertCreatorReview({
+        userId: user.id,
+        creatorId: profileId,
+        rating: creatorReviewRating,
+        reviewText: creatorReviewText
+      });
+    },
+    onSuccess: async () => {
+      pushToast(existingCreatorReview ? "Review updated." : "Review submitted.", "success");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["creator-rating-summary", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-reviews", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not save review.", "error");
+    }
+  });
+
+  const deleteCreatorReviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !existingCreatorReview) {
+        throw new Error("No review to delete.");
+      }
+
+      await deleteCreatorReview(existingCreatorReview.id, user.id);
+    },
+    onSuccess: async () => {
+      setCreatorReviewRating(5);
+      setCreatorReviewText("");
+      pushToast("Review removed.", "success");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["creator-rating-summary", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-reviews", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not remove review.", "error");
     }
   });
 
@@ -320,6 +457,11 @@ export function ProfilePage() {
   const payoutProviderOptions = payoutType === "mobile_money" ? payoutMobileProviders : payoutBanks;
   const payoutLastUpdated = payoutAccount?.updated_at ? new Date(payoutAccount.updated_at).toLocaleDateString("en-US") : null;
   const hasPayoutAccount = Boolean(payoutAccount);
+  const followerCount = followStatsQuery.data?.followerCount ?? 0;
+  const isFollowing = followStatsQuery.data?.isFollowing ?? false;
+  const creatorRatingSummary = creatorRatingSummaryQuery.data ?? { average_rating: 0, review_count: 0 };
+  const creatorReviews = creatorReviewsQuery.data ?? [];
+  const canLeaveCreatorReview = Boolean(user?.id) && !isOwnProfile && purchaseEligibilityQuery.data === true;
 
   return (
     <div className="profile-shell space-y-6">
@@ -338,9 +480,10 @@ export function ProfilePage() {
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <ProfileStatChip label="Category" value={creatorCategoryLabel} />
             <ProfileStatChip label="Portfolio" value={String(listedWorksCount)} />
+            <ProfileStatChip label="Followers" value={new Intl.NumberFormat("en-US").format(followerCount)} />
           </div>
         </div>
       </header>
@@ -373,14 +516,29 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <div className="mt-5 grid gap-2 sm:grid-cols-3">
             <ProfileStatTile label="Category" value={creatorCategoryLabel} />
             <ProfileStatTile label="Portfolio" value={listedWorksLabel} />
+            <ProfileStatTile label="Followers" value={new Intl.NumberFormat("en-US").format(followerCount)} />
           </div>
 
           <div className="mt-5 rounded-xl border border-sand-200 bg-sand-50/80 px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sand-500">About</p>
             <p className="mt-1 text-sm leading-relaxed text-sand-700">{profileQuery.data?.bio || "No bio added yet."}</p>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-sand-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sand-500">Creator rating</p>
+            <div className="mt-1 flex items-center gap-2 text-sm text-sand-700">
+              <StarRating value={creatorRatingSummary.average_rating} />
+              <span>
+                {creatorRatingSummary.review_count > 0
+                  ? `${creatorRatingSummary.average_rating.toFixed(1)}/5 from ${creatorRatingSummary.review_count} review${
+                      creatorRatingSummary.review_count === 1 ? "" : "s"
+                    }`
+                  : "No reviews yet"}
+              </span>
+            </div>
           </div>
 
           <div className="mt-5 space-y-2 text-sm">
@@ -409,14 +567,125 @@ export function ProfilePage() {
                 </Link>
               </>
             ) : (
-              <Link
-                to="/market"
-                className="rounded-full border border-sand-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
-              >
-                Explore Marketplace
-              </Link>
+              <>
+                {user ? (
+                  <button
+                    type="button"
+                    onClick={() => followMutation.mutate(!isFollowing)}
+                    disabled={followMutation.isPending}
+                    className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {followMutation.isPending ? "Updating..." : isFollowing ? "Following" : "Follow creator"}
+                  </button>
+                ) : (
+                  <Link
+                    to="/auth"
+                    className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700"
+                  >
+                    Sign in to follow
+                  </Link>
+                )}
+
+                <Link
+                  to="/market"
+                  className="rounded-full border border-sand-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
+                >
+                  Explore Marketplace
+                </Link>
+              </>
             )}
           </div>
+          </article>
+
+          <article className="surface-card p-5 md:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cobalt-600">Trust signals</p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-ink">Creator Reviews</h3>
+              </div>
+              <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-sand-700">
+                {creatorRatingSummary.review_count} total
+              </span>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2 text-sm text-sand-700">
+              <StarRating value={creatorRatingSummary.average_rating} />
+              <span>
+                {creatorRatingSummary.review_count > 0
+                  ? `${creatorRatingSummary.average_rating.toFixed(1)}/5 average`
+                  : "No creator reviews yet"}
+              </span>
+            </div>
+
+            {!isOwnProfile ? (
+              <div className="mt-4">
+                {canLeaveCreatorReview ? (
+                  <form
+                    className="space-y-3 rounded-xl border border-sand-200 bg-sand-50 p-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      creatorReviewMutation.mutate();
+                    }}
+                  >
+                    <label className="block text-xs font-semibold uppercase tracking-[0.1em] text-sand-600">Your rating</label>
+                    <StarRating value={creatorReviewRating} onChange={setCreatorReviewRating} />
+
+                    <label className="block text-xs font-semibold uppercase tracking-[0.1em] text-sand-600">Your review</label>
+                    <textarea
+                      rows={3}
+                      value={creatorReviewText}
+                      onChange={(event) => setCreatorReviewText(event.target.value)}
+                      className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
+                      placeholder="Share your experience buying from this creator."
+                    />
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        disabled={creatorReviewMutation.isPending}
+                        className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {creatorReviewMutation.isPending ? "Saving..." : existingCreatorReview ? "Update review" : "Submit review"}
+                      </button>
+
+                      {existingCreatorReview ? (
+                        <button
+                          type="button"
+                          onClick={() => deleteCreatorReviewMutation.mutate()}
+                          disabled={deleteCreatorReviewMutation.isPending}
+                          className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-sand-700 transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deleteCreatorReviewMutation.isPending ? "Removing..." : "Delete review"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </form>
+                ) : (
+                  <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">
+                    {user
+                      ? "You can review this creator after completing at least one paid order from their catalog."
+                      : "Sign in to follow this creator and leave reviews after purchase."}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <div className="mt-4 space-y-3">
+              {creatorReviewsQuery.isLoading ? <p className="text-sm text-sand-600">Loading creator reviews...</p> : null}
+              {!creatorReviewsQuery.isLoading && creatorReviews.length === 0 ? <p className="text-sm text-sand-600">No reviews yet.</p> : null}
+              {creatorReviews.slice(0, 8).map((review) => (
+                <article key={review.id} className="rounded-xl border border-sand-200 bg-white px-3 py-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{review.reviewer?.display_name ?? "Buyer"}</p>
+                      <p className="text-xs text-sand-500">{new Date(review.created_at).toLocaleDateString("en-US")}</p>
+                    </div>
+                    <StarRating value={review.rating} size="sm" />
+                  </div>
+                  {review.review_text ? <p className="mt-2 text-sm text-sand-700">{review.review_text}</p> : null}
+                </article>
+              ))}
+            </div>
           </article>
 
           {isOwnProfile ? (

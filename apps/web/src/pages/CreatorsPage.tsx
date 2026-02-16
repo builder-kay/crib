@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { SearchInput } from "@/components/SearchInput";
+import { StarRating } from "@/components/StarRating";
 import { getCreatorDirectory } from "@/lib/api";
 import type { CreatorDirectoryEntry } from "@/lib/types";
 
@@ -184,10 +185,21 @@ function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
           <p className="line-clamp-2 text-xs text-sand-700 sm:line-clamp-3 sm:text-sm">{creator.bio || "Creative building digital products on Crib."}</p>
         </div>
 
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-2.5 py-2 text-xs text-sand-700 sm:mt-4">
+          <StarRating value={creator.average_rating} size="sm" />
+          <span>
+            {creator.review_count > 0
+              ? `${creator.average_rating.toFixed(1)}/5 (${creator.review_count} review${creator.review_count === 1 ? "" : "s"})`
+              : "No reviews yet"}
+          </span>
+        </div>
+
         <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-xl border border-sand-200 bg-white p-1.5 sm:mt-4 sm:gap-2 sm:p-2">
           <StatBlock label="Assets" value={String(creator.published_assets)} />
-          <StatBlock label="Joined" value={toDateLabel(creator.created_at)} />
+          <StatBlock label="Followers" value={new Intl.NumberFormat("en-US").format(creator.follower_count)} />
         </div>
+
+        <p className="mt-2 text-[11px] text-sand-500">Joined {toDateLabel(creator.created_at)}</p>
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4">
           <Link

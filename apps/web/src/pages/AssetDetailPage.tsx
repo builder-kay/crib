@@ -1,10 +1,22 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
+import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
-import { createPayment, getAssetById, hasPaidOrderForAsset } from "@/lib/api";
+import {
+  addAssetToWishlist,
+  createPayment,
+  deleteAssetReview,
+  getAssetById,
+  getAssetReviews,
+  getWishlistAssetIds,
+  hasPaidOrderForAsset,
+  removeAssetFromWishlist,
+  trackAnalyticsEvent,
+  upsertAssetReview
+} from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { startPaystackCheckout } from "@/lib/paystack";
 import { useAuthStore } from "@/store/authStore";
@@ -13,10 +25,13 @@ export function AssetDetailPage() {
   const { id = "" } = useParams();
   const user = useAuthStore((state) => state.user);
   const { pushToast } = useToast();
+  const queryClient = useQueryClient();
 
   const [guestEmail, setGuestEmail] = useState("");
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [showPurchasedModal, setShowPurchasedModal] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -26,11 +41,82 @@ export function AssetDetailPage() {
 
   const previews = useMemo(() => assetQuery.data?.previews ?? [], [assetQuery.data]);
 
+  const assetReviewsQuery = useQuery({
+    queryKey: ["asset-reviews", id],
+    queryFn: () => getAssetReviews(id),
+    enabled: Boolean(id)
+  });
+
+  const wishlistQuery = useQuery({
+    queryKey: ["wishlist-ids", user?.id],
+    queryFn: () => getWishlistAssetIds(user!.id),
+    enabled: Boolean(user?.id)
+  });
+
   const existingPurchaseQuery = useQuery({
     queryKey: ["asset-paid-order", id, user?.id, user?.email],
     queryFn: () => hasPaidOrderForAsset(id, user!.id, user?.email),
     enabled: Boolean(id && user?.id)
   });
+
+  const existingUserReview = useMemo(() => {
+    if (!user?.id) {
+      return null;
+    }
+    return (assetReviewsQuery.data ?? []).find((review) => review.reviewer_id === user.id) ?? null;
+  }, [assetReviewsQuery.data, user?.id]);
+
+  useEffect(() => {
+    if (existingUserReview) {
+      setReviewRating(existingUserReview.rating);
+      setReviewText(existingUserReview.review_text);
+      return;
+    }
+
+    setReviewRating(5);
+    setReviewText("");
+  }, [existingUserReview, user?.id]);
+
+  useEffect(() => {
+    if (!assetQuery.data || typeof window === "undefined") {
+      return;
+    }
+
+    const storageKey = "crib.analytics.asset_detail_views";
+    const entryKey = `${assetQuery.data.id}:detail-view`;
+    const existing = window.sessionStorage.getItem(storageKey);
+    let parsed: string[] = [];
+    if (existing) {
+      try {
+        const value = JSON.parse(existing) as unknown;
+        if (Array.isArray(value)) {
+          parsed = value.filter((entry): entry is string => typeof entry === "string");
+        }
+      } catch {
+        parsed = [];
+      }
+    }
+
+    const seen = new Set(parsed);
+
+    if (seen.has(entryKey)) {
+      return;
+    }
+
+    seen.add(entryKey);
+    window.sessionStorage.setItem(storageKey, JSON.stringify(Array.from(seen)));
+
+    void trackAnalyticsEvent({
+      eventName: "asset_view",
+      assetId: assetQuery.data.id,
+      creatorId: assetQuery.data.creator_id,
+      actorUserId: user?.id,
+      actorEmail: user?.email,
+      metadata: {
+        page: "asset_detail"
+      }
+    });
+  }, [assetQuery.data, user?.email, user?.id]);
 
   const paymentMutation = useMutation({
     mutationFn: async (email?: string) => {
@@ -41,6 +127,20 @@ export function AssetDetailPage() {
       return createPayment(assetQuery.data.id, email);
     },
     onSuccess: (payload) => {
+      if (assetQuery.data) {
+        void trackAnalyticsEvent({
+          eventName: "checkout_start",
+          assetId: assetQuery.data.id,
+          creatorId: assetQuery.data.creator_id,
+          orderId: payload.order_id,
+          actorUserId: user?.id,
+          actorEmail: user?.email ?? payload.email ?? null,
+          metadata: {
+            page: "asset_detail"
+          }
+        });
+      }
+
       pushToast("Redirecting to secure payment...", "success");
       void startPaystackCheckout({
         authorizationUrl: payload.authorization_url,
@@ -81,6 +181,82 @@ export function AssetDetailPage() {
     }
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !assetQuery.data) {
+        throw new Error("Sign in to leave a review.");
+      }
+
+      if (!Number.isFinite(reviewRating) || reviewRating < 1 || reviewRating > 5) {
+        throw new Error("Choose a rating from 1 to 5 stars.");
+      }
+
+      return upsertAssetReview({
+        userId: user.id,
+        assetId: assetQuery.data.id,
+        rating: reviewRating,
+        reviewText
+      });
+    },
+    onSuccess: async () => {
+      pushToast(existingUserReview ? "Review updated." : "Review submitted.", "success");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["asset", id] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-reviews", id] }),
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not save review.", "error");
+    }
+  });
+
+  const deleteReviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !existingUserReview) {
+        throw new Error("No review to delete.");
+      }
+
+      await deleteAssetReview(existingUserReview.id, user.id);
+    },
+    onSuccess: async () => {
+      setReviewRating(5);
+      setReviewText("");
+      pushToast("Review removed.", "success");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["asset", id] }),
+        queryClient.invalidateQueries({ queryKey: ["asset-reviews", id] }),
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not remove review.", "error");
+    }
+  });
+
+  const wishlistMutation = useMutation({
+    mutationFn: async (nextState: boolean) => {
+      if (!user?.id || !assetQuery.data) {
+        throw new Error("Sign in to save assets.");
+      }
+
+      if (nextState) {
+        await addAssetToWishlist(user.id, assetQuery.data.id);
+      } else {
+        await removeAssetFromWishlist(user.id, assetQuery.data.id);
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["wishlist-ids", user?.id] }),
+        queryClient.invalidateQueries({ queryKey: ["wishlist-assets", user?.id] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not update wishlist.", "error");
+    }
+  });
+
   if (assetQuery.isLoading) {
     return <div className="surface-card p-6 text-sm text-sand-600">Loading asset...</div>;
   }
@@ -98,6 +274,7 @@ export function AssetDetailPage() {
   const isOwnAsset = Boolean(user?.id) && user?.id === asset.creator_id;
   const alreadyPurchased = existingPurchaseQuery.data === true;
   const canPurchase = asset.status === "published" && !isOwnAsset && !alreadyPurchased;
+  const canReview = Boolean(user?.id) && alreadyPurchased && !isOwnAsset;
   const buyButtonLabel = paymentMutation.isPending
     ? "Processing..."
     : asset.status !== "published"
@@ -121,6 +298,10 @@ export function AssetDetailPage() {
       : isOwnAsset
         ? "Creators cannot purchase their own assets."
         : "You already purchased this asset. Open Orders to download it.";
+  const reviewCount = asset.review_count ?? 0;
+  const averageRating = asset.average_rating ?? 0;
+  const reviews = assetReviewsQuery.data ?? [];
+  const isWishlisted = (wishlistQuery.data ?? []).includes(asset.id);
 
   return (
     <div className="space-y-4">
@@ -184,6 +365,91 @@ export function AssetDetailPage() {
               <MetaItem label="Uploaded" value={formatDate(asset.created_at)} />
               <MetaItem label="Status" value={asset.status} />
             </div>
+
+            <section className="mt-6 space-y-4 rounded-xl border border-sand-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-ink">Ratings and Reviews</h3>
+                  <div className="mt-1 flex items-center gap-2 text-sm text-sand-700">
+                    <StarRating value={averageRating} />
+                    <span>
+                      {reviewCount > 0
+                        ? `${averageRating.toFixed(1)}/5 from ${reviewCount} review${reviewCount === 1 ? "" : "s"}`
+                        : "No reviews yet"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {canReview ? (
+                <form
+                  className="space-y-3 rounded-xl border border-sand-200 bg-sand-50 p-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    reviewMutation.mutate();
+                  }}
+                >
+                  <label className="block text-xs font-semibold uppercase tracking-[0.1em] text-sand-600">Your rating</label>
+                  <StarRating value={reviewRating} onChange={setReviewRating} />
+
+                  <label className="block text-xs font-semibold uppercase tracking-[0.1em] text-sand-600">Your review</label>
+                  <textarea
+                    value={reviewText}
+                    onChange={(event) => setReviewText(event.target.value)}
+                    rows={3}
+                    placeholder="Share what you liked, how you used it, and who it is good for."
+                    className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
+                  />
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      disabled={reviewMutation.isPending}
+                      className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {reviewMutation.isPending ? "Saving..." : existingUserReview ? "Update review" : "Submit review"}
+                    </button>
+
+                    {existingUserReview ? (
+                      <button
+                        type="button"
+                        onClick={() => deleteReviewMutation.mutate()}
+                        disabled={deleteReviewMutation.isPending}
+                        className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-sand-700 transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {deleteReviewMutation.isPending ? "Removing..." : "Delete review"}
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              ) : (
+                <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2 text-xs text-sand-700">
+                  {isOwnAsset
+                    ? "Creators cannot review their own asset."
+                    : user
+                      ? "You can leave a review after purchasing this asset."
+                      : "Sign in and purchase this asset to leave a review."}
+                </div>
+              )}
+
+              {assetReviewsQuery.isLoading ? <p className="text-sm text-sand-600">Loading reviews...</p> : null}
+              {!assetReviewsQuery.isLoading && reviews.length === 0 ? <p className="text-sm text-sand-600">No reviews yet.</p> : null}
+
+              <div className="space-y-3">
+                {reviews.slice(0, 8).map((review) => (
+                  <article key={review.id} className="rounded-xl border border-sand-200 bg-white px-3 py-2.5">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{review.reviewer?.display_name ?? "Buyer"}</p>
+                        <p className="text-xs text-sand-500">{formatDate(review.created_at)}</p>
+                      </div>
+                      <StarRating value={review.rating} size="sm" />
+                    </div>
+                    {review.review_text ? <p className="mt-2 text-sm text-sand-700">{review.review_text}</p> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
           </article>
         </section>
 
@@ -202,6 +468,11 @@ export function AssetDetailPage() {
           <p className="mt-1 text-xs text-sand-600">
             {creatorCategory} - {creatorSalesLabel}
           </p>
+
+          <div className="mt-3 flex items-center gap-2 text-sm text-sand-700">
+            <StarRating value={averageRating} size="sm" />
+            <span>{reviewCount > 0 ? `${averageRating.toFixed(1)}/5 (${reviewCount})` : "No reviews yet"}</span>
+          </div>
 
           <div className="mt-5 flex items-center justify-between gap-3">
             <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} className="text-base" />
@@ -237,6 +508,24 @@ export function AssetDetailPage() {
           >
             {buyButtonLabel}
           </button>
+
+          {user ? (
+            <button
+              type="button"
+              onClick={() => wishlistMutation.mutate(!isWishlisted)}
+              disabled={wishlistMutation.isPending}
+              className="mt-3 w-full rounded-full border border-sand-300 px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {wishlistMutation.isPending ? "Saving..." : isWishlisted ? "Saved to wishlist" : "Save for later"}
+            </button>
+          ) : (
+            <Link
+              to="/auth"
+              className="mt-3 block w-full rounded-full border border-sand-300 px-4 py-2.5 text-center text-sm font-semibold text-ink transition hover:bg-sand-100"
+            >
+              Sign in to save
+            </Link>
+          )}
 
           {!canPurchase ? (
             <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">{unavailableReason}</div>

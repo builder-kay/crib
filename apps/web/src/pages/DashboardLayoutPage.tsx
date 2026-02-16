@@ -3,7 +3,9 @@ import { NavLink, Outlet } from "react-router-dom";
 const dashboardTabs = [
   { to: "/dashboard", label: "Overview", end: true },
   { to: "/dashboard/orders", label: "Orders", end: false },
-  { to: "/dashboard/upload", label: "Upload", end: false }
+  { to: "/dashboard/upload", label: "Upload", end: false },
+  { to: "/dashboard/wishlist", label: "Wishlist", end: false },
+  { to: "/dashboard/notifications", label: "Alerts", end: false }
 ] as const;
 
 export function DashboardLayoutPage() {

@@ -9,13 +9,27 @@ import {
   MAX_PRIMARY_ASSET_SIZE_BYTES
 } from "@/lib/uploadLimits";
 import { supabase } from "@/lib/supabaseClient";
-import type { Asset, CreatorDashboard, CreatorDirectoryEntry, Order, PayoutAccount, PayoutBank, Profile } from "@/lib/types";
+import type {
+  Asset,
+  AssetReview,
+  CreatorDashboard,
+  CreatorDirectoryEntry,
+  CreatorFunnelSummary,
+  CreatorReview,
+  Order,
+  PayoutAccount,
+  PayoutBank,
+  Profile,
+  RatingSummary,
+  ReleaseNotification
+} from "@/lib/types";
 import type { EditorialPost, EditorialSection } from "@/lib/editorial";
 import type { UploadAssetInput, ProfileInput } from "@/lib/validators/asset";
 
 export type MarketFilters = {
   search?: string;
   category?: string;
+  creator?: string;
   minPrice?: number;
   maxPrice?: number;
   fileType?: string;
@@ -52,6 +66,11 @@ type AssetRow = {
   profile?: AssetProfileRow | AssetProfileRow[] | null;
   previews?: Array<{ id: string; preview_url: string }>;
   files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
+};
+
+type AssetRatingRow = {
+  asset_id: string;
+  rating: number;
 };
 
 type OrderRow = {
@@ -92,6 +111,53 @@ type CreatorProfileRow = {
 type CreatorAssetStatRow = {
   creator_id: string;
   created_at: string;
+};
+
+type CreatorReviewRatingRow = {
+  creator_id: string;
+  rating: number;
+};
+
+type CreatorFollowRow = {
+  creator_id: string;
+};
+
+type AssetReviewRow = {
+  id: string;
+  asset_id: string;
+  reviewer_id: string;
+  rating: number;
+  review_text: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewer?: { id: string; display_name: string; avatar_url: string | null } | Array<{ id: string; display_name: string; avatar_url: string | null }> | null;
+};
+
+type CreatorReviewRow = {
+  id: string;
+  creator_id: string;
+  reviewer_id: string;
+  rating: number;
+  review_text: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewer?: { id: string; display_name: string; avatar_url: string | null } | Array<{ id: string; display_name: string; avatar_url: string | null }> | null;
+};
+
+type WishlistAssetRow = {
+  asset: AssetRow | AssetRow[] | null;
+};
+
+type CreatorReleaseNotificationRow = {
+  id: string;
+  created_at: string;
+  read_at: string | null;
+  delivery_status: "pending" | "sent" | "dismissed" | "failed";
+  creator_id: string;
+  follower_id: string;
+  asset_id: string;
+  creator?: { display_name: string } | { display_name: string }[] | null;
+  asset?: { title: string } | { title: string }[] | null;
 };
 
 type PayoutSetupResponse = {
@@ -200,6 +266,162 @@ function mapOrder(row: OrderRow): Order {
         }
       : undefined
   };
+}
+
+function mapAssetReview(row: AssetReviewRow): AssetReview {
+  const reviewer = Array.isArray(row.reviewer) ? row.reviewer[0] : row.reviewer;
+
+  return {
+    id: row.id,
+    asset_id: row.asset_id,
+    reviewer_id: row.reviewer_id,
+    rating: row.rating,
+    review_text: row.review_text ?? "",
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    reviewer: reviewer
+      ? {
+          id: reviewer.id,
+          display_name: reviewer.display_name,
+          avatar_url: reviewer.avatar_url
+        }
+      : null
+  };
+}
+
+function mapCreatorReview(row: CreatorReviewRow): CreatorReview {
+  const reviewer = Array.isArray(row.reviewer) ? row.reviewer[0] : row.reviewer;
+
+  return {
+    id: row.id,
+    creator_id: row.creator_id,
+    reviewer_id: row.reviewer_id,
+    rating: row.rating,
+    review_text: row.review_text ?? "",
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    reviewer: reviewer
+      ? {
+          id: reviewer.id,
+          display_name: reviewer.display_name,
+          avatar_url: reviewer.avatar_url
+        }
+      : null
+  };
+}
+
+function mapReleaseNotification(row: CreatorReleaseNotificationRow): ReleaseNotification {
+  const creator = Array.isArray(row.creator) ? row.creator[0] : row.creator;
+  const asset = Array.isArray(row.asset) ? row.asset[0] : row.asset;
+
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    read_at: row.read_at,
+    delivery_status: row.delivery_status,
+    creator_id: row.creator_id,
+    follower_id: row.follower_id,
+    asset_id: row.asset_id,
+    creator_name: creator?.display_name ?? "Creator",
+    asset_title: asset?.title ?? "New release"
+  };
+}
+
+function summarizeRatings(ratings: number[]): RatingSummary {
+  if (ratings.length === 0) {
+    return { average_rating: 0, review_count: 0 };
+  }
+
+  const total = ratings.reduce((sum, rating) => sum + rating, 0);
+  const average = total / ratings.length;
+
+  return {
+    average_rating: Number(average.toFixed(2)),
+    review_count: ratings.length
+  };
+}
+
+async function attachAssetRatingSummaries(assets: Asset[]): Promise<Asset[]> {
+  if (assets.length === 0) {
+    return assets;
+  }
+
+  const assetIds = Array.from(new Set(assets.map((asset) => asset.id)));
+  const { data, error } = await supabase.from("asset_reviews").select("asset_id, rating").in("asset_id", assetIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const ratingsByAsset = new Map<string, number[]>();
+  for (const row of (data ?? []) as AssetRatingRow[]) {
+    const existing = ratingsByAsset.get(row.asset_id) ?? [];
+    existing.push(row.rating);
+    ratingsByAsset.set(row.asset_id, existing);
+  }
+
+  return assets.map((asset) => {
+    const ratings = ratingsByAsset.get(asset.id) ?? [];
+    const summary = summarizeRatings(ratings);
+    return {
+      ...asset,
+      average_rating: summary.average_rating,
+      review_count: summary.review_count
+    };
+  });
+}
+
+function toNormalizedTokens(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function scoreAssetSearchMatch(asset: Asset, tokens: string[]): number {
+  if (tokens.length === 0) {
+    return 0;
+  }
+
+  const title = asset.title.toLowerCase();
+  const description = asset.description.toLowerCase();
+  const category = asset.category.toLowerCase();
+  const creator = (asset.profile?.display_name ?? "").toLowerCase();
+  const tags = (asset.tags ?? []).map((tag) => tag.toLowerCase());
+
+  let score = 0;
+  for (const token of tokens) {
+    let tokenScore = 0;
+    if (title.includes(token)) {
+      tokenScore += 8;
+    }
+    if (creator.includes(token)) {
+      tokenScore += 6;
+    }
+    if (category.includes(token)) {
+      tokenScore += 4;
+    }
+    if (description.includes(token)) {
+      tokenScore += 2;
+    }
+
+    for (const tag of tags) {
+      if (tag === token) {
+        tokenScore += 7;
+      } else if (tag.includes(token)) {
+        tokenScore += 5;
+      }
+    }
+
+    if (tokenScore === 0) {
+      return 0;
+    }
+
+    score += tokenScore;
+  }
+
+  return score;
 }
 
 function normalizeEditorialSections(value: unknown): EditorialSection[] {
@@ -499,21 +721,35 @@ function toTimestamp(value: string | null) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function trendingScore(entry: Pick<CreatorDirectoryEntry, "sales_count" | "published_assets" | "latest_asset_at" | "is_verified">) {
+function trendingScore(
+  entry: Pick<
+    CreatorDirectoryEntry,
+    "sales_count" | "published_assets" | "latest_asset_at" | "is_verified" | "follower_count" | "average_rating" | "review_count"
+  >
+) {
   const now = Date.now();
   const latest = toTimestamp(entry.latest_asset_at);
   const daysSinceLatest = latest > 0 ? Math.floor((now - latest) / (1000 * 60 * 60 * 24)) : 9999;
   const recencyBoost = daysSinceLatest <= 30 ? 4 : daysSinceLatest <= 90 ? 2 : 0;
   const verificationBoost = entry.is_verified ? 3 : 0;
-  return entry.sales_count * 5 + entry.published_assets * 2 + recencyBoost + verificationBoost;
+  const followerBoost = entry.follower_count * 1.5;
+  const ratingBoost = entry.average_rating * 3 + Math.min(entry.review_count, 20) * 0.25;
+  return entry.sales_count * 5 + entry.published_assets * 2 + recencyBoost + verificationBoost + followerBoost + ratingBoost;
 }
 
 export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {}): Promise<CreatorDirectoryEntry[]> {
-  const [{ data: profilesData, error: profilesError }, { data: assetsData, error: assetsError }] = await Promise.all([
+  const [
+    { data: profilesData, error: profilesError },
+    { data: assetsData, error: assetsError },
+    { data: reviewData, error: reviewError },
+    { data: followData, error: followError }
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at"),
-    supabase.from("assets").select("creator_id, created_at").eq("status", "published")
+    supabase.from("assets").select("creator_id, created_at").eq("status", "published"),
+    supabase.from("creator_reviews").select("creator_id, rating"),
+    supabase.from("creator_follows").select("creator_id")
   ]);
 
   if (profilesError) {
@@ -524,9 +760,21 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
     throw new Error(assetsError.message);
   }
 
+  if (reviewError) {
+    throw new Error(reviewError.message);
+  }
+
+  if (followError) {
+    throw new Error(followError.message);
+  }
+
   const profileRows = (profilesData ?? []) as CreatorProfileRow[];
   const assetRows = (assetsData ?? []) as CreatorAssetStatRow[];
+  const creatorReviewRows = (reviewData ?? []) as CreatorReviewRatingRow[];
+  const creatorFollowRows = (followData ?? []) as CreatorFollowRow[];
   const creatorStats = new Map<string, { published_assets: number; latest_asset_at: string | null }>();
+  const creatorRatingMap = new Map<string, { total: number; count: number }>();
+  const creatorFollowerMap = new Map<string, number>();
 
   for (const row of assetRows) {
     const current = creatorStats.get(row.creator_id) ?? { published_assets: 0, latest_asset_at: null };
@@ -539,9 +787,25 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
     });
   }
 
+  for (const row of creatorReviewRows) {
+    const current = creatorRatingMap.get(row.creator_id) ?? { total: 0, count: 0 };
+    creatorRatingMap.set(row.creator_id, {
+      total: current.total + row.rating,
+      count: current.count + 1
+    });
+  }
+
+  for (const row of creatorFollowRows) {
+    const current = creatorFollowerMap.get(row.creator_id) ?? 0;
+    creatorFollowerMap.set(row.creator_id, current + 1);
+  }
+
   const baseCreators = profileRows
     .map((profile) => {
       const stats = creatorStats.get(profile.id) ?? { published_assets: 0, latest_asset_at: null };
+      const rating = creatorRatingMap.get(profile.id) ?? { total: 0, count: 0 };
+      const averageRating = rating.count > 0 ? Number((rating.total / rating.count).toFixed(2)) : 0;
+      const followerCount = creatorFollowerMap.get(profile.id) ?? 0;
 
       return {
         id: profile.id,
@@ -556,7 +820,10 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
         published_assets: stats.published_assets,
         latest_asset_at: stats.latest_asset_at,
         trending_score: 0,
-        editor_pick: false
+        editor_pick: false,
+        follower_count: followerCount,
+        average_rating: averageRating,
+        review_count: rating.count
       } as CreatorDirectoryEntry;
     })
     .filter((creator) => creator.published_assets > 0);
@@ -605,6 +872,7 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
     return (
       b.trending_score - a.trending_score ||
       b.sales_count - a.sales_count ||
+      b.follower_count - a.follower_count ||
       toTimestamp(b.latest_asset_at) - toTimestamp(a.latest_asset_at)
     );
   });
@@ -637,33 +905,35 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
     throw new Error(error.message);
   }
 
-  const all = (data as AssetRow[]).map(mapAsset);
+  const withRatings = await attachAssetRatingSummaries((data as AssetRow[]).map(mapAsset));
+  const searchTokens = toNormalizedTokens(filters.search ?? "");
+  const creatorQuery = (filters.creator ?? "").trim().toLowerCase();
 
-  return all.filter((asset) => {
-    const normalizedSearch = filters.search?.trim().toLowerCase() ?? "";
-    const searchableText = [
-      asset.title,
-      asset.description,
-      asset.category,
-      asset.tags.join(" "),
-      asset.profile?.display_name ?? "",
-      asset.profile?.niche ?? "",
-      asset.profile?.creator_category ?? ""
-    ]
-      .join(" ")
-      .toLowerCase();
-    const matchesSearch = normalizedSearch.length === 0 ? true : searchableText.includes(normalizedSearch);
+  const filtered = withRatings
+    .map((asset) => ({
+      asset,
+      relevance: scoreAssetSearchMatch(asset, searchTokens)
+    }))
+    .filter(({ asset, relevance }) => {
+      const matchesSearch = searchTokens.length === 0 ? true : relevance > 0;
+      const matchesCategory = !filters.category || filters.category === "all" ? true : asset.category === filters.category;
+      const matchesCreator = creatorQuery ? (asset.profile?.display_name ?? "").toLowerCase().includes(creatorQuery) : true;
+      const matchesMin = typeof filters.minPrice === "number" ? asset.price_kobo >= Math.round(filters.minPrice * 100) : true;
+      const matchesMax = typeof filters.maxPrice === "number" ? asset.price_kobo <= Math.round(filters.maxPrice * 100) : true;
+      const firstFileType = asset.files?.[0]?.file_type ?? "";
+      const matchesFileType = !filters.fileType || filters.fileType === "all" ? true : firstFileType.includes(filters.fileType);
 
-    const matchesCategory = !filters.category || filters.category === "all" ? true : asset.category === filters.category;
+      return matchesSearch && matchesCategory && matchesCreator && matchesMin && matchesMax && matchesFileType;
+    });
 
-    const matchesMin = typeof filters.minPrice === "number" ? asset.price_kobo >= Math.round(filters.minPrice * 100) : true;
-    const matchesMax = typeof filters.maxPrice === "number" ? asset.price_kobo <= Math.round(filters.maxPrice * 100) : true;
-
-    const firstFileType = asset.files?.[0]?.file_type ?? "";
-    const matchesFileType = !filters.fileType || filters.fileType === "all" ? true : firstFileType.includes(filters.fileType);
-
-    return matchesSearch && matchesCategory && matchesMin && matchesMax && matchesFileType;
+  filtered.sort((a, b) => {
+    if (searchTokens.length > 0) {
+      return b.relevance - a.relevance || toTimestamp(b.asset.created_at) - toTimestamp(a.asset.created_at);
+    }
+    return toTimestamp(b.asset.created_at) - toTimestamp(a.asset.created_at);
   });
+
+  return filtered.map((entry) => entry.asset);
 }
 
 export async function getAssetById(assetId: string): Promise<Asset> {
@@ -691,7 +961,8 @@ export async function getAssetById(assetId: string): Promise<Asset> {
     throw new Error(error?.message ?? "Asset not found");
   }
 
-  return mapAsset(data as AssetRow);
+  const [asset] = await attachAssetRatingSummaries([mapAsset(data as AssetRow)]);
+  return asset;
 }
 
 export async function getCreatorAssets(userId: string): Promise<Asset[]> {
@@ -719,7 +990,381 @@ export async function getCreatorAssets(userId: string): Promise<Asset[]> {
     throw new Error(error.message);
   }
 
-  return (data as AssetRow[]).map(mapAsset);
+  return attachAssetRatingSummaries((data as AssetRow[]).map(mapAsset));
+}
+
+export async function getAssetRatingSummary(assetId: string): Promise<RatingSummary> {
+  const { data, error } = await supabase.rpc("get_asset_rating_summary", { p_asset_id: assetId });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    average_rating: Number(row?.average_rating ?? 0),
+    review_count: Number(row?.review_count ?? 0)
+  };
+}
+
+export async function getAssetReviews(assetId: string): Promise<AssetReview[]> {
+  const { data, error } = await supabase
+    .from("asset_reviews")
+    .select("id, asset_id, reviewer_id, rating, review_text, created_at, updated_at, reviewer:profiles!asset_reviews_reviewer_id_fkey(id, display_name, avatar_url)")
+    .eq("asset_id", assetId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as AssetReviewRow[]).map(mapAssetReview);
+}
+
+export async function upsertAssetReview(input: {
+  userId: string;
+  assetId: string;
+  rating: number;
+  reviewText?: string;
+}): Promise<AssetReview> {
+  const { data, error } = await supabase
+    .from("asset_reviews")
+    .upsert(
+      {
+        asset_id: input.assetId,
+        reviewer_id: input.userId,
+        rating: input.rating,
+        review_text: input.reviewText?.trim() ?? ""
+      },
+      { onConflict: "asset_id,reviewer_id" }
+    )
+    .select("id, asset_id, reviewer_id, rating, review_text, created_at, updated_at, reviewer:profiles!asset_reviews_reviewer_id_fkey(id, display_name, avatar_url)")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Unable to submit asset review.");
+  }
+
+  return mapAssetReview(data as AssetReviewRow);
+}
+
+export async function deleteAssetReview(reviewId: string, userId: string): Promise<void> {
+  const { error } = await supabase.from("asset_reviews").delete().eq("id", reviewId).eq("reviewer_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getReviewedAssetIdsForUser(userId: string, assetIds: string[]): Promise<string[]> {
+  const normalizedAssetIds = Array.from(new Set(assetIds.filter(Boolean)));
+  if (normalizedAssetIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("asset_reviews")
+    .select("asset_id")
+    .eq("reviewer_id", userId)
+    .in("asset_id", normalizedAssetIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => String(row.asset_id));
+}
+
+export async function getCreatorRatingSummary(creatorId: string): Promise<RatingSummary> {
+  const { data, error } = await supabase.rpc("get_creator_rating_summary", { p_creator_id: creatorId });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    average_rating: Number(row?.average_rating ?? 0),
+    review_count: Number(row?.review_count ?? 0)
+  };
+}
+
+export async function getCreatorReviews(creatorId: string): Promise<CreatorReview[]> {
+  const { data, error } = await supabase
+    .from("creator_reviews")
+    .select("id, creator_id, reviewer_id, rating, review_text, created_at, updated_at, reviewer:profiles!creator_reviews_reviewer_id_fkey(id, display_name, avatar_url)")
+    .eq("creator_id", creatorId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as CreatorReviewRow[]).map(mapCreatorReview);
+}
+
+export async function upsertCreatorReview(input: {
+  userId: string;
+  creatorId: string;
+  rating: number;
+  reviewText?: string;
+}): Promise<CreatorReview> {
+  const { data, error } = await supabase
+    .from("creator_reviews")
+    .upsert(
+      {
+        creator_id: input.creatorId,
+        reviewer_id: input.userId,
+        rating: input.rating,
+        review_text: input.reviewText?.trim() ?? ""
+      },
+      { onConflict: "creator_id,reviewer_id" }
+    )
+    .select("id, creator_id, reviewer_id, rating, review_text, created_at, updated_at, reviewer:profiles!creator_reviews_reviewer_id_fkey(id, display_name, avatar_url)")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Unable to submit creator review.");
+  }
+
+  return mapCreatorReview(data as CreatorReviewRow);
+}
+
+export async function deleteCreatorReview(reviewId: string, userId: string): Promise<void> {
+  const { error } = await supabase.from("creator_reviews").delete().eq("id", reviewId).eq("reviewer_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getWishlistAssetIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from("wishlists").select("asset_id").eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => String(row.asset_id));
+}
+
+export async function getWishlistCount(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("wishlists")
+    .select("asset_id", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+export async function addAssetToWishlist(userId: string, assetId: string): Promise<void> {
+  const { error } = await supabase.from("wishlists").upsert({ user_id: userId, asset_id: assetId }, { onConflict: "user_id,asset_id" });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function removeAssetFromWishlist(userId: string, assetId: string): Promise<void> {
+  const { error } = await supabase.from("wishlists").delete().eq("user_id", userId).eq("asset_id", assetId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getWishlistAssets(userId: string): Promise<Asset[]> {
+  const { data, error } = await supabase
+    .from("wishlists")
+    .select(
+      `asset:assets(
+        id,
+        creator_id,
+        title,
+        description,
+        category,
+        tags,
+        price_kobo,
+        currency,
+        status,
+        created_at,
+        profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
+        previews:asset_previews(id, preview_url),
+        files:asset_files(id, file_type, file_size, original_name)
+      )`
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const assets = ((data ?? []) as WishlistAssetRow[])
+    .map((row) => (Array.isArray(row.asset) ? row.asset[0] : row.asset))
+    .filter((row): row is AssetRow => Boolean(row))
+    .map(mapAsset)
+    .filter((asset) => asset.status === "published");
+
+  return attachAssetRatingSummaries(assets);
+}
+
+export async function getCreatorFollowStats(creatorId: string, followerId?: string | null): Promise<{ followerCount: number; isFollowing: boolean }> {
+  const [{ count, error: countError }, followRow] = await Promise.all([
+    supabase.from("creator_follows").select("*", { count: "exact", head: true }).eq("creator_id", creatorId),
+    followerId
+      ? supabase.from("creator_follows").select("creator_id").eq("creator_id", creatorId).eq("follower_id", followerId).maybeSingle()
+      : Promise.resolve({ data: null, error: null as { message?: string } | null })
+  ]);
+
+  if (countError) {
+    throw new Error(countError.message);
+  }
+
+  if (followRow.error) {
+    throw new Error(followRow.error.message ?? "Unable to load follow state.");
+  }
+
+  return {
+    followerCount: count ?? 0,
+    isFollowing: Boolean(followRow.data)
+  };
+}
+
+export async function followCreator(followerId: string, creatorId: string): Promise<void> {
+  const { error } = await supabase
+    .from("creator_follows")
+    .upsert({ follower_id: followerId, creator_id: creatorId }, { onConflict: "follower_id,creator_id" });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function unfollowCreator(followerId: string, creatorId: string): Promise<void> {
+  const { error } = await supabase.from("creator_follows").delete().eq("follower_id", followerId).eq("creator_id", creatorId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getReleaseNotifications(userId: string): Promise<ReleaseNotification[]> {
+  const { data, error } = await supabase
+    .from("creator_release_notifications")
+    .select(
+      "id, created_at, read_at, delivery_status, creator_id, follower_id, asset_id, creator:profiles!creator_release_notifications_creator_id_fkey(display_name), asset:assets!creator_release_notifications_asset_id_fkey(title)"
+    )
+    .eq("follower_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(40);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as CreatorReleaseNotificationRow[]).map(mapReleaseNotification);
+}
+
+export async function getUnreadReleaseNotificationsCount(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("creator_release_notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("follower_id", userId)
+    .is("read_at", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+export async function markReleaseNotificationAsRead(notificationId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("creator_release_notifications")
+    .update({ read_at: new Date().toISOString(), delivery_status: "sent" })
+    .eq("id", notificationId)
+    .eq("follower_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function getCreatorFunnelSummary(creatorId: string): Promise<CreatorFunnelSummary> {
+  const { data, error } = await supabase.rpc("get_creator_funnel_summary", { p_creator_id: creatorId });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    asset_views: Number(row?.asset_views ?? 0),
+    asset_clicks: Number(row?.asset_clicks ?? 0),
+    checkout_starts: Number(row?.checkout_starts ?? 0),
+    purchases: Number(row?.purchases ?? 0)
+  };
+}
+
+type AnalyticsEventName = "asset_view" | "asset_click" | "checkout_start" | "purchase";
+
+type TrackAnalyticsEventInput = {
+  eventName: AnalyticsEventName;
+  assetId?: string;
+  creatorId?: string;
+  orderId?: string;
+  actorUserId?: string | null;
+  actorEmail?: string | null;
+  sessionId?: string;
+  metadata?: Record<string, unknown>;
+};
+
+const ANALYTICS_SESSION_STORAGE_KEY = "crib.analytics.session";
+
+function getAnalyticsSessionId() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const existing = window.localStorage.getItem(ANALYTICS_SESSION_STORAGE_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const generated =
+    typeof window.crypto !== "undefined" && typeof window.crypto.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage.setItem(ANALYTICS_SESSION_STORAGE_KEY, generated);
+  return generated;
+}
+
+export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput): Promise<void> {
+  if (!input.creatorId || !input.assetId) {
+    return;
+  }
+
+  const payload = {
+    event_name: input.eventName,
+    asset_id: input.assetId,
+    creator_id: input.creatorId,
+    order_id: input.orderId ?? null,
+    actor_user_id: input.actorUserId ?? null,
+    actor_email: input.actorEmail ?? null,
+    session_id: input.sessionId ?? getAnalyticsSessionId(),
+    metadata: input.metadata ?? {}
+  };
+
+  const { error } = await supabase.from("analytics_events").insert(payload);
+  if (error) {
+    console.error("analytics tracking failed", error.message);
+  }
 }
 
 export async function createAssetListing(
@@ -992,6 +1637,28 @@ export async function hasPaidOrderForAsset(assetId: string, userId: string, user
 
   const { data, error } = await query.maybeSingle();
 
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return Boolean(data);
+}
+
+export async function hasPaidOrderWithCreator(creatorId: string, userId: string, userEmail?: string | null): Promise<boolean> {
+  let query = supabase
+    .from("orders")
+    .select("id, assets!inner(creator_id)")
+    .eq("status", "paid")
+    .eq("assets.creator_id", creatorId)
+    .limit(1);
+
+  if (userEmail) {
+    query = query.or(`buyer_id.eq.${userId},email.eq.${userEmail}`);
+  } else {
+    query = query.eq("buyer_id", userId);
+  }
+
+  const { data, error } = await query.maybeSingle();
   if (error) {
     throw new Error(error.message);
   }
@@ -1272,7 +1939,7 @@ export async function getAdminAssets() {
     throw new Error(error.message);
   }
 
-  return (data as AssetRow[]).map(mapAsset);
+  return attachAssetRatingSummaries((data as AssetRow[]).map(mapAsset));
 }
 
 export async function updateAssetStatus(assetId: string, status: "draft" | "published" | "archived") {
@@ -1301,5 +1968,6 @@ export async function updateAssetStatus(assetId: string, status: "draft" | "publ
     throw new Error(error?.message ?? "Unable to update asset status");
   }
 
-  return mapAsset(data as AssetRow);
+  const [asset] = await attachAssetRatingSummaries([mapAsset(data as AssetRow)]);
+  return asset;
 }

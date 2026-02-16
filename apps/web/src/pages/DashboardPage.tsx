@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PriceTag } from "@/components/PriceTag";
-import { getCreatorAssets, getCreatorDashboard } from "@/lib/api";
+import { getCreatorAssets, getCreatorDashboard, getCreatorFunnelSummary } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/format";
 import type { Asset, Order } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
@@ -23,8 +23,20 @@ export function DashboardPage() {
     enabled: Boolean(user?.id)
   });
 
+  const funnelSummaryQuery = useQuery({
+    queryKey: ["creator-funnel-summary", user?.id],
+    queryFn: () => getCreatorFunnelSummary(user!.id),
+    enabled: Boolean(user?.id)
+  });
+
   const recentOrders = dashboardQuery.data?.recentOrders ?? [];
   const assetList = assetsQuery.data ?? [];
+  const funnel = funnelSummaryQuery.data ?? {
+    asset_views: 0,
+    asset_clicks: 0,
+    checkout_starts: 0,
+    purchases: 0
+  };
 
   const orderBreakdown = useMemo(() => {
     const initial = { paid: 0, pending: 0, failed: 0, refunded: 0 };
@@ -62,6 +74,9 @@ export function DashboardPage() {
 
   const latestAsset = assetList[0];
   const lastOrder = recentOrders[0];
+  const clickThrough = funnel.asset_views > 0 ? Math.round((funnel.asset_clicks / funnel.asset_views) * 100) : 0;
+  const checkoutRate = funnel.asset_clicks > 0 ? Math.round((funnel.checkout_starts / funnel.asset_clicks) * 100) : 0;
+  const purchaseRate = funnel.checkout_starts > 0 ? Math.round((funnel.purchases / funnel.checkout_starts) * 100) : 0;
 
   if (!user) {
     return null;
@@ -119,6 +134,30 @@ export function DashboardPage() {
         />
         <MetricCard label="Asset Count" value={String(dashboardQuery.data?.assetCount ?? 0)} helper="Total listings created" tone="lagoon" />
         <MetricCard label="Avg Paid Order" value={avgPaidOrderLabel} helper="Average ticket size" tone="sunset" />
+      </section>
+
+      <section className="surface-card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl font-semibold text-ink">Acquisition Funnel</h2>
+            <p className="mt-1 text-sm text-sand-600">Track where buyers drop between discovery and completed purchase.</p>
+          </div>
+          <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-sand-700">
+            Views to purchase {funnel.asset_views > 0 ? `${Math.round((funnel.purchases / funnel.asset_views) * 100)}%` : "0%"}
+          </span>
+        </div>
+
+        {funnelSummaryQuery.isLoading ? <p className="mt-4 text-sm text-sand-600">Loading funnel analytics...</p> : null}
+        {funnelSummaryQuery.isError ? <p className="mt-4 text-sm text-rose-700">Could not load funnel analytics.</p> : null}
+
+        {!funnelSummaryQuery.isLoading ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <FunnelStage label="Views" count={funnel.asset_views} sublabel="Asset viewed" tone="cobalt" />
+            <FunnelStage label="Clicks" count={funnel.asset_clicks} sublabel={`${clickThrough}% from views`} tone="lagoon" />
+            <FunnelStage label="Checkout" count={funnel.checkout_starts} sublabel={`${checkoutRate}% from clicks`} tone="sunset" />
+            <FunnelStage label="Purchases" count={funnel.purchases} sublabel={`${purchaseRate}% from checkout`} tone="forest" />
+          </div>
+        ) : null}
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
@@ -297,6 +336,35 @@ function MiniInsight({ label, value, tone }: { label: string; value: string; ton
     <article className={`rounded-xl border border-white/60 px-3 py-2 ${tone}`}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.12em]">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold">{value}</p>
+    </article>
+  );
+}
+
+function FunnelStage({
+  label,
+  count,
+  sublabel,
+  tone
+}: {
+  label: string;
+  count: number;
+  sublabel: string;
+  tone: "cobalt" | "lagoon" | "sunset" | "forest";
+}) {
+  const toneClass =
+    tone === "cobalt"
+      ? "border-cobalt-100 bg-cobalt-50"
+      : tone === "lagoon"
+        ? "border-lagoon-200 bg-lagoon-100/60"
+        : tone === "sunset"
+          ? "border-sunset-200 bg-sunset-100"
+          : "border-forest-300 bg-forest-100/70";
+
+  return (
+    <article className={`rounded-xl border px-3 py-3 ${toneClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sand-600">{label}</p>
+      <p className="mt-1 font-display text-2xl font-bold text-ink">{new Intl.NumberFormat("en-US").format(count)}</p>
+      <p className="mt-1 text-xs text-sand-600">{sublabel}</p>
     </article>
   );
 }

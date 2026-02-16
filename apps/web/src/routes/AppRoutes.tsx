@@ -16,6 +16,8 @@ import { CreatorsPage } from "@/pages/CreatorsPage";
 import { EditorialPage } from "@/pages/EditorialPage";
 import { EditorialPostPage } from "@/pages/EditorialPostPage";
 import { EditorialAdminPage } from "@/pages/EditorialAdminPage";
+import { WishlistPage } from "@/pages/WishlistPage";
+import { NotificationsPage } from "@/pages/NotificationsPage";
 
 export function AppRoutes() {
   return (
@@ -38,7 +40,11 @@ export function AppRoutes() {
               <Route index element={<DashboardPage />} />
               <Route path="orders" element={<OrdersPage />} />
               <Route path="upload" element={<UploadPage />} />
+              <Route path="wishlist" element={<WishlistPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
             </Route>
+            <Route path="/wishlist" element={<Navigate to="/dashboard/wishlist" replace />} />
+            <Route path="/notifications" element={<Navigate to="/dashboard/notifications" replace />} />
             <Route path="/upload" element={<Navigate to="/dashboard/upload" replace />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/editorial-admin" element={<EditorialAdminPage />} />

@@ -4,11 +4,13 @@ import { SearchInput } from "@/components/SearchInput";
 type FilterBarProps = {
   search: string;
   category: string;
+  creator: string;
   minPrice: string;
   maxPrice: string;
   fileType: string;
   onSearchChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
+  onCreatorChange: (value: string) => void;
   onMinPriceChange: (value: string) => void;
   onMaxPriceChange: (value: string) => void;
   onFileTypeChange: (value: string) => void;
@@ -27,11 +29,13 @@ const FILE_TYPES = [
 export function FilterBar({
   search,
   category,
+  creator,
   minPrice,
   maxPrice,
   fileType,
   onSearchChange,
   onCategoryChange,
+  onCreatorChange,
   onMinPriceChange,
   onMaxPriceChange,
   onFileTypeChange,
@@ -40,7 +44,7 @@ export function FilterBar({
 }: FilterBarProps) {
   return (
     <section className="surface-card discover-filter-panel space-y-3 p-3 md:p-4">
-      <div className="grid gap-3 md:grid-cols-[2.1fr,1fr,1.2fr,1fr]">
+      <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr,1.2fr,1fr]">
         <SearchInput value={search} onChange={onSearchChange} placeholder="Search projects, tools, presets..." />
 
         <select
@@ -55,6 +59,13 @@ export function FilterBar({
             </option>
           ))}
         </select>
+
+        <input
+          value={creator}
+          onChange={(event) => onCreatorChange(event.target.value)}
+          placeholder="Creator name"
+          className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
+        />
 
         <div className="flex items-center gap-2 rounded-full border border-sand-200 bg-white px-3 py-2">
           <input

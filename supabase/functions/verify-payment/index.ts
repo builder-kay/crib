@@ -15,6 +15,33 @@ function parseCommissionBps(value: string | undefined): number {
   return parsed;
 }
 
+async function trackPurchaseEvent(input: {
+  supabase: ReturnType<typeof createClient>;
+  orderId: string;
+  assetId: string;
+  creatorId: string;
+  buyerId: string | null;
+  buyerEmail: string;
+  reference: string;
+}) {
+  const { error } = await input.supabase.from("analytics_events").insert({
+    event_name: "purchase",
+    order_id: input.orderId,
+    asset_id: input.assetId,
+    creator_id: input.creatorId,
+    actor_user_id: input.buyerId,
+    actor_email: input.buyerEmail,
+    metadata: {
+      source: "verify-payment",
+      reference: input.reference
+    }
+  });
+
+  if (error && error.code !== "23505") {
+    console.error("purchase analytics insert failed", error.message);
+  }
+}
+
 Deno.serve(async (request) => {
   const corsResponse = handleCors(request);
   if (corsResponse) {
@@ -82,7 +109,7 @@ Deno.serve(async (request) => {
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, amount_kobo, currency, status, buyer_id, email, email_token, assets!inner(creator_id)")
+    .select("id, asset_id, amount_kobo, currency, status, buyer_id, email, email_token, assets!inner(creator_id)")
     .eq("id", payment.order_id)
     .single();
 
@@ -103,6 +130,16 @@ Deno.serve(async (request) => {
   }
 
   if (payment.status === "paid" && order.status === "paid") {
+    await trackPurchaseEvent({
+      supabase,
+      orderId: order.id,
+      assetId: order.asset_id,
+      creatorId,
+      buyerId: order.buyer_id,
+      buyerEmail: order.email,
+      reference
+    });
+
     return jsonResponse({
       ok: true,
       idempotent: true,
@@ -186,6 +223,16 @@ Deno.serve(async (request) => {
 
       credited = Boolean(creditResult);
     }
+
+    await trackPurchaseEvent({
+      supabase,
+      orderId: order.id,
+      assetId: order.asset_id,
+      creatorId,
+      buyerId: order.buyer_id,
+      buyerEmail: order.email,
+      reference
+    });
 
     return jsonResponse({
       ok: true,
