@@ -5,6 +5,7 @@ export type EditorialSection = {
 };
 
 export type EditorialPost = {
+  id?: string;
   slug: string;
   title: string;
   excerpt: string;
@@ -19,6 +20,8 @@ export type EditorialPost = {
     role: string;
   };
   sections: EditorialSection[];
+  created_at?: string;
+  updated_at?: string;
 };
 
 const editorialPosts: EditorialPost[] = [

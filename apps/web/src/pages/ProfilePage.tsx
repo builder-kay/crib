@@ -4,7 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/components/Toast";
-import { getCreatorAssets, getProfile, updateProfile } from "@/lib/api";
+import { getCreatorAssets, getProfile, updateProfile, uploadProfileAvatar } from "@/lib/api";
+import { formatFileSize, MAX_PROFILE_AVATAR_SIZE_BYTES } from "@/lib/uploadLimits";
 import { profileSchema } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
 
@@ -79,6 +80,8 @@ export function ProfilePage() {
   const [website, setWebsite] = useState("");
   const [instagram, setInstagram] = useState("");
   const [xHandle, setXHandle] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!profileQuery.data) {
@@ -93,6 +96,20 @@ export function ProfilePage() {
     setInstagram((profileQuery.data.socials?.instagram as string) ?? "");
     setXHandle((profileQuery.data.socials?.x as string) ?? "");
   }, [profileQuery.data]);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(nextPreviewUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [avatarFile]);
 
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
@@ -122,6 +139,32 @@ export function ProfilePage() {
     },
     onError: (error) => {
       pushToast(error instanceof Error ? error.message : "Profile update failed", "error");
+    }
+  });
+
+  const uploadAvatarMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !isOwnProfile) {
+        throw new Error("You can only edit your own profile.");
+      }
+
+      if (!avatarFile) {
+        throw new Error("Select a profile photo first.");
+      }
+
+      return uploadProfileAvatar(user.id, avatarFile);
+    },
+    onSuccess: async () => {
+      pushToast("Profile photo updated", "success");
+      setAvatarFile(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profile", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Profile photo upload failed", "error");
     }
   });
 
@@ -175,6 +218,7 @@ export function ProfilePage() {
   const isVerified = Boolean(profileQuery.data?.is_verified);
   const listedWorksCount = portfolioAssets.length;
   const listedWorksLabel = `${listedWorksCount} listed work${listedWorksCount === 1 ? "" : "s"}`;
+  const activeAvatarUrl = avatarPreviewUrl || profileQuery.data?.avatar_url || "";
 
   return (
     <div className="profile-shell space-y-6">
@@ -206,8 +250,8 @@ export function ProfilePage() {
           <div className="pointer-events-none absolute -right-16 top-6 h-36 w-36 rounded-full bg-cobalt-100/55 blur-3xl" />
           <div className="relative z-10 flex items-start gap-4">
             <div className="profile-avatar-frame grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cobalt-50 via-white to-lagoon-50">
-              {profileQuery.data?.avatar_url ? (
-                <img src={profileQuery.data.avatar_url} alt={profileName} className="h-16 w-16 rounded-full object-cover" />
+              {activeAvatarUrl ? (
+                <img src={activeAvatarUrl} alt={profileName} className="h-16 w-16 rounded-full object-cover" />
               ) : (
                 <span className="font-display text-2xl font-bold text-cobalt-700">{initialsFromName(profileName)}</span>
               )}
@@ -288,6 +332,66 @@ export function ProfilePage() {
                 updateProfileMutation.mutate();
               }}
             >
+              <div className="rounded-xl border border-sand-200 bg-white p-3">
+                <p className="text-sm font-medium text-sand-800">Profile photo</p>
+                <p className="mt-1 text-xs text-sand-500">Add a clear headshot or brand avatar for trust and discoverability.</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <div className="profile-avatar-frame grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cobalt-50 via-white to-lagoon-50">
+                    {activeAvatarUrl ? (
+                      <img src={activeAvatarUrl} alt={profileName} className="h-12 w-12 rounded-full object-cover" />
+                    ) : (
+                      <span className="font-display text-lg font-bold text-cobalt-700">{initialsFromName(profileName)}</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100">
+                      Choose image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) {
+                            setAvatarFile(null);
+                            return;
+                          }
+
+                          if (!file.type.startsWith("image/")) {
+                            pushToast("Profile photo must be an image file.", "error");
+                            event.target.value = "";
+                            return;
+                          }
+
+                          if (file.size > MAX_PROFILE_AVATAR_SIZE_BYTES) {
+                            pushToast(`Profile photo must be ${formatFileSize(MAX_PROFILE_AVATAR_SIZE_BYTES)} or smaller.`, "error");
+                            event.target.value = "";
+                            return;
+                          }
+
+                          setAvatarFile(file);
+                        }}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => uploadAvatarMutation.mutate()}
+                      disabled={!avatarFile || uploadAvatarMutation.isPending}
+                      className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {uploadAvatarMutation.isPending ? "Uploading..." : "Upload photo"}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="mt-2 text-xs text-sand-500">
+                  {avatarFile ? `Selected: ${avatarFile.name}` : `Supported: image files up to ${formatFileSize(MAX_PROFILE_AVATAR_SIZE_BYTES)}.`}
+                </p>
+              </div>
+
               <Field label="Display Name" value={displayName} onChange={setDisplayName} required />
               <Field label="Category" value={creatorCategory} onChange={setCreatorCategory} required />
               <Field label="Niche (optional)" value={niche} onChange={setNiche} />

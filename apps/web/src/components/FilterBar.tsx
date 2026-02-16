@@ -12,6 +12,8 @@ type FilterBarProps = {
   onMinPriceChange: (value: string) => void;
   onMaxPriceChange: (value: string) => void;
   onFileTypeChange: (value: string) => void;
+  onResetFilters?: () => void;
+  canResetFilters?: boolean;
 };
 
 const FILE_TYPES = [
@@ -32,17 +34,19 @@ export function FilterBar({
   onCategoryChange,
   onMinPriceChange,
   onMaxPriceChange,
-  onFileTypeChange
+  onFileTypeChange,
+  onResetFilters,
+  canResetFilters = false
 }: FilterBarProps) {
   return (
-    <section className="surface-card space-y-3 p-3 md:p-4">
+    <section className="surface-card discover-filter-panel space-y-3 p-3 md:p-4">
       <div className="grid gap-3 md:grid-cols-[2.1fr,1fr,1.2fr,1fr]">
         <SearchInput value={search} onChange={onSearchChange} placeholder="Search projects, tools, presets..." />
 
         <select
           value={category}
           onChange={(event) => onCategoryChange(event.target.value)}
-          className="rounded-full border border-sand-200 bg-sand-50 px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400 focus:bg-white"
+          className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
         >
           <option value="all">All categories</option>
           {ASSET_CATEGORIES.map((item) => (
@@ -52,7 +56,7 @@ export function FilterBar({
           ))}
         </select>
 
-        <div className="flex items-center gap-2 rounded-full border border-sand-200 bg-sand-50 px-3 py-2">
+        <div className="flex items-center gap-2 rounded-full border border-sand-200 bg-white px-3 py-2">
           <input
             type="number"
             min={0}
@@ -75,7 +79,7 @@ export function FilterBar({
         <select
           value={fileType}
           onChange={(event) => onFileTypeChange(event.target.value)}
-          className="rounded-full border border-sand-200 bg-sand-50 px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400 focus:bg-white"
+          className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
         >
           {FILE_TYPES.map((item) => (
             <option key={item.value} value={item.value}>
@@ -85,10 +89,23 @@ export function FilterBar({
         </select>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-sand-600">
-        <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1.5">Curated picks</span>
-        <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1.5">Ready-to-use packs</span>
-        <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1.5">Commercial license</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-sand-600">
+          <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5">Curated picks</span>
+          <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5">Ready-to-use packs</span>
+          <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5">Commercial license</span>
+        </div>
+
+        {onResetFilters ? (
+          <button
+            type="button"
+            onClick={onResetFilters}
+            disabled={!canResetFilters}
+            className="rounded-full border border-sand-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Reset filters
+          </button>
+        ) : null}
       </div>
     </section>
   );

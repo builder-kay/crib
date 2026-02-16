@@ -44,6 +44,11 @@ function isNewCreator(createdAt: string) {
   return days <= 45;
 }
 
+function formatSalesCount(value: number) {
+  const safeValue = Math.max(0, value);
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(safeValue);
+}
+
 export function CreatorsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -66,9 +71,11 @@ export function CreatorsPage() {
   }, [category, creators]);
 
   return (
-    <div className="space-y-6">
-      <header className="surface-card-vivid subtle-pattern p-5 md:p-6">
-        <div className="flex flex-col gap-4">
+    <div className="creators-shell space-y-6">
+      <header className="surface-card-vivid subtle-pattern creators-hero-panel relative overflow-hidden p-5 md:p-6">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-cobalt-100/70 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-24 h-52 w-52 rounded-full bg-lagoon-100/60 blur-3xl" />
+        <div className="relative z-10 flex flex-col gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-600">Creator Discovery</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Browse Creator Profiles</h1>
@@ -79,14 +86,14 @@ export function CreatorsPage() {
         </div>
       </header>
 
-      <section className="surface-card space-y-3 p-4">
+      <section className="surface-card creators-filter-panel space-y-3 p-3 sm:p-4">
         <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr]">
           <SearchInput value={search} onChange={setSearch} placeholder="Search creator name, niche, category..." />
 
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value)}
-            className="rounded-full border border-sand-200 bg-sand-50 px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400 focus:bg-white"
+            className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
           >
             {categories.map((item) => (
               <option key={item} value={item}>
@@ -98,7 +105,7 @@ export function CreatorsPage() {
           <select
             value={sort}
             onChange={(event) => setSort(event.target.value as CreatorSort)}
-            className="rounded-full border border-sand-200 bg-sand-50 px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400 focus:bg-white"
+            className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -123,7 +130,7 @@ export function CreatorsPage() {
       {filteredCreators.length > 0 ? (
         <section className="space-y-3">
           <h2 className="font-display text-2xl font-bold text-ink">All Creators</h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {filteredCreators.map((creator) => (
               <CreatorCard key={creator.id} creator={creator} />
             ))}
@@ -134,75 +141,84 @@ export function CreatorsPage() {
   );
 }
 
-function CreatorCard({
-  creator,
-  variant = "default"
-}: {
-  creator: CreatorDirectoryEntry;
-  variant?: "default" | "featured";
-}) {
+function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
   const fresh = isNewCreator(creator.created_at);
-  const classes =
-    variant === "featured"
-      ? "surface-card-vivid border-cobalt-200"
-      : "surface-card border-sand-200";
 
   return (
-    <article className={`overflow-hidden p-4 ${classes}`}>
-      <div className="flex items-start gap-3">
-        {creator.avatar_url ? (
-          <img src={creator.avatar_url} alt={creator.display_name} className="h-12 w-12 rounded-full object-cover" />
-        ) : (
-          <div className="grid h-12 w-12 place-items-center rounded-full bg-cobalt-100 font-display text-lg font-bold text-cobalt-700">
-            {initials(creator.display_name)}
-          </div>
-        )}
+    <article className="creator-profile-card group relative overflow-hidden rounded-2xl border border-sand-200 bg-white p-3 sm:p-4">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-36 w-36 rounded-full bg-cobalt-100/50 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 left-10 h-32 w-32 rounded-full bg-lagoon-100/50 blur-3xl" />
 
-        <div className="min-w-0">
-          <Link to={`/profile/${creator.id}`} className="block truncate font-display text-lg font-bold text-ink hover:text-cobalt-700">
-            {creator.display_name}
-          </Link>
-          <p className="text-sm text-sand-600">{creator.niche || creator.creator_category}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full border border-sand-200 bg-sand-50 px-2 py-0.5 text-[11px] font-medium text-sand-700">
+      <div className="relative z-10">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-start gap-2 sm:gap-3">
+            <div className="creator-profile-avatar grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cobalt-50 via-white to-lagoon-50 sm:h-14 sm:w-14 sm:rounded-2xl">
+              {creator.avatar_url ? (
+                <img src={creator.avatar_url} alt={creator.display_name} className="h-9 w-9 rounded-full object-cover sm:h-11 sm:w-11" />
+              ) : (
+                <span className="font-display text-base font-bold text-cobalt-700 sm:text-lg">{initials(creator.display_name)}</span>
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <Link to={`/profile/${creator.id}`} className="block truncate font-display text-lg font-bold text-ink transition hover:text-cobalt-700 sm:text-xl">
+                {creator.display_name}
+              </Link>
+              <p className="mt-0.5 text-xs text-sand-600 sm:text-sm">{creator.niche || creator.creator_category}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <span className="rounded-full border border-sand-200 bg-white px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-sand-700 sm:px-2.5 sm:text-[10px]">
               {creator.creator_category}
             </span>
             {creator.is_verified ? (
-              <span className="rounded-full bg-forest-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-forest-700">
+              <span className="rounded-full bg-forest-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-forest-700 sm:px-2.5 sm:text-[10px]">
                 Verified
               </span>
             ) : null}
             {fresh ? (
-              <span className="rounded-full bg-sunset-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-sunset-700">
+              <span className="rounded-full bg-sunset-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-sunset-700 sm:px-2.5 sm:text-[10px]">
                 New
               </span>
             ) : null}
           </div>
         </div>
+
+        <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50/80 p-2.5 sm:mt-4 sm:p-3">
+          <p className="line-clamp-2 text-xs text-sand-700 sm:line-clamp-3 sm:text-sm">{creator.bio || "Creative building digital products on Crib."}</p>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-xl border border-sand-200 bg-white p-1.5 sm:mt-4 sm:gap-2 sm:p-2">
+          <StatBlock label="Assets" value={String(creator.published_assets)} />
+          <StatBlock label="Sales" value={formatSalesCount(creator.sales_count)} />
+          <StatBlock label="Joined" value={toDateLabel(creator.created_at)} />
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4">
+          <Link
+            to={`/profile/${creator.id}`}
+            className="inline-flex items-center justify-center rounded-full bg-cobalt-600 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-white transition hover:bg-cobalt-700 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.1em]"
+          >
+            View profile
+          </Link>
+          <Link
+            to={`/market?q=${encodeURIComponent(creator.display_name)}`}
+            className="inline-flex items-center justify-center rounded-full border border-sand-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-ink transition hover:bg-sand-100 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.1em]"
+          >
+            Browse work
+          </Link>
+        </div>
       </div>
-
-      <p className="mt-3 line-clamp-2 text-sm text-sand-700">{creator.bio || "Creative building digital products on Crib."}</p>
-
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-sand-200 bg-white p-2 text-center">
-        <StatBlock label="Assets" value={String(creator.published_assets)} />
-        <StatBlock label="Joined" value={toDateLabel(creator.created_at)} />
-      </div>
-
-      <Link
-        to={`/profile/${creator.id}`}
-        className="mt-4 inline-flex rounded-full border border-sand-300 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
-      >
-        View profile
-      </Link>
     </article>
   );
 }
 
 function StatBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-sand-50 px-2 py-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-sand-500">{label}</p>
-      <p className="mt-0.5 text-xs font-semibold text-ink">{value}</p>
+    <div className="rounded-lg bg-sand-50 px-1.5 py-1 text-center sm:px-2 sm:py-1.5">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-sand-500 sm:text-[10px] sm:tracking-[0.1em]">{label}</p>
+      <p className="mt-0.5 text-[11px] font-semibold text-ink sm:text-xs">{value}</p>
     </div>
   );
 }

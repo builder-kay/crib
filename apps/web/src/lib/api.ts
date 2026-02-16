@@ -4,6 +4,7 @@ import { slugify } from "@/lib/format";
 import {
   formatFileSize,
   looksLikeUploadSizeError,
+  MAX_PROFILE_AVATAR_SIZE_BYTES,
   MAX_PREVIEW_FILE_SIZE_BYTES,
   MAX_PRIMARY_ASSET_SIZE_BYTES
 } from "@/lib/uploadLimits";
@@ -113,9 +114,25 @@ type EditorialPostRow = {
   author_name: string;
   author_role: string;
   sections: unknown;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type CreateEditorialPostInput = {
+  title: string;
+  excerpt: string;
+  category: EditorialPost["category"];
+  publishedAt?: string;
+  readTimeMinutes: number;
+  coverImage: string;
+  spotlight?: boolean;
+  tags: string[];
+  authorName: string;
+  authorRole: string;
+  sections: EditorialSection[];
+};
+
+export type UpdateEditorialPostInput = {
   title: string;
   excerpt: string;
   category: EditorialPost["category"];
@@ -209,6 +226,7 @@ function normalizeEditorialSections(value: unknown): EditorialSection[] {
 
 function mapEditorialPost(row: EditorialPostRow): EditorialPost {
   return {
+    id: row.id,
     slug: row.slug,
     title: row.title,
     excerpt: row.excerpt,
@@ -222,7 +240,9 @@ function mapEditorialPost(row: EditorialPostRow): EditorialPost {
       name: row.author_name,
       role: row.author_role
     },
-    sections: normalizeEditorialSections(row.sections)
+    sections: normalizeEditorialSections(row.sections),
+    created_at: row.created_at,
+    updated_at: row.updated_at
   };
 }
 
@@ -332,6 +352,46 @@ export async function updateProfile(userId: string, input: ProfileInput) {
   }
 
   return data as Profile;
+}
+
+export async function uploadProfileAvatar(userId: string, file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Profile photo must be an image file.");
+  }
+
+  if (file.size > MAX_PROFILE_AVATAR_SIZE_BYTES) {
+    throw new Error(`Profile photo must be ${formatFileSize(MAX_PROFILE_AVATAR_SIZE_BYTES)} or smaller.`);
+  }
+
+  const avatarPath = `${userId}/avatar`;
+
+  const { error: uploadError } = await supabase.storage.from("previews").upload(avatarPath, file, {
+    upsert: true,
+    contentType: file.type || "image/jpeg"
+  });
+
+  if (uploadError) {
+    throw mapStorageUploadError(uploadError, {
+      fileName: file.name,
+      maxBytes: MAX_PROFILE_AVATAR_SIZE_BYTES
+    });
+  }
+
+  const { data: publicUrlData } = supabase.storage.from("previews").getPublicUrl(avatarPath);
+  const avatarUrl = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", userId)
+    .select("avatar_url")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Failed to update profile photo.");
+  }
+
+  return data.avatar_url as string;
 }
 
 function toTimestamp(value: string | null) {
@@ -893,7 +953,7 @@ export async function getEditorialPostsFromDb(): Promise<EditorialPost[]> {
   const { data, error } = await supabase
     .from("editorial_posts")
     .select(
-      "id, slug, title, excerpt, category, published_at, read_time_minutes, cover_image, spotlight, tags, author_name, author_role, sections"
+      "id, slug, title, excerpt, category, published_at, read_time_minutes, cover_image, spotlight, tags, author_name, author_role, sections, created_at, updated_at"
     )
     .order("published_at", { ascending: false });
 
@@ -907,6 +967,10 @@ export async function getEditorialPostsFromDb(): Promise<EditorialPost[]> {
 export async function createEditorialPost(userId: string, input: CreateEditorialPostInput): Promise<EditorialPost> {
   const baseSlug = slugify(input.title);
   const safeSlug = baseSlug || `editorial-${Date.now()}`;
+
+  if (!Number.isFinite(input.readTimeMinutes) || input.readTimeMinutes <= 0) {
+    throw new Error("Read time must be a positive number.");
+  }
 
   const normalizedSections = input.sections
     .map((section) => ({
@@ -955,7 +1019,7 @@ export async function createEditorialPost(userId: string, input: CreateEditorial
         created_by: userId
       })
       .select(
-        "id, slug, title, excerpt, category, published_at, read_time_minutes, cover_image, spotlight, tags, author_name, author_role, sections"
+        "id, slug, title, excerpt, category, published_at, read_time_minutes, cover_image, spotlight, tags, author_name, author_role, sections, created_at, updated_at"
       )
       .single();
 
@@ -973,6 +1037,104 @@ export async function createEditorialPost(userId: string, input: CreateEditorial
   }
 
   throw new Error("Unable to generate a unique post slug. Try a different title.");
+}
+
+export async function updateEditorialPost(postId: string, input: UpdateEditorialPostInput): Promise<EditorialPost> {
+  if (!postId) {
+    throw new Error("Post ID is required.");
+  }
+
+  if (!Number.isFinite(input.readTimeMinutes) || input.readTimeMinutes <= 0) {
+    throw new Error("Read time must be a positive number.");
+  }
+
+  const normalizedSections = input.sections
+    .map((section) => ({
+      heading: section.heading.trim(),
+      paragraphs: section.paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean),
+      points: section.points?.map((point) => point.trim()).filter(Boolean) ?? []
+    }))
+    .filter((section) => section.heading && section.paragraphs.length > 0)
+    .map((section) => ({
+      heading: section.heading,
+      paragraphs: section.paragraphs,
+      ...(section.points.length > 0 ? { points: section.points } : {})
+    }));
+
+  if (normalizedSections.length === 0) {
+    throw new Error("At least one valid section is required.");
+  }
+
+  const normalizedTags = Array.from(
+    new Set(
+      input.tags
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  const payload: {
+    title: string;
+    excerpt: string;
+    category: EditorialPost["category"];
+    read_time_minutes: number;
+    cover_image: string;
+    spotlight: boolean;
+    tags: string[];
+    author_name: string;
+    author_role: string;
+    sections: Array<{
+      heading: string;
+      paragraphs: string[];
+      points?: string[];
+    }>;
+    published_at?: string;
+  } = {
+    title: input.title.trim(),
+    excerpt: input.excerpt.trim(),
+    category: input.category,
+    read_time_minutes: Math.round(input.readTimeMinutes),
+    cover_image: input.coverImage.trim(),
+    spotlight: Boolean(input.spotlight),
+    tags: normalizedTags,
+    author_name: input.authorName.trim(),
+    author_role: input.authorRole.trim(),
+    sections: normalizedSections
+  };
+
+  if (input.publishedAt) {
+    payload.published_at = input.publishedAt;
+  }
+
+  const { data, error } = await supabase
+    .from("editorial_posts")
+    .update(payload)
+    .eq("id", postId)
+    .select(
+      "id, slug, title, excerpt, category, published_at, read_time_minutes, cover_image, spotlight, tags, author_name, author_role, sections, created_at, updated_at"
+    )
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Failed to update editorial post");
+  }
+
+  return mapEditorialPost(data as EditorialPostRow);
+}
+
+export async function deleteEditorialPost(postId: string): Promise<void> {
+  if (!postId) {
+    throw new Error("Post ID is required.");
+  }
+
+  const { error } = await supabase
+    .from("editorial_posts")
+    .delete()
+    .eq("id", postId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function isCurrentUserAdmin(userId: string) {

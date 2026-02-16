@@ -87,9 +87,12 @@ export function AssetCard({ asset }: AssetCardProps) {
           </div>
           <Link
             to={`/asset/${asset.id}`}
-            className="text-xs font-semibold uppercase tracking-wide text-cobalt-700 transition hover:text-cobalt-800"
+            className="group inline-flex items-center gap-1 rounded-full bg-cobalt-600 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-cobalt-700 hover:shadow-md"
           >
-            View
+            <span>View</span>
+            <span aria-hidden="true" className="transition-transform duration-200 group-hover:translate-x-0.5">
+              →
+            </span>
           </Link>
         </div>
       </div>

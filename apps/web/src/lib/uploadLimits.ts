@@ -1,5 +1,6 @@
 export const MAX_PRIMARY_ASSET_SIZE_BYTES = 512 * 1024 * 1024; // 512 MB
 export const MAX_PREVIEW_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+export const MAX_PROFILE_AVATAR_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MAX_PREVIEW_FILES = 8;
 
 export function formatFileSize(bytes: number): string {
