@@ -309,6 +309,41 @@
   .auth-mode-enter-back {
     animation: auth-mode-enter-back 300ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
   }
+
+  .profile-shell {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .profile-shell::before {
+    content: "";
+    position: absolute;
+    inset: -18px -16px auto;
+    height: 180px;
+    border-radius: 24px;
+    pointer-events: none;
+    z-index: -1;
+    background: radial-gradient(circle at 12% 30%, rgba(31, 70, 239, 0.12), transparent 56%),
+      radial-gradient(circle at 75% 40%, rgba(21, 147, 145, 0.1), transparent 58%);
+  }
+
+  .profile-hero-panel {
+    box-shadow: 0 18px 34px -24px rgba(23, 105, 255, 0.45);
+  }
+
+  .profile-summary-panel {
+    box-shadow: 0 16px 34px -26px rgba(16, 19, 36, 0.5);
+  }
+
+  .profile-edit-panel {
+    background-image: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+    box-shadow: 0 14px 32px -26px rgba(16, 19, 36, 0.42);
+  }
+
+  .profile-avatar-frame {
+    border: 1px solid #d7e5ff;
+    box-shadow: 0 14px 24px -18px rgba(23, 105, 255, 0.5);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

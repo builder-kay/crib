@@ -173,24 +173,44 @@ export function ProfilePage() {
   const creatorCategoryLabel = profileQuery.data?.creator_category?.trim() || "General";
   const salesLabel = formatSalesCount(profileQuery.data?.sales_count ?? 0);
   const isVerified = Boolean(profileQuery.data?.is_verified);
+  const listedWorksCount = portfolioAssets.length;
+  const listedWorksLabel = `${listedWorksCount} listed work${listedWorksCount === 1 ? "" : "s"}`;
 
   return (
-    <div className="space-y-6">
-      <header className="surface-card-vivid p-5 md:p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">{isOwnProfile ? "Your Public Profile" : "Creator Profile"}</p>
-        <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">{profileName}</h1>
-        <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
-          {isOwnProfile
-            ? "Build trust with a complete identity: category, bio, portfolio, and social proof."
-            : "Discover the creator behind the work, then explore their portfolio."}
-        </p>
+    <div className="profile-shell space-y-6">
+      <header className="surface-card-vivid profile-hero-panel relative overflow-hidden p-5 md:p-6">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-cobalt-100/70 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-24 h-52 w-52 rounded-full bg-lagoon-100/50 blur-3xl" />
+
+        <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">{isOwnProfile ? "Your Public Profile" : "Creator Profile"}</p>
+            <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">{profileName}</h1>
+            <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
+              {isOwnProfile
+                ? "Build trust with a complete identity: category, bio, portfolio, and social proof."
+                : "Discover the creator behind the work, then explore their portfolio."}
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <ProfileStatChip label="Category" value={creatorCategoryLabel} />
+            <ProfileStatChip label="Sales" value={salesLabel} />
+            <ProfileStatChip label="Portfolio" value={String(listedWorksCount)} />
+          </div>
+        </div>
       </header>
 
-      <section className={`grid gap-5 ${isOwnProfile ? "lg:grid-cols-[0.82fr,1.18fr]" : ""}`}>
-        <article className="surface-card p-5">
-          <div className="flex items-start gap-4">
-            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-cobalt-100 font-display text-xl font-bold text-cobalt-700">
-              {initialsFromName(profileName)}
+      <section className={`grid items-start gap-5 ${isOwnProfile ? "lg:grid-cols-[0.82fr,1.18fr]" : ""}`}>
+        <article className="surface-card profile-summary-panel relative overflow-hidden p-5 md:p-6">
+          <div className="pointer-events-none absolute -right-16 top-6 h-36 w-36 rounded-full bg-cobalt-100/55 blur-3xl" />
+          <div className="relative z-10 flex items-start gap-4">
+            <div className="profile-avatar-frame grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cobalt-50 via-white to-lagoon-50">
+              {profileQuery.data?.avatar_url ? (
+                <img src={profileQuery.data.avatar_url} alt={profileName} className="h-16 w-16 rounded-full object-cover" />
+              ) : (
+                <span className="font-display text-2xl font-bold text-cobalt-700">{initialsFromName(profileName)}</span>
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -208,17 +228,24 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <IdentityChip label="Category" value={creatorCategoryLabel} />
-            <IdentityChip label="Sales" value={salesLabel} />
+          <div className="mt-5 grid gap-2 sm:grid-cols-3">
+            <ProfileStatTile label="Category" value={creatorCategoryLabel} />
+            <ProfileStatTile label="Sales" value={salesLabel} />
+            <ProfileStatTile label="Portfolio" value={listedWorksLabel} />
           </div>
 
-          <p className="mt-4 text-sm leading-relaxed text-sand-700">{profileQuery.data?.bio || "No bio added yet."}</p>
+          <div className="mt-5 rounded-xl border border-sand-200 bg-sand-50/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sand-500">About</p>
+            <p className="mt-1 text-sm leading-relaxed text-sand-700">{profileQuery.data?.bio || "No bio added yet."}</p>
+          </div>
 
-          <div className="mt-5 grid gap-2 text-sm">
-            <SocialRow label="Website" url={websiteUrl} fallback={profileQuery.data?.socials?.website ?? ""} />
-            <SocialRow label="Instagram" url={instagramUrl} fallback={profileQuery.data?.socials?.instagram ?? ""} />
-            <SocialRow label="X / Twitter" url={xUrl} fallback={profileQuery.data?.socials?.x ?? ""} />
+          <div className="mt-5 space-y-2 text-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sand-500">Social links</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <SocialRow label="Website" url={websiteUrl} fallback={profileQuery.data?.socials?.website ?? ""} />
+              <SocialRow label="Instagram" url={instagramUrl} fallback={profileQuery.data?.socials?.instagram ?? ""} />
+              <SocialRow label="X / Twitter" url={xUrl} fallback={profileQuery.data?.socials?.x ?? ""} />
+            </div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -226,7 +253,7 @@ export function ProfilePage() {
               <>
                 <Link
                   to="/dashboard"
-                  className="rounded-full border border-sand-300 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
+                  className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
                 >
                   Dashboard
                 </Link>
@@ -249,7 +276,7 @@ export function ProfilePage() {
         </article>
 
         {isOwnProfile ? (
-          <article className="surface-card p-5">
+          <article className="surface-card profile-edit-panel p-5 md:p-6">
             <h2 className="font-display text-xl font-semibold text-ink">Edit Profile</h2>
             <p className="mt-2 text-sm text-sand-600">
               Your public profile powers trust in marketplace listings. Bio and category are required.
@@ -284,7 +311,7 @@ export function ProfilePage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-2xl font-bold text-ink">{isOwnProfile ? "Your Portfolio" : "Portfolio"}</h2>
           <span className="rounded-full border border-sand-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sand-700">
-            {portfolioAssets.length} listed works
+            {listedWorksLabel}
           </span>
         </div>
 
@@ -302,33 +329,42 @@ export function ProfilePage() {
   );
 }
 
-function IdentityChip({ label, value }: { label: string; value: string }) {
+function ProfileStatChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1.5 text-xs">
-      <span className="font-medium uppercase tracking-[0.12em] text-sand-500">{label}</span>
-      <span className="ml-1.5 font-semibold text-ink">{value}</span>
-    </div>
+    <article className="rounded-xl border border-cobalt-100 bg-white/85 px-3 py-2 backdrop-blur-sm">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cobalt-600">{label}</p>
+      <p className="mt-1 line-clamp-1 text-sm font-semibold text-ink">{value}</p>
+    </article>
+  );
+}
+
+function ProfileStatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="rounded-xl border border-sand-200 bg-white px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sand-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+    </article>
   );
 }
 
 function SocialRow({ label, url, fallback }: { label: string; url: string; fallback: string }) {
   if (!url) {
     return (
-      <div className="rounded-lg border border-sand-200 bg-sand-50 px-3 py-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">{label}</p>
-        <p className="mt-0.5 text-sm text-sand-600">Not provided</p>
+      <div className="h-full rounded-xl border border-dashed border-sand-300 bg-sand-50 px-3 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sand-500">{label}</p>
+        <p className="mt-1 text-sm text-sand-600">Not provided</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-sand-200 bg-white px-3 py-2">
-      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">{label}</p>
+    <div className="h-full rounded-xl border border-sand-200 bg-white px-3 py-2.5 transition hover:border-cobalt-200 hover:bg-cobalt-50/35">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sand-500">{label}</p>
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-0.5 inline-block max-w-full truncate text-sm font-medium text-cobalt-700 hover:text-cobalt-800"
+        className="mt-1 inline-block max-w-full truncate text-sm font-medium text-cobalt-700 hover:text-cobalt-800"
       >
         {fallback.trim() || url}
       </a>

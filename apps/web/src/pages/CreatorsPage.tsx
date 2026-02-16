@@ -65,33 +65,16 @@ export function CreatorsPage() {
     return creators.filter((creator) => creator.creator_category === category);
   }, [category, creators]);
 
-  const editorPicks = useMemo(() => filteredCreators.filter((creator) => creator.editor_pick).slice(0, 4), [filteredCreators]);
-  const newCreators = useMemo(
-    () =>
-      [...filteredCreators]
-        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-        .slice(0, 6),
-    [filteredCreators]
-  );
-
-  const newCreatorsCount = useMemo(() => filteredCreators.filter((creator) => isNewCreator(creator.created_at)).length, [filteredCreators]);
-
   return (
     <div className="space-y-6">
       <header className="surface-card-vivid subtle-pattern p-5 md:p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-600">Creator Discovery</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Browse Creator Profiles</h1>
             <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
               Discover creatives by niche, category, and momentum. Follow trending talent and spot rising newcomers early.
             </p>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            <SummaryPill label="Total creators" value={String(filteredCreators.length)} />
-            <SummaryPill label="Editor picks" value={String(editorPicks.length)} />
-            <SummaryPill label="New creators" value={String(newCreatorsCount)} />
           </div>
         </div>
       </header>
@@ -137,28 +120,6 @@ export function CreatorsPage() {
         <EmptyState title="No creators found" body="Try another search or category filter to discover more profiles." />
       ) : null}
 
-      {editorPicks.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="font-display text-2xl font-bold text-ink">Editor&apos;s Picks</h2>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {editorPicks.map((creator) => (
-              <CreatorCard key={creator.id} creator={creator} variant="featured" />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {newCreators.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="font-display text-2xl font-bold text-ink">New Creators</h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {newCreators.map((creator) => (
-              <CreatorCard key={creator.id} creator={creator} />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       {filteredCreators.length > 0 ? (
         <section className="space-y-3">
           <h2 className="font-display text-2xl font-bold text-ink">All Creators</h2>
@@ -170,15 +131,6 @@ export function CreatorsPage() {
         </section>
       ) : null}
     </div>
-  );
-}
-
-function SummaryPill({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="rounded-xl border border-cobalt-100 bg-white/90 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cobalt-600">{label}</p>
-      <p className="mt-1 font-display text-xl font-bold text-ink">{value}</p>
-    </article>
   );
 }
 

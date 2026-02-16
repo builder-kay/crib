@@ -79,7 +79,7 @@ export function MarketPage() {
   return (
     <div className="space-y-5">
       <header className="surface-card-vivid space-y-4 p-5 md:p-6">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+        <div className="flex flex-col gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Discover</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Creative Assets Marketplace</h1>
@@ -87,34 +87,32 @@ export function MarketPage() {
               Explore curated digital products from designers, producers, and visual storytellers.
             </p>
           </div>
-          <div className="rounded-xl border border-cobalt-100 bg-cobalt-50 px-4 py-3 text-sm text-cobalt-800">
-            <p className="text-xs uppercase tracking-wide text-cobalt-600">Total listings</p>
-            <p className="mt-1 font-display text-xl font-bold">{assetsQuery.data?.length ?? 0}</p>
-          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCategory("all")}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-              category === "all" ? "bg-cobalt-600 text-white" : "border border-sand-200 bg-white text-sand-700 hover:bg-sand-100"
-            }`}
-          >
-            All
-          </button>
-          {ASSET_CATEGORIES.map((item) => (
+        <div className="overflow-x-auto pb-1">
+          <div className="flex w-max items-center gap-2 pr-2">
             <button
-              key={item}
               type="button"
-              onClick={() => setCategory(item)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                category === item ? "bg-cobalt-600 text-white" : "border border-sand-200 bg-white text-sand-700 hover:bg-sand-100"
+              onClick={() => setCategory("all")}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                category === "all" ? "bg-cobalt-600 text-white" : "border border-sand-200 bg-white text-sand-700 hover:bg-sand-100"
               }`}
             >
-              {item}
+              All
             </button>
-          ))}
+            {ASSET_CATEGORIES.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setCategory(item)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                  category === item ? "bg-cobalt-600 text-white" : "border border-sand-200 bg-white text-sand-700 hover:bg-sand-100"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

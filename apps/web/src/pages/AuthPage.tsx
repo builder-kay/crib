@@ -110,7 +110,7 @@ export function AuthPage() {
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr,0.95fr]">
-      <section className="surface-card-vivid auth-hero-panel relative overflow-hidden p-6 md:p-8">
+      <section className="order-2 surface-card-vivid auth-hero-panel relative overflow-hidden p-6 md:p-8 lg:order-1">
         <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-cobalt-100/70 blur-3xl auth-orb-drift" />
         <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-sunset-100/60 blur-3xl auth-orb-drift-reverse" />
         <div className="pointer-events-none absolute left-8 top-8 hidden h-36 w-36 rounded-full border border-cobalt-200/70 lg:block auth-ring-spin" />
@@ -141,7 +141,7 @@ export function AuthPage() {
         </div>
       </section>
 
-      <section className="surface-card auth-form-panel relative overflow-hidden p-6 md:p-7">
+      <section className="order-1 surface-card auth-form-panel relative overflow-hidden p-6 md:p-7 lg:order-2">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cobalt-600 via-lagoon-500 to-sunset-500" />
         <div className="relative z-10">
           <div className="rounded-full border border-sand-200 bg-sand-100 p-1">
