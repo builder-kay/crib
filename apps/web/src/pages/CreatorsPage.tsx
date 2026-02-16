@@ -44,11 +44,6 @@ function isNewCreator(createdAt: string) {
   return days <= 45;
 }
 
-function formatSalesCount(value: number) {
-  const safeValue = Math.max(0, value);
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(safeValue);
-}
-
 export function CreatorsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -189,9 +184,8 @@ function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
           <p className="line-clamp-2 text-xs text-sand-700 sm:line-clamp-3 sm:text-sm">{creator.bio || "Creative building digital products on Crib."}</p>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-xl border border-sand-200 bg-white p-1.5 sm:mt-4 sm:gap-2 sm:p-2">
+        <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-xl border border-sand-200 bg-white p-1.5 sm:mt-4 sm:gap-2 sm:p-2">
           <StatBlock label="Assets" value={String(creator.published_assets)} />
-          <StatBlock label="Sales" value={formatSalesCount(creator.sales_count)} />
           <StatBlock label="Joined" value={toDateLabel(creator.created_at)} />
         </div>
 

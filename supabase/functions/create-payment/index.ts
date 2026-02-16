@@ -7,6 +7,10 @@ type CreatePaymentPayload = {
   email?: string;
 };
 
+type PayoutFlags = {
+  testMode: boolean;
+};
+
 function parseCommissionBps(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "1000", 10);
   if (Number.isNaN(parsed) || parsed < 0) {
@@ -27,6 +31,27 @@ function parseEmail(input: unknown): string | null {
 
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailPattern.test(value) ? value : null;
+}
+
+function hasUnsupportedBuyerDomain(email: string): boolean {
+  const [, domain = ""] = email.split("@");
+  const normalizedDomain = domain.trim().toLowerCase();
+  if (!normalizedDomain) {
+    return true;
+  }
+
+  return normalizedDomain === "localhost" || normalizedDomain.endsWith(".local");
+}
+
+function parsePayoutFlags(metadata: unknown): PayoutFlags {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return { testMode: false };
+  }
+
+  const record = metadata as Record<string, unknown>;
+  return {
+    testMode: record.test_mode === true
+  };
 }
 
 Deno.serve(async (request) => {
@@ -81,6 +106,16 @@ Deno.serve(async (request) => {
 
   if (!buyerEmail) {
     return jsonResponse({ error: "A valid buyer email is required" }, 400);
+  }
+
+  if (hasUnsupportedBuyerDomain(buyerEmail)) {
+    return jsonResponse(
+      {
+        error: "Use a real email domain for checkout (example: yourname@gmail.com)",
+        code: "invalid_buyer_email"
+      },
+      400
+    );
   }
 
   const { data: asset, error: assetError } = await supabase
@@ -147,7 +182,7 @@ Deno.serve(async (request) => {
 
   const { data: payoutAccount, error: payoutAccountError } = await supabase
     .from("creator_payout_accounts")
-    .select("subaccount_code, status")
+    .select("subaccount_code, status, metadata")
     .eq("creator_id", asset.creator_id)
     .eq("provider", "paystack")
     .maybeSingle();
@@ -156,10 +191,22 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Unable to load creator payout setup", details: payoutAccountError.message }, 500);
   }
 
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.subaccount_code) {
+  if (!payoutAccount || payoutAccount.status !== "active") {
     return jsonResponse(
       {
         error: "Creator has not configured payout account yet",
+        code: "creator_payout_unavailable"
+      },
+      409
+    );
+  }
+
+  const payoutFlags = parsePayoutFlags(payoutAccount.metadata);
+  const useSplitPayout = !payoutFlags.testMode;
+  if (useSplitPayout && !payoutAccount.subaccount_code) {
+    return jsonResponse(
+      {
+        error: "Creator payout account is incomplete",
         code: "creator_payout_unavailable"
       },
       409
@@ -187,15 +234,12 @@ Deno.serve(async (request) => {
   const commission = Math.floor((order.amount_kobo * commissionBps) / 10_000);
 
   try {
-    const paystackResponse = await initializePaystackTransaction(paystackSecretKey, {
+    const paystackPayload = {
       email: buyerEmail,
       amount: order.amount_kobo,
       currency: order.currency,
       reference,
       callback_url: `${siteUrl}/orders?reference=${encodeURIComponent(reference)}&token=${order.email_token}`,
-      subaccount: payoutAccount.subaccount_code,
-      ...(commission > 0 ? { transaction_charge: commission } : {}),
-      bearer: "subaccount",
       metadata: {
         source: "crib",
         asset_id: asset.id,
@@ -204,11 +248,32 @@ Deno.serve(async (request) => {
         order_token: order.email_token,
         buyer_id: buyerId,
         creator_id: asset.creator_id,
-        creator_subaccount_code: payoutAccount.subaccount_code,
         commission_bps: commissionBps,
-        commission_kobo: commission
+        commission_kobo: commission,
+        payout_mode: useSplitPayout ? "split_subaccount" : "test_no_split"
       }
-    });
+    } as {
+      email: string;
+      amount: number;
+      currency: string;
+      reference: string;
+      callback_url: string;
+      metadata: Record<string, unknown>;
+      subaccount?: string;
+      transaction_charge?: number;
+      bearer?: "subaccount";
+    };
+
+    if (useSplitPayout) {
+      paystackPayload.subaccount = payoutAccount.subaccount_code;
+      if (commission > 0) {
+        paystackPayload.transaction_charge = commission;
+      }
+      paystackPayload.bearer = "subaccount";
+      paystackPayload.metadata.creator_subaccount_code = payoutAccount.subaccount_code;
+    }
+
+    const paystackResponse = await initializePaystackTransaction(paystackSecretKey, paystackPayload);
 
     if (!paystackResponse.status || !paystackResponse.data) {
       await supabase.from("orders").update({ status: "failed" }).eq("id", order.id);
@@ -244,6 +309,8 @@ Deno.serve(async (request) => {
       corsHeaders
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
     await supabase.from("orders").update({ status: "failed" }).eq("id", order.id);
     await supabase.from("payments").upsert(
       {
@@ -252,16 +319,37 @@ Deno.serve(async (request) => {
         reference,
         status: "failed",
         raw: {
-          error: error instanceof Error ? error.message : "Unknown error"
+          error: errorMessage
         }
       },
       { onConflict: "order_id" }
     );
 
+    const normalizedError = errorMessage.toLowerCase();
+    if (normalizedError.includes("invalid email address")) {
+      return jsonResponse(
+        {
+          error: "Paystack rejected the buyer email. Use a valid public email address.",
+          code: "invalid_buyer_email"
+        },
+        400
+      );
+    }
+
+    if (normalizedError.includes("invalid subaccount")) {
+      return jsonResponse(
+        {
+          error: "Creator payout account is invalid. Ask creator to reconnect payout settings.",
+          code: "creator_payout_invalid"
+        },
+        409
+      );
+    }
+
     return jsonResponse(
       {
         error: "Unable to initialize payment",
-        details: error instanceof Error ? error.message : "Unknown error"
+        details: errorMessage
       },
       502
     );

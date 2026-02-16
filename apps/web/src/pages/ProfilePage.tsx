@@ -52,12 +52,6 @@ function toSocialUrl(kind: "website" | "instagram" | "x", rawValue: string) {
   return kind === "instagram" ? `https://instagram.com/${handle}` : `https://x.com/${handle}`;
 }
 
-function formatSalesCount(count: number) {
-  const safeCount = Math.max(0, count);
-  const formatted = new Intl.NumberFormat("en-US").format(safeCount);
-  return `${formatted} sale${safeCount === 1 ? "" : "s"}`;
-}
-
 export function ProfilePage() {
   const { id: routeProfileId } = useParams();
   const user = useAuthStore((state) => state.user);
@@ -316,7 +310,6 @@ export function ProfilePage() {
   const instagramUrl = toSocialUrl("instagram", profileQuery.data?.socials?.instagram ?? "");
   const xUrl = toSocialUrl("x", profileQuery.data?.socials?.x ?? "");
   const creatorCategoryLabel = profileQuery.data?.creator_category?.trim() || "General";
-  const salesLabel = formatSalesCount(profileQuery.data?.sales_count ?? 0);
   const isVerified = Boolean(profileQuery.data?.is_verified);
   const listedWorksCount = portfolioAssets.length;
   const listedWorksLabel = `${listedWorksCount} listed work${listedWorksCount === 1 ? "" : "s"}`;
@@ -345,9 +338,8 @@ export function ProfilePage() {
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             <ProfileStatChip label="Category" value={creatorCategoryLabel} />
-            <ProfileStatChip label="Sales" value={salesLabel} />
             <ProfileStatChip label="Portfolio" value={String(listedWorksCount)} />
           </div>
         </div>
@@ -381,9 +373,8 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
             <ProfileStatTile label="Category" value={creatorCategoryLabel} />
-            <ProfileStatTile label="Sales" value={salesLabel} />
             <ProfileStatTile label="Portfolio" value={listedWorksLabel} />
           </div>
 

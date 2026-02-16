@@ -89,14 +89,8 @@ export function FilterBar({
         </select>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-sand-600">
-          <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5">Curated picks</span>
-          <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5">Ready-to-use packs</span>
-          <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5">Commercial license</span>
-        </div>
-
-        {onResetFilters ? (
+      {onResetFilters ? (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={onResetFilters}
@@ -105,8 +99,8 @@ export function FilterBar({
           >
             Reset filters
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </section>
   );
 }

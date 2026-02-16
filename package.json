@@ -10,6 +10,9 @@
     "build": "npm run build --workspace @crib/web",
     "preview": "npm run preview --workspace @crib/web",
     "lint": "npm run lint --workspace @crib/web",
-    "typecheck": "npm run typecheck --workspace @crib/web"
+    "typecheck": "npm run typecheck --workspace @crib/web",
+    "seed:stress": "node scripts/seed-stress-creators.mjs",
+    "payouts:test": "node scripts/configure-test-payouts.mjs",
+    "seed:stress:fix-emails": "node scripts/fix-stress-user-emails.mjs"
   }
 }
