@@ -13,6 +13,7 @@
     "typecheck": "npm run typecheck --workspace @crib/web",
     "seed:stress": "node scripts/seed-stress-creators.mjs",
     "payouts:test": "node scripts/configure-test-payouts.mjs",
-    "seed:stress:fix-emails": "node scripts/fix-stress-user-emails.mjs"
+    "seed:stress:fix-emails": "node scripts/fix-stress-user-emails.mjs",
+    "seed:stress:cleanup": "node scripts/cleanup-stress-data.mjs"
   }
 }
