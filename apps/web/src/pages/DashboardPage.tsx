@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PriceTag } from "@/components/PriceTag";
 import { getCreatorAssets, getCreatorDashboard, getCreatorFunnelSummary } from "@/lib/api";
+import { getAssetAppLabel, getAssetFormatLabel } from "@/lib/assetCatalog";
 import { formatDate, formatCurrency } from "@/lib/format";
 import type { Asset, Order } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
@@ -111,8 +112,8 @@ export function DashboardPage() {
             tone="bg-forest-100/80 text-forest-700"
           />
           <MiniInsight
-            label="Latest Upload"
-            value={latestAsset ? latestAsset.title : "No assets yet"}
+            label="Latest Listing"
+            value={latestAsset ? latestAsset.title : "No listings yet"}
             tone="bg-cobalt-100/70 text-cobalt-700"
           />
           <MiniInsight label="Paid Conversion" value={conversionLabel} tone="bg-sunset-100 text-sunset-700" />
@@ -132,7 +133,7 @@ export function DashboardPage() {
           helper="Available for payout"
           tone="forest"
         />
-        <MetricCard label="Asset Count" value={String(dashboardQuery.data?.assetCount ?? 0)} helper="Total listings created" tone="lagoon" />
+        <MetricCard label="Listing Count" value={String(dashboardQuery.data?.assetCount ?? 0)} helper="Total listings created" tone="lagoon" />
         <MetricCard label="Avg Paid Order" value={avgPaidOrderLabel} helper="Average ticket size" tone="sunset" />
       </section>
 
@@ -152,7 +153,7 @@ export function DashboardPage() {
 
         {!funnelSummaryQuery.isLoading ? (
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <FunnelStage label="Views" count={funnel.asset_views} sublabel="Asset viewed" tone="cobalt" />
+            <FunnelStage label="Views" count={funnel.asset_views} sublabel="Listing viewed" tone="cobalt" />
             <FunnelStage label="Clicks" count={funnel.asset_clicks} sublabel={`${clickThrough}% from views`} tone="lagoon" />
             <FunnelStage label="Checkout" count={funnel.checkout_starts} sublabel={`${checkoutRate}% from clicks`} tone="sunset" />
             <FunnelStage label="Purchases" count={funnel.purchases} sublabel={`${purchaseRate}% from checkout`} tone="forest" />
@@ -173,7 +174,7 @@ export function DashboardPage() {
           {dashboardQuery.isError ? <p className="mt-3 text-sm text-rose-700">Unable to load order data.</p> : null}
 
           {dashboardQuery.data && recentOrders.length === 0 ? (
-            <EmptyState title="No sales yet" body="Share your assets and links to start collecting orders." />
+            <EmptyState title="No sales yet" body="Share your template listings and links to start collecting orders." />
           ) : null}
 
           {recentOrders.length > 0 ? (
@@ -186,7 +187,7 @@ export function DashboardPage() {
                   }`}
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-ink">{order.asset?.title ?? "Asset"}</p>
+                    <p className="truncate font-semibold text-ink">{order.asset?.title ?? "Listing"}</p>
                     <p className="mt-0.5 text-xs text-sand-600">
                       #{order.id.slice(0, 8)} - {formatDate(order.created_at)}
                     </p>
@@ -228,17 +229,17 @@ export function DashboardPage() {
       <section className="grid gap-5 xl:grid-cols-[1.3fr,0.7fr]">
         <section className="surface-card p-5">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-xl font-semibold text-ink">Your Assets</h2>
+            <h2 className="font-display text-xl font-semibold text-ink">Your Listings</h2>
             <Link to="/dashboard/upload" className="text-xs font-semibold uppercase tracking-wide text-cobalt-700 hover:text-cobalt-800">
               Upload another
             </Link>
           </div>
 
-          {assetsQuery.isLoading ? <p className="mt-3 text-sm text-sand-600">Loading assets...</p> : null}
-          {assetsQuery.isError ? <p className="mt-3 text-sm text-rose-700">Unable to load assets.</p> : null}
+          {assetsQuery.isLoading ? <p className="mt-3 text-sm text-sand-600">Loading listings...</p> : null}
+          {assetsQuery.isError ? <p className="mt-3 text-sm text-rose-700">Unable to load listings.</p> : null}
 
           {assetsQuery.data && assetList.length === 0 ? (
-            <EmptyState title="No uploads yet" body="Publish your first product from the upload page." />
+            <EmptyState title="No uploads yet" body="Publish your first template listing from the upload page." />
           ) : null}
 
           {assetList.length > 0 ? (
@@ -251,7 +252,7 @@ export function DashboardPage() {
         </section>
 
         <aside className="surface-card p-5">
-          <h2 className="font-display text-xl font-semibold text-ink">Asset Pipeline</h2>
+          <h2 className="font-display text-xl font-semibold text-ink">Listing Pipeline</h2>
           <p className="mt-1 text-sm text-sand-600">Keep your catalog balanced between draft work and live listings.</p>
 
           <div className="mt-4 space-y-3">
@@ -396,6 +397,9 @@ function PerformanceRow({
 }
 
 function AssetPreviewCard({ asset }: { asset: Asset }) {
+  const appLabel = getAssetAppLabel(asset);
+  const formatLabel = getAssetFormatLabel(asset);
+
   return (
     <article className="rounded-xl border border-sand-200 bg-white p-3 transition hover:border-cobalt-200">
       <div className="flex items-start justify-between gap-2">
@@ -404,6 +408,9 @@ function AssetPreviewCard({ asset }: { asset: Asset }) {
       </div>
       <p className="mt-1 text-xs text-sand-600">
         {asset.category} - {formatDate(asset.created_at)}
+      </p>
+      <p className="mt-1 text-xs text-sand-500">
+        {appLabel} - {formatLabel}
       </p>
       <div className="mt-3 flex items-center justify-between">
         <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} />

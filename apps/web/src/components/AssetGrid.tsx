@@ -71,7 +71,7 @@ export function AssetGrid({ assets }: AssetGridProps) {
 
   function handleToggleWishlist(assetId: string, nextState: boolean) {
     if (!user?.id) {
-      pushToast("Sign in to save assets.", "info");
+      pushToast("Sign in to save listings.", "info");
       navigate("/auth");
       return;
     }

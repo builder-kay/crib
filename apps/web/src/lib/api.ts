@@ -1,6 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
+import { getUserContactEmail, looksLikeEmailIdentifier, normalizeAuthPhoneInput } from "@/lib/auth";
+import { getAssetAppLabel, getAssetFilterFileType, getAssetPrimaryFilename } from "@/lib/assetCatalog";
 import { env } from "@/lib/env";
 import { slugify } from "@/lib/format";
+import {
+  normalizeAdminWhatsAppMessage,
+  normalizeAdminWhatsAppNumber,
+  normalizePlatformSocialHandle,
+  normalizePlatformSupportEmail
+} from "@/lib/platform";
 import {
   formatFileSize,
   looksLikeUploadSizeError,
@@ -10,6 +18,9 @@ import {
 } from "@/lib/uploadLimits";
 import { supabase } from "@/lib/supabaseClient";
 import type {
+  AdminCreatorRecord,
+  AdminOrderRecord,
+  AdminOverview,
   Asset,
   AssetReview,
   CreatorDashboard,
@@ -19,6 +30,7 @@ import type {
   Order,
   PayoutAccount,
   PayoutBank,
+  PlatformSocialSettings,
   Profile,
   RatingSummary,
   ReleaseNotification
@@ -87,12 +99,14 @@ type OrderRow = {
         title: string;
         category: string;
         previews?: Array<{ id: string; preview_url: string }>;
+        files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
       }
     | Array<{
         id: string;
         title: string;
         category: string;
         previews?: Array<{ id: string; preview_url: string }>;
+        files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
       }>;
 };
 
@@ -110,6 +124,7 @@ type CreatorProfileRow = {
 
 type CreatorAssetStatRow = {
   creator_id: string;
+  status: Asset["status"];
   created_at: string;
 };
 
@@ -120,6 +135,19 @@ type CreatorReviewRatingRow = {
 
 type CreatorFollowRow = {
   creator_id: string;
+};
+
+type PlatformSettingsRow = {
+  singleton: boolean;
+  instagram_handle: string | null;
+  x_handle: string | null;
+  tiktok_handle: string | null;
+  linkedin_handle: string | null;
+  facebook_handle: string | null;
+  whatsapp_channel: string | null;
+  support_email: string | null;
+  admin_whatsapp_number: string | null;
+  admin_whatsapp_message: string | null;
 };
 
 type AssetReviewRow = {
@@ -262,7 +290,8 @@ function mapOrder(row: OrderRow): Order {
           id: asset.id,
           title: asset.title,
           category: asset.category,
-          previews: asset.previews ?? []
+          previews: asset.previews ?? [],
+          files: asset.files ?? []
         }
       : undefined
   };
@@ -322,10 +351,84 @@ function mapReleaseNotification(row: CreatorReleaseNotificationRow): ReleaseNoti
     creator_id: row.creator_id,
     follower_id: row.follower_id,
     asset_id: row.asset_id,
-    creator_name: creator?.display_name ?? "Creator",
+  creator_name: creator?.display_name ?? "Creator",
     asset_title: asset?.title ?? "New release"
   };
 }
+
+function normalizeJoinedRecord<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
+type AdminOverviewAssetRow = {
+  creator_id: string;
+  status: Asset["status"];
+};
+
+type AdminOverviewOrderRow = {
+  status: Order["status"];
+  amount_kobo: number;
+  currency: string;
+};
+
+type AdminOrderRow = {
+  id: string;
+  buyer_id: string | null;
+  email: string;
+  status: Order["status"];
+  amount_kobo: number;
+  currency: string;
+  created_at: string;
+  paid_at: string | null;
+  asset?:
+    | {
+        id: string;
+        title: string;
+        category: string;
+        creator_id: string;
+        profile?: AssetProfileRow | AssetProfileRow[] | null;
+      }
+    | Array<{
+        id: string;
+        title: string;
+        category: string;
+        creator_id: string;
+        profile?: AssetProfileRow | AssetProfileRow[] | null;
+      }>
+    | null;
+  payment?:
+    | {
+        provider: string;
+        reference: string;
+        status: "pending" | "paid" | "failed" | "refunded";
+        updated_at: string | null;
+      }
+    | Array<{
+        provider: string;
+        reference: string;
+        status: "pending" | "paid" | "failed" | "refunded";
+        updated_at: string | null;
+      }>
+    | null;
+};
+
+type AdminCreatorPayoutRow = {
+  creator_id: string;
+  status: "active" | "inactive";
+  country: string;
+  payout_type: "bank" | "mobile_money";
+  settlement_bank_name: string | null;
+  updated_at: string;
+};
+
+type WalletRow = {
+  creator_id: string;
+  balance_kobo: number | null;
+};
 
 function summarizeRatings(ratings: number[]): RatingSummary {
   if (ratings.length === 0) {
@@ -388,6 +491,8 @@ function scoreAssetSearchMatch(asset: Asset, tokens: string[]): number {
   const description = asset.description.toLowerCase();
   const category = asset.category.toLowerCase();
   const creator = (asset.profile?.display_name ?? "").toLowerCase();
+  const appLabel = getAssetAppLabel(asset).toLowerCase();
+  const primaryFileName = getAssetPrimaryFilename(asset).toLowerCase();
   const tags = (asset.tags ?? []).map((tag) => tag.toLowerCase());
 
   let score = 0;
@@ -401,6 +506,12 @@ function scoreAssetSearchMatch(asset: Asset, tokens: string[]): number {
     }
     if (category.includes(token)) {
       tokenScore += 4;
+    }
+    if (appLabel.includes(token)) {
+      tokenScore += 4;
+    }
+    if (primaryFileName.includes(token)) {
+      tokenScore += 5;
     }
     if (description.includes(token)) {
       tokenScore += 2;
@@ -513,6 +624,215 @@ function buildApiError(responseStatus: number, text: string) {
   error.payload = payload;
 
   return error;
+}
+
+export type ResolveAuthIdentifierResult = {
+  ok: boolean;
+  phone: string | null;
+  email: string | null;
+  display_name: string;
+  destination: string;
+};
+
+export type SendAuthOtpInput =
+  | {
+      intent: "register";
+      phone: string;
+      email?: string;
+    }
+  | {
+      intent: "reset";
+      identifier: string;
+    };
+
+export type SendAuthOtpResult = {
+  ok: boolean;
+  intent: "register" | "reset";
+  destination: string;
+  phone: string;
+  expires_in_seconds: number;
+};
+
+export type VerifyAuthOtpInput =
+  | {
+      intent: "register";
+      phone: string;
+      email?: string;
+      code: string;
+      display_name: string;
+      password: string;
+    }
+  | {
+      intent: "reset";
+      phone: string;
+      code: string;
+      new_password: string;
+    };
+
+export type ProvisionEditorialAdminInput =
+  | {
+      credential_type: "email";
+      email: string;
+      password: string;
+      display_name?: string;
+    }
+  | {
+      credential_type: "phone";
+      phone: string;
+      password: string;
+      display_name?: string;
+    };
+
+export type ProvisionEditorialAdminResult = {
+  ok: boolean;
+  mode: "created" | "updated";
+  user_id: string;
+  credential_type: "email" | "phone";
+  email: string | null;
+  phone: string | null;
+  display_name: string;
+};
+
+export async function resolveAuthIdentifier(identifier: string): Promise<ResolveAuthIdentifierResult> {
+  const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/resolve-auth-identifier`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.VITE_SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ identifier })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  return (await response.json()) as ResolveAuthIdentifierResult;
+}
+
+export async function sendAuthOtp(input: SendAuthOtpInput): Promise<SendAuthOtpResult> {
+  const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/send-auth-otp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.VITE_SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  return (await response.json()) as SendAuthOtpResult;
+}
+
+export async function verifyAuthOtp(input: VerifyAuthOtpInput): Promise<{
+  ok: boolean;
+  intent: "register" | "reset";
+  phone: string;
+  email?: string | null;
+  user_id?: string;
+}> {
+  const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/verify-auth-otp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.VITE_SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  return (await response.json()) as {
+    ok: boolean;
+    intent: "register" | "reset";
+    phone: string;
+    email?: string | null;
+    user_id?: string;
+  };
+}
+
+export async function provisionEditorialAdmin(input: ProvisionEditorialAdminInput): Promise<ProvisionEditorialAdminResult> {
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("You must be signed in to manage editorial accounts.");
+  }
+
+  const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/provision-editorial-admin`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify(input)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  return (await response.json()) as ProvisionEditorialAdminResult;
+}
+
+export async function signInWithIdentifier(identifier: string, password: string) {
+  const trimmedIdentifier = identifier.trim();
+  if (!trimmedIdentifier) {
+    throw new Error("Enter your email or mobile number.");
+  }
+
+  if (looksLikeEmailIdentifier(trimmedIdentifier)) {
+    const directEmailAttempt = await supabase.auth.signInWithPassword({
+      email: trimmedIdentifier.toLowerCase(),
+      password
+    });
+
+    if (!directEmailAttempt.error) {
+      return directEmailAttempt.data;
+    }
+
+    const resolved = await resolveAuthIdentifier(trimmedIdentifier);
+    if (!resolved.phone) {
+      throw directEmailAttempt.error;
+    }
+
+    const fallbackPhoneAttempt = await supabase.auth.signInWithPassword({
+      phone: resolved.phone,
+      password
+    });
+
+    if (fallbackPhoneAttempt.error) {
+      throw fallbackPhoneAttempt.error;
+    }
+
+    return fallbackPhoneAttempt.data;
+  }
+
+  const normalizedPhone = normalizeAuthPhoneInput(trimmedIdentifier);
+  if (!normalizedPhone) {
+    throw new Error("Enter your mobile number with country code, for example +233...");
+  }
+
+  const phoneAttempt = await supabase.auth.signInWithPassword({
+    phone: normalizedPhone,
+    password
+  });
+
+  if (phoneAttempt.error) {
+    throw phoneAttempt.error;
+  }
+
+  return phoneAttempt.data;
 }
 
 function mapStorageUploadError(
@@ -920,8 +1240,8 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
       const matchesCreator = creatorQuery ? (asset.profile?.display_name ?? "").toLowerCase().includes(creatorQuery) : true;
       const matchesMin = typeof filters.minPrice === "number" ? asset.price_kobo >= Math.round(filters.minPrice * 100) : true;
       const matchesMax = typeof filters.maxPrice === "number" ? asset.price_kobo <= Math.round(filters.maxPrice * 100) : true;
-      const firstFileType = asset.files?.[0]?.file_type ?? "";
-      const matchesFileType = !filters.fileType || filters.fileType === "all" ? true : firstFileType.includes(filters.fileType);
+      const matchesFileType =
+        !filters.fileType || filters.fileType === "all" ? true : getAssetFilterFileType(asset) === filters.fileType;
 
       return matchesSearch && matchesCategory && matchesCreator && matchesMin && matchesMax && matchesFileType;
     });
@@ -1478,21 +1798,28 @@ export async function createAssetListing(
   }
 }
 
-export async function createPayment(assetId: string, email?: string) {
+export async function createPayment(assetId: string, buyerEmailOverride?: string) {
   const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  const buyerEmail = getUserContactEmail(data.session?.user) ?? buyerEmailOverride?.trim() ?? "";
+
+  if (!accessToken) {
+    throw new Error("Sign in to continue to checkout.");
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    apikey: env.VITE_SUPABASE_ANON_KEY
+    apikey: env.VITE_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${accessToken}`
   };
-
-  if (data.session?.access_token) {
-    headers.Authorization = `Bearer ${data.session.access_token}`;
-  }
 
   const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/create-payment`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ asset_id: assetId, email })
+    body: JSON.stringify({
+      asset_id: assetId,
+      ...(buyerEmail ? { email: buyerEmail } : {})
+    })
   });
 
   if (!response.ok) {
@@ -1604,7 +1931,7 @@ export async function getBuyerOrders(options: {
       amount_kobo,
       currency,
       created_at,
-      asset:assets(id, title, category, previews:asset_previews(id, preview_url))`
+      asset:assets(id, title, category, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
     )
     .order("created_at", { ascending: false });
 
@@ -1680,7 +2007,7 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
           amount_kobo,
           currency,
           created_at,
-          asset:assets!inner(id, title, category, creator_id, previews:asset_previews(id, preview_url))`
+          asset:assets!inner(id, title, category, creator_id, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
         )
         .eq("assets.creator_id", userId)
         .order("created_at", { ascending: false })
@@ -1913,6 +2240,416 @@ export async function isCurrentUserAdmin(userId: string) {
   }
 
   return Boolean(data);
+}
+
+export async function isCurrentUserEditorialAdmin(userId: string) {
+  const { data, error } = await supabase
+    .from("editorial_admins")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return Boolean(data);
+}
+
+function normalizePlatformSettings(row: PlatformSettingsRow | null | undefined): PlatformSocialSettings {
+  return {
+    instagram_handle: normalizePlatformSocialHandle("instagram", row?.instagram_handle ?? ""),
+    x_handle: normalizePlatformSocialHandle("x", row?.x_handle ?? ""),
+    tiktok_handle: normalizePlatformSocialHandle("tiktok", row?.tiktok_handle ?? ""),
+    linkedin_handle: normalizePlatformSocialHandle("linkedin", row?.linkedin_handle ?? ""),
+    facebook_handle: normalizePlatformSocialHandle("facebook", row?.facebook_handle ?? ""),
+    whatsapp_channel: normalizePlatformSocialHandle("whatsapp", row?.whatsapp_channel ?? ""),
+    support_email: normalizePlatformSupportEmail(row?.support_email ?? ""),
+    admin_whatsapp_number: normalizeAdminWhatsAppNumber(row?.admin_whatsapp_number ?? ""),
+    admin_whatsapp_message: normalizeAdminWhatsAppMessage(row?.admin_whatsapp_message ?? "")
+  };
+}
+
+export async function getPlatformSocialSettings(): Promise<PlatformSocialSettings> {
+  const { data, error } = await supabase
+    .from("platform_settings")
+    .select("singleton, instagram_handle, x_handle, tiktok_handle, linkedin_handle, facebook_handle, whatsapp_channel, support_email, admin_whatsapp_number, admin_whatsapp_message")
+    .eq("singleton", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return normalizePlatformSettings((data ?? null) as PlatformSettingsRow | null);
+}
+
+export async function updatePlatformSocialSettings(input: PlatformSocialSettings): Promise<PlatformSocialSettings> {
+  const payload = normalizePlatformSettings({
+    singleton: true,
+    instagram_handle: input.instagram_handle,
+    x_handle: input.x_handle,
+    tiktok_handle: input.tiktok_handle,
+    linkedin_handle: input.linkedin_handle,
+    facebook_handle: input.facebook_handle,
+    whatsapp_channel: input.whatsapp_channel,
+    support_email: input.support_email,
+    admin_whatsapp_number: input.admin_whatsapp_number,
+    admin_whatsapp_message: input.admin_whatsapp_message
+  });
+
+  const { data, error } = await supabase
+    .from("platform_settings")
+    .upsert(
+      {
+        singleton: true,
+        ...payload
+      },
+      { onConflict: "singleton" }
+    )
+    .select("singleton, instagram_handle, x_handle, tiktok_handle, linkedin_handle, facebook_handle, whatsapp_channel, support_email, admin_whatsapp_number, admin_whatsapp_message")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Unable to update platform settings");
+  }
+
+  return normalizePlatformSettings(data as PlatformSettingsRow);
+}
+
+export async function getAdminOverview(): Promise<AdminOverview> {
+  const [
+    profileCountResult,
+    adminCountResult,
+    assetsResult,
+    ordersResult,
+    payoutCountResult,
+    editorialCountResult,
+    assetReviewsCountResult,
+    creatorReviewsCountResult,
+    wishlistCountResult,
+    followsCountResult
+  ] = await Promise.all([
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+    supabase.from("admins").select("user_id", { count: "exact", head: true }),
+    supabase.from("assets").select("creator_id, status"),
+    supabase.from("orders").select("status, amount_kobo, currency"),
+    supabase.from("creator_payout_accounts").select("creator_id", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("editorial_posts").select("id", { count: "exact", head: true }),
+    supabase.from("asset_reviews").select("id", { count: "exact", head: true }),
+    supabase.from("creator_reviews").select("id", { count: "exact", head: true }),
+    supabase.from("wishlists").select("asset_id", { count: "exact", head: true }),
+    supabase.from("creator_follows").select("creator_id", { count: "exact", head: true })
+  ]);
+
+  if (profileCountResult.error) {
+    throw new Error(profileCountResult.error.message);
+  }
+  if (adminCountResult.error) {
+    throw new Error(adminCountResult.error.message);
+  }
+  if (assetsResult.error) {
+    throw new Error(assetsResult.error.message);
+  }
+  if (ordersResult.error) {
+    throw new Error(ordersResult.error.message);
+  }
+  if (payoutCountResult.error) {
+    throw new Error(payoutCountResult.error.message);
+  }
+  if (editorialCountResult.error) {
+    throw new Error(editorialCountResult.error.message);
+  }
+  if (assetReviewsCountResult.error) {
+    throw new Error(assetReviewsCountResult.error.message);
+  }
+  if (creatorReviewsCountResult.error) {
+    throw new Error(creatorReviewsCountResult.error.message);
+  }
+  if (wishlistCountResult.error) {
+    throw new Error(wishlistCountResult.error.message);
+  }
+  if (followsCountResult.error) {
+    throw new Error(followsCountResult.error.message);
+  }
+
+  const assets = (assetsResult.data ?? []) as AdminOverviewAssetRow[];
+  const orders = (ordersResult.data ?? []) as AdminOverviewOrderRow[];
+
+  const creatorIds = new Set<string>();
+  let publishedAssets = 0;
+  let draftAssets = 0;
+  let archivedAssets = 0;
+
+  for (const asset of assets) {
+    creatorIds.add(asset.creator_id);
+    if (asset.status === "published") {
+      publishedAssets += 1;
+    } else if (asset.status === "draft") {
+      draftAssets += 1;
+    } else {
+      archivedAssets += 1;
+    }
+  }
+
+  let paidOrders = 0;
+  let pendingOrders = 0;
+  let failedOrders = 0;
+  let refundedOrders = 0;
+  const volumeByCurrency = new Map<string, { amount_kobo: number; order_count: number }>();
+
+  for (const order of orders) {
+    const currency = order.currency.toUpperCase();
+    const current = volumeByCurrency.get(currency) ?? { amount_kobo: 0, order_count: 0 };
+
+    if (order.status === "paid") {
+      paidOrders += 1;
+      current.amount_kobo += order.amount_kobo;
+      current.order_count += 1;
+      volumeByCurrency.set(currency, current);
+      continue;
+    }
+
+    if (order.status === "pending") {
+      pendingOrders += 1;
+      continue;
+    }
+
+    if (order.status === "failed") {
+      failedOrders += 1;
+      continue;
+    }
+
+    refundedOrders += 1;
+  }
+
+  return {
+    total_profiles: profileCountResult.count ?? 0,
+    active_creators: creatorIds.size,
+    total_admins: adminCountResult.count ?? 0,
+    total_assets: assets.length,
+    published_assets: publishedAssets,
+    draft_assets: draftAssets,
+    archived_assets: archivedAssets,
+    total_orders: orders.length,
+    paid_orders: paidOrders,
+    pending_orders: pendingOrders,
+    failed_orders: failedOrders,
+    refunded_orders: refundedOrders,
+    order_volume: Array.from(volumeByCurrency.entries())
+      .map(([currency, entry]) => ({
+        currency,
+        amount_kobo: entry.amount_kobo,
+        order_count: entry.order_count
+      }))
+      .sort((left, right) => right.amount_kobo - left.amount_kobo),
+    active_payout_accounts: payoutCountResult.count ?? 0,
+    editorial_posts: editorialCountResult.count ?? 0,
+    asset_reviews: assetReviewsCountResult.count ?? 0,
+    creator_reviews: creatorReviewsCountResult.count ?? 0,
+    wishlists: wishlistCountResult.count ?? 0,
+    creator_follows: followsCountResult.count ?? 0
+  };
+}
+
+export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `id,
+      buyer_id,
+      email,
+      status,
+      amount_kobo,
+      currency,
+      created_at,
+      paid_at,
+      asset:assets(
+        id,
+        title,
+        category,
+        creator_id,
+        profile:profiles!assets_creator_id_fkey(display_name, avatar_url, creator_category, is_verified)
+      ),
+      payment:payments(provider, reference, status, updated_at)`
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as AdminOrderRow[]).map((row) => {
+    const asset = normalizeJoinedRecord(row.asset);
+    const creator = normalizeJoinedRecord(asset?.profile);
+    const payment = normalizeJoinedRecord(row.payment);
+
+    return {
+      id: row.id,
+      buyer_id: row.buyer_id,
+      email: row.email,
+      status: row.status,
+      amount_kobo: row.amount_kobo,
+      currency: row.currency,
+      created_at: row.created_at,
+      paid_at: row.paid_at,
+      payment: payment
+        ? {
+            provider: payment.provider,
+            reference: payment.reference,
+            status: payment.status,
+            updated_at: payment.updated_at
+          }
+        : null,
+      asset: asset
+        ? {
+            id: asset.id,
+            title: asset.title,
+            category: asset.category,
+            creator_id: asset.creator_id,
+            creator: creator
+              ? {
+                  display_name: creator.display_name,
+                  avatar_url: creator.avatar_url,
+                  creator_category: creator.creator_category ?? "General",
+                  is_verified: Boolean(creator.is_verified)
+                }
+              : null
+          }
+        : null
+    };
+  });
+}
+
+export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]> {
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (profilesError) {
+    throw new Error(profilesError.message);
+  }
+
+  const creatorList = (profiles ?? []) as CreatorProfileRow[];
+  if (creatorList.length === 0) {
+    return [];
+  }
+
+  const creatorIds = creatorList.map((profile) => profile.id);
+
+  const [assetsResult, walletsResult, payoutAccountsResult, followsResult] = await Promise.all([
+    supabase.from("assets").select("creator_id, status, created_at").in("creator_id", creatorIds),
+    supabase.from("wallet").select("creator_id, balance_kobo").in("creator_id", creatorIds),
+    supabase
+      .from("creator_payout_accounts")
+      .select("creator_id, status, country, payout_type, settlement_bank_name, updated_at")
+      .in("creator_id", creatorIds),
+    supabase.from("creator_follows").select("creator_id").in("creator_id", creatorIds)
+  ]);
+
+  if (assetsResult.error) {
+    throw new Error(assetsResult.error.message);
+  }
+  if (walletsResult.error) {
+    throw new Error(walletsResult.error.message);
+  }
+  if (payoutAccountsResult.error) {
+    throw new Error(payoutAccountsResult.error.message);
+  }
+  if (followsResult.error) {
+    throw new Error(followsResult.error.message);
+  }
+
+  const assetStats = new Map<
+    string,
+    {
+      asset_count: number;
+      published_assets: number;
+      draft_assets: number;
+      archived_assets: number;
+      latest_asset_at: string | null;
+    }
+  >();
+
+  for (const row of (assetsResult.data ?? []) as CreatorAssetStatRow[]) {
+    const existing = assetStats.get(row.creator_id) ?? {
+      asset_count: 0,
+      published_assets: 0,
+      draft_assets: 0,
+      archived_assets: 0,
+      latest_asset_at: null
+    };
+
+    existing.asset_count += 1;
+    if (row.status === "published") {
+      existing.published_assets += 1;
+    } else if (row.status === "draft") {
+      existing.draft_assets += 1;
+    } else {
+      existing.archived_assets += 1;
+    }
+
+    if (!existing.latest_asset_at || Date.parse(row.created_at) > Date.parse(existing.latest_asset_at)) {
+      existing.latest_asset_at = row.created_at;
+    }
+
+    assetStats.set(row.creator_id, existing);
+  }
+
+  const walletByCreator = new Map(
+    ((walletsResult.data ?? []) as WalletRow[]).map((row) => [row.creator_id, Number(row.balance_kobo ?? 0)])
+  );
+
+  const payoutByCreator = new Map(
+    ((payoutAccountsResult.data ?? []) as AdminCreatorPayoutRow[]).map((row) => [row.creator_id, row])
+  );
+
+  const followerCounts = new Map<string, number>();
+  for (const row of (followsResult.data ?? []) as CreatorFollowRow[]) {
+    followerCounts.set(row.creator_id, (followerCounts.get(row.creator_id) ?? 0) + 1);
+  }
+
+  return creatorList.map((profile) => {
+    const stats = assetStats.get(profile.id) ?? {
+      asset_count: 0,
+      published_assets: 0,
+      draft_assets: 0,
+      archived_assets: 0,
+      latest_asset_at: null
+    };
+    const payout = payoutByCreator.get(profile.id) ?? null;
+
+    return {
+      id: profile.id,
+      display_name: profile.display_name,
+      bio: profile.bio,
+      avatar_url: profile.avatar_url,
+      creator_category: profile.creator_category ?? "General",
+      niche: profile.niche,
+      sales_count: profile.sales_count ?? 0,
+      is_verified: Boolean(profile.is_verified),
+      created_at: profile.created_at,
+      asset_count: stats.asset_count,
+      published_assets: stats.published_assets,
+      draft_assets: stats.draft_assets,
+      archived_assets: stats.archived_assets,
+      latest_asset_at: stats.latest_asset_at,
+      follower_count: followerCounts.get(profile.id) ?? 0,
+      wallet_balance_kobo: walletByCreator.get(profile.id) ?? 0,
+      payout_account: payout
+        ? {
+            status: payout.status,
+            country: payout.country,
+            payout_type: payout.payout_type,
+            settlement_bank_name: payout.settlement_bank_name,
+            updated_at: payout.updated_at
+          }
+        : null
+    };
+  });
 }
 
 export async function getAdminAssets() {

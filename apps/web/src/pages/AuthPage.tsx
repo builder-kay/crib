@@ -1,67 +1,181 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/components/Toast";
-import { authSchema } from "@/lib/validators/asset";
-import { supabase } from "@/lib/supabaseClient";
+import { ARKESEL_SUPPORTED_COUNTRIES, composeArkeselPhoneInput, getUserContactEmail, maskPhoneNumber, normalizeAuthPhoneInput } from "@/lib/auth";
+import { sendAuthOtp, signInWithIdentifier, verifyAuthOtp } from "@/lib/api";
+import {
+  authLoginSchema,
+  authOtpCodeSchema,
+  authRegisterSchema,
+  authResetRequestSchema,
+  authResetVerifySchema
+} from "@/lib/validators/auth";
 import { useAuthStore } from "@/store/authStore";
 
 const heroStats = [
-  { label: "Secure checkout", value: "Paystack-ready" },
-  { label: "File delivery", value: "Signed URLs" },
-  { label: "Creator dashboard", value: "Orders + uploads" },
-  { label: "Profile discovery", value: "Identity-first" }
+  { label: "Checkout layer", value: "Paystack-powered", detail: "Fast buyer payments across the storefront." },
+  { label: "Delivery flow", value: "Secure file access", detail: "Signed delivery links keep paid downloads protected." },
+  { label: "Creator workspace", value: "Uploads and orders", detail: "Manage listings, buyers, and activity in one place." },
+  { label: "Account access", value: "OTP-first identity", detail: "Mobile verification keeps entry simple and trusted." }
 ];
 
-const workflowSignals = [
-  "Publish digital assets",
-  "Track buyer orders",
-  "Update creator profile",
-  "Discover fresh talent"
+const editorialHeroStats = [
+  { label: "Editorial desk", value: "Story workflow", detail: "Write, edit, and manage stories from one focused workspace." },
+  { label: "Access model", value: "Editor-only logins", detail: "Editorial accounts are provisioned separately from platform admins." },
+  { label: "Publishing pace", value: "Draft to spotlight", detail: "Track updates and feature the strongest stories quickly." },
+  { label: "Account recovery", value: "OTP reset ready", detail: "Editors can still recover access with the same secure auth system." }
 ];
+
+type AuthMode = "login" | "register" | "reset";
+
+type ExistingAccountHint = {
+  identifier: string;
+  destination: string;
+};
 
 export function AuthPage() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const isEditorialLogin = location.pathname === "/editorial-login";
+  const redirectTo = searchParams.get("redirect") || (isEditorialLogin ? "/editorial-admin" : "/market");
 
   const user = useAuthStore((state) => state.user);
+  const setSession = useAuthStore((state) => state.setSession);
   const navigate = useNavigate();
   const { pushToast } = useToast();
 
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<AuthMode>("login");
   const [modeDirection, setModeDirection] = useState<"to-login" | "to-register">("to-register");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+
+  const [loginIdentifier, setLoginIdentifier] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  const [registerStep, setRegisterStep] = useState<"details" | "verify">("details");
+  const [registerDisplayName, setRegisterDisplayName] = useState("");
+  const [registerCountryCode, setRegisterCountryCode] = useState(ARKESEL_SUPPORTED_COUNTRIES[0]?.dialCode ?? "+233");
+  const [registerPhone, setRegisterPhone] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [registerOtpCode, setRegisterOtpCode] = useState("");
+  const [registerResolvedPhone, setRegisterResolvedPhone] = useState("");
+  const [registerDestination, setRegisterDestination] = useState("");
+  const [existingAccountHint, setExistingAccountHint] = useState<ExistingAccountHint | null>(null);
+
+  const [resetStep, setResetStep] = useState<"details" | "verify">("details");
+  const [resetIdentifier, setResetIdentifier] = useState("");
+  const [resetOtpCode, setResetOtpCode] = useState("");
+  const [resetResolvedPhone, setResetResolvedPhone] = useState("");
+  const [resetDestination, setResetDestination] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const formLabel = useMemo(() => (mode === "login" ? "Log in" : "Create account"), [mode]);
-  const formHeadline = useMemo(() => (mode === "login" ? "Welcome back" : "Start your creator account"), [mode]);
-  const formHint = useMemo(
-    () =>
-      mode === "login"
-        ? "Sign in to manage your uploads, orders, and profile."
-        : "Create your account to publish assets and build your creator presence.",
-    [mode]
-  );
+  const currentUserEmail = getUserContactEmail(user);
 
-  const heroTitle = useMemo(
-    () => (mode === "login" ? "Step back into your Crib workspace." : "Launch your creative storefront on Crib."),
-    [mode]
+  const formHeadline = useMemo(() => {
+    if (isEditorialLogin) {
+      return mode === "reset" ? (resetStep === "verify" ? "Enter your reset code" : "Reset editor access") : "Editorial sign in";
+    }
+
+    if (mode === "register") {
+      return registerStep === "verify" ? "Verify your mobile number" : "Create your account";
+    }
+
+    if (mode === "reset") {
+      return resetStep === "verify" ? "Enter your reset code" : "Reset your password";
+    }
+
+    return "Welcome back";
+  }, [isEditorialLogin, mode, registerStep, resetStep]);
+
+  const formHint = useMemo(() => {
+    if (isEditorialLogin) {
+      return mode === "reset"
+        ? resetStep === "verify"
+          ? `We sent a reset code to ${resetDestination || "your phone"}. Enter it and choose a new password.`
+          : "Enter the mobile number or email tied to your editor account. We will send the reset OTP to the linked mobile number."
+        : "Sign in with the editor account assigned to you for the editorial workspace.";
+    }
+
+    if (mode === "register") {
+      return registerStep === "verify"
+        ? `We sent a one-time code to ${registerDestination || "your phone"}. Enter it to finish creating your account.`
+        : "";
+    }
+
+    if (mode === "reset") {
+      return resetStep === "verify"
+        ? `We sent a reset code to ${resetDestination || "your phone"}. Enter it and choose a new password.`
+        : "Enter the mobile number or email tied to your account. We will send the reset OTP to the linked mobile number.";
+    }
+
+    return "";
+  }, [isEditorialLogin, mode, registerDestination, registerStep, resetDestination, resetStep]);
+
+  const heroTitle = useMemo(() => {
+    if (isEditorialLogin) {
+      return "Step into the editorial workspace.";
+    }
+
+    if (mode === "register") {
+      return "Build a creative storefront buyers can trust.";
+    }
+
+    if (mode === "reset") {
+      return "Get back into your workspace without the friction.";
+    }
+
+    return "Return to your creative workspace.";
+  }, [isEditorialLogin, mode]);
+
+  const heroCopy = useMemo(() => {
+    if (isEditorialLogin) {
+      return "Use your dedicated editor login to access story publishing, updates, and spotlight management without platform-admin permissions.";
+    }
+
+    if (mode === "register") {
+      return "Create your account, verify with a one-time code, and start selling templates, packs, and creative systems from one polished profile.";
+    }
+
+    if (mode === "reset") {
+      return "Use the mobile number linked to the account, confirm the OTP, and set a fresh password so you can get back to your storefront quickly.";
+    }
+
+    return "Pick up where you left off with one secure account for uploads, orders, creator discovery, and profile visibility.";
+  }, [isEditorialLogin, mode]);
+
+  const activeHeroStats = isEditorialLogin ? editorialHeroStats : heroStats;
+
+  const registerPasswordStrength = useMemo(() => evaluatePasswordStrength(registerPassword), [registerPassword]);
+  const registerConfirmMismatch = registerStep === "details" && registerConfirmPassword.length > 0 && registerPassword !== registerConfirmPassword;
+  const resetPasswordStrength = useMemo(() => evaluatePasswordStrength(resetNewPassword), [resetNewPassword]);
+  const selectedRegisterCountry = useMemo(
+    () => ARKESEL_SUPPORTED_COUNTRIES.find((country) => country.dialCode === registerCountryCode) ?? ARKESEL_SUPPORTED_COUNTRIES[0],
+    [registerCountryCode]
   );
-  const heroCopy = useMemo(
-    () =>
-      mode === "login"
-        ? "Continue where you left off with one secure account for assets, orders, and profile visibility."
-        : "Build an identity-first creator profile, upload products, and get discovered through curated and trending feeds.",
-    [mode]
-  );
-  const passwordStrength = useMemo(() => evaluatePasswordStrength(password), [password]);
-  const confirmMismatch = mode === "register" && confirmPassword.length > 0 && password !== confirmPassword;
   const modeAnimationClass = modeDirection === "to-register" ? "auth-mode-enter-forward" : "auth-mode-enter-back";
 
-  function handleModeChange(nextMode: "login" | "register") {
+  function resetRegisterVerificationState() {
+    setRegisterStep("details");
+    setRegisterOtpCode("");
+    setRegisterResolvedPhone("");
+    setRegisterDestination("");
+  }
+
+  function resetResetVerificationState() {
+    setResetStep("details");
+    setResetOtpCode("");
+    setResetResolvedPhone("");
+    setResetDestination("");
+  }
+
+  function handleModeChange(nextMode: AuthMode) {
+    if (isEditorialLogin && nextMode === "register") {
+      return;
+    }
+
     if (nextMode === mode) {
       return;
     }
@@ -69,8 +183,231 @@ export function AuthPage() {
     setModeDirection(nextMode === "register" ? "to-register" : "to-login");
     setMode(nextMode);
 
+    if (nextMode !== "register") {
+      setExistingAccountHint(null);
+    }
+
     if (nextMode === "login") {
-      setConfirmPassword("");
+      resetResetVerificationState();
+    }
+  }
+
+  async function handleLoginSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const parsed = authLoginSchema.safeParse({
+      identifier: loginIdentifier.trim(),
+      password: loginPassword
+    });
+
+    if (!parsed.success) {
+      pushToast(parsed.error.issues[0]?.message ?? "Invalid login details", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const authResult = await signInWithIdentifier(parsed.data.identifier, parsed.data.password);
+      if (authResult.session) {
+        setSession(authResult.session);
+      }
+      pushToast("Welcome back", "success");
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Authentication failed", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function requestRegisterOtp() {
+    if (registerPassword !== registerConfirmPassword) {
+      pushToast("Confirm password does not match", "error");
+      return;
+    }
+
+    const parsed = authRegisterSchema.safeParse({
+      display_name: registerDisplayName.trim(),
+      phone: registerPhone.trim(),
+      email: registerEmail.trim(),
+      password: registerPassword
+    });
+
+    if (!parsed.success) {
+      pushToast(parsed.error.issues[0]?.message ?? "Invalid sign up details", "error");
+      return;
+    }
+
+    const normalizedPhone = composeArkeselPhoneInput(registerCountryCode, parsed.data.phone);
+    if (!normalizedPhone) {
+      pushToast("Choose a supported country code and enter a valid mobile number.", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = await sendAuthOtp({
+        intent: "register",
+        phone: normalizedPhone,
+        ...(parsed.data.email ? { email: parsed.data.email } : {})
+      });
+
+      setRegisterResolvedPhone(payload.phone);
+      setRegisterDestination(payload.destination);
+      setRegisterStep("verify");
+      setRegisterOtpCode("");
+      setExistingAccountHint(null);
+      pushToast(`OTP sent to ${payload.destination}`, "success");
+    } catch (error) {
+      const authError = error as Error & {
+        code?: string;
+        payload?: Record<string, unknown>;
+      };
+
+      if (authError.code === "account_exists") {
+        const fallbackIdentifier = registerEmail.trim() || normalizedPhone;
+        const destination =
+          typeof authError.payload?.destination === "string" ? authError.payload.destination : maskPhoneNumber(normalizedPhone);
+        setExistingAccountHint({
+          identifier: fallbackIdentifier,
+          destination
+        });
+        pushToast("Account already exists. Sign in instead or send a reset OTP.", "info");
+        return;
+      }
+
+      pushToast(authError.message || "Could not send OTP", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function completeRegister() {
+    if (registerPassword !== registerConfirmPassword) {
+      pushToast("Confirm password does not match", "error");
+      return;
+    }
+
+    const codeParsed = authOtpCodeSchema.safeParse({ code: registerOtpCode });
+    if (!codeParsed.success) {
+      pushToast(codeParsed.error.issues[0]?.message ?? "Invalid OTP code", "error");
+      return;
+    }
+
+    const payloadParsed = authRegisterSchema.safeParse({
+      display_name: registerDisplayName.trim(),
+      phone: registerPhone.trim(),
+      email: registerEmail.trim(),
+      password: registerPassword
+    });
+
+    if (!payloadParsed.success) {
+      pushToast(payloadParsed.error.issues[0]?.message ?? "Invalid sign up details", "error");
+      return;
+    }
+
+    const normalizedPhone = registerResolvedPhone || composeArkeselPhoneInput(registerCountryCode, registerPhone);
+    if (!normalizedPhone) {
+      pushToast("Choose a supported country code and enter a valid mobile number.", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await verifyAuthOtp({
+        intent: "register",
+        phone: normalizedPhone,
+        code: codeParsed.data.code,
+        display_name: payloadParsed.data.display_name,
+        password: payloadParsed.data.password,
+        ...(payloadParsed.data.email ? { email: payloadParsed.data.email } : {})
+      });
+
+      const authResult = await signInWithIdentifier(normalizedPhone, payloadParsed.data.password);
+      if (authResult.session) {
+        setSession(authResult.session);
+      }
+      pushToast("Account created", "success");
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Could not verify OTP", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function requestResetOtp(identifierOverride?: string, switchMode = false) {
+    const identifierValue = (identifierOverride ?? resetIdentifier).trim();
+    const parsed = authResetRequestSchema.safeParse({
+      identifier: identifierValue
+    });
+
+    if (!parsed.success) {
+      pushToast(parsed.error.issues[0]?.message ?? "Invalid reset details", "error");
+      return;
+    }
+
+    if (switchMode) {
+      setModeDirection("to-login");
+      setMode("reset");
+    }
+
+    setResetIdentifier(parsed.data.identifier);
+    setSubmitting(true);
+    try {
+      const payload = await sendAuthOtp({
+        intent: "reset",
+        identifier: parsed.data.identifier
+      });
+
+      setResetResolvedPhone(payload.phone);
+      setResetDestination(payload.destination);
+      setResetStep("verify");
+      setResetOtpCode("");
+      pushToast(`Reset OTP sent to ${payload.destination}`, "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Could not send reset OTP", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function completePasswordReset() {
+    const parsed = authResetVerifySchema.safeParse({
+      code: resetOtpCode,
+      new_password: resetNewPassword
+    });
+
+    if (!parsed.success) {
+      pushToast(parsed.error.issues[0]?.message ?? "Invalid reset details", "error");
+      return;
+    }
+
+    const normalizedPhone = normalizeAuthPhoneInput(resetResolvedPhone);
+    if (!normalizedPhone) {
+      pushToast("Request a new reset OTP and try again.", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await verifyAuthOtp({
+        intent: "reset",
+        phone: normalizedPhone,
+        code: parsed.data.code,
+        new_password: parsed.data.new_password
+      });
+
+      const authResult = await signInWithIdentifier(normalizedPhone, parsed.data.new_password);
+      if (authResult.session) {
+        setSession(authResult.session);
+      }
+      pushToast("Password reset successfully", "success");
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Could not reset password", "error");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -86,14 +423,19 @@ export function AuthPage() {
           <div className="relative z-10">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Session active</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-ink">You are already signed in.</h2>
-            <p className="mt-2 max-w-xl text-sm text-sand-700">Continue to your dashboard to manage uploads and orders, or browse the marketplace.</p>
+            <p className="mt-2 max-w-xl text-sm text-sand-700">
+              {isEditorialLogin
+                ? "Continue to the editorial workspace with your current editor session."
+                : "Continue to Discover to browse assets, creators, and fresh editorial picks."}
+            </p>
+            {currentUserEmail ? <p className="mt-2 text-xs text-sand-500">Signed in as {currentUserEmail}</p> : null}
             <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => navigate(redirectTo)}
+                onClick={() => navigate(redirectTo, { replace: true })}
                 className="rounded-full bg-cobalt-600 px-5 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700"
               >
-                Continue to dashboard
+                {isEditorialLogin ? "Continue to editorial desk" : "Continue to Discover"}
               </button>
               <Link
                 to="/market"
@@ -110,33 +452,50 @@ export function AuthPage() {
 
   return (
     <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr,0.95fr]">
-      <section className="order-2 surface-card-vivid auth-hero-panel relative overflow-hidden p-6 md:p-8 lg:order-1">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-cobalt-100/70 blur-3xl auth-orb-drift" />
-        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-sunset-100/60 blur-3xl auth-orb-drift-reverse" />
-        <div className="pointer-events-none absolute left-8 top-8 hidden h-36 w-36 rounded-full border border-cobalt-200/70 lg:block auth-ring-spin" />
-
+      <section className="order-2 auth-hero-panel relative overflow-hidden rounded-[2rem] border border-cobalt-400/40 bg-gradient-to-br from-cobalt-700 via-cobalt-600 to-[#0a3ea8] p-6 text-white shadow-[0_24px_46px_-30px_rgba(20,63,207,0.82)] md:p-8 lg:order-1">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-3xl auth-orb-drift" />
+        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-lagoon-300/20 blur-3xl auth-orb-drift-reverse" />
         <div className="relative z-10 space-y-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Home for African creators</p>
-            <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-ink md:text-5xl">{heroTitle}</h1>
-            <p className="mt-3 max-w-xl text-sm text-sand-700 md:text-base">{heroCopy}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/72">
+              {isEditorialLogin ? "Editorial workspace access" : "Creative commerce for African creators"}
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-white md:text-5xl">{heroTitle}</h1>
+            <p className="mt-3 max-w-xl text-sm text-white/78 md:text-base">{heroCopy}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {isEditorialLogin ? (
+              <>
+                <span className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/88">
+                  Editor accounts
+                </span>
+                <span className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/88">
+                  Story publishing
+                </span>
+                <span className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/88">
+                  OTP recovery
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/88">
+                  Mobile OTP
+                </span>
+                <span className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/88">
+                  Secure delivery
+                </span>
+                <span className="rounded-full border border-white/16 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-white/88">
+                  Creator profiles
+                </span>
+              </>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            {heroStats.map((stat) => (
-              <ValueCard key={stat.label} label={stat.label} value={stat.value} />
+            {activeHeroStats.map((stat) => (
+              <ValueCard key={stat.label} label={stat.label} value={stat.value} detail={stat.detail} />
             ))}
-          </div>
-
-          <div className="rounded-2xl border border-cobalt-100 bg-white/80 p-4 backdrop-blur-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cobalt-700">Workflow snapshot</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {workflowSignals.map((signal) => (
-                <span key={signal} className="rounded-full border border-sand-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-sand-700">
-                  {signal}
-                </span>
-              ))}
-            </div>
           </div>
         </div>
       </section>
@@ -144,225 +503,465 @@ export function AuthPage() {
       <section className="order-1 surface-card auth-form-panel relative overflow-hidden p-6 md:p-7 lg:order-2">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cobalt-600 via-lagoon-500 to-sunset-500" />
         <div className="relative z-10">
-          <div className="rounded-full border border-sand-200 bg-sand-100 p-1">
-            <div className="grid grid-cols-2 gap-1">
-              <ModeToggle label="Log in" active={mode === "login"} onClick={() => handleModeChange("login")} />
-              <ModeToggle label="Create account" active={mode === "register"} onClick={() => handleModeChange("register")} />
+          {isEditorialLogin ? (
+            <div className="rounded-full border border-sand-200 bg-sand-100 px-4 py-3 text-center text-sm font-semibold text-sand-700">
+              {mode === "reset" ? "Editorial access recovery" : "Editorial staff login"}
             </div>
-          </div>
+          ) : (
+            <div className="rounded-full border border-sand-200 bg-sand-100 p-1">
+              <div className="grid grid-cols-2 gap-1">
+                <ModeToggle label="Log in" active={mode === "login" || mode === "reset"} onClick={() => handleModeChange("login")} />
+                <ModeToggle label="Create account" active={mode === "register"} onClick={() => handleModeChange("register")} />
+              </div>
+            </div>
+          )}
 
-          <div key={mode} className={modeAnimationClass}>
+          <div key={`${mode}-${registerStep}-${resetStep}`} className={modeAnimationClass}>
             <h2 className="mt-5 font-display text-3xl font-bold text-ink">{formHeadline}</h2>
             <p className="mt-1 text-sm text-sand-700">{formHint}</p>
 
-            <form
-              className="mt-5 space-y-4"
-              onSubmit={async (event) => {
-                event.preventDefault();
+            {mode === "login" ? (
+              <form className="mt-5 space-y-4" onSubmit={handleLoginSubmit}>
+                <div>
+                  <label htmlFor="loginIdentifier" className="block text-sm font-medium text-sand-800">
+                    Email or mobile number
+                  </label>
+                  <input
+                    id="loginIdentifier"
+                    value={loginIdentifier}
+                    onChange={(event) => setLoginIdentifier(event.target.value)}
+                    autoComplete="username"
+                    required
+                    placeholder="name@example.com or +233..."
+                    className={inputClass}
+                  />
+                </div>
 
-                if (mode === "register" && password !== confirmPassword) {
-                  pushToast("Confirm password does not match", "error");
-                  return;
-                }
+                <div>
+                  <label htmlFor="loginPassword" className="block text-sm font-medium text-sand-800">
+                    Password
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      id="loginPassword"
+                      value={loginPassword}
+                      onChange={(event) => setLoginPassword(event.target.value)}
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      required
+                      minLength={6}
+                      placeholder="Enter your password"
+                      className={`${inputClass} pr-16 mt-0`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-cobalt-700 transition hover:bg-cobalt-50"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
 
-                const parsed = authSchema.safeParse({
-                  email,
-                  password,
-                  display_name: mode === "register" ? displayName : undefined
-                });
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Please wait..." : "Log in"}
+                </button>
 
-                if (!parsed.success) {
-                  pushToast(parsed.error.issues[0]?.message ?? "Invalid form", "error");
-                  return;
-                }
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetIdentifier(loginIdentifier);
+                    resetResetVerificationState();
+                    handleModeChange("reset");
+                  }}
+                  className="w-full text-sm font-semibold text-cobalt-700 hover:text-cobalt-800"
+                >
+                  Forgot password? Reset with OTP
+                </button>
+              </form>
+            ) : null}
 
-                setSubmitting(true);
-                try {
-                  if (mode === "login") {
-                    const { error } = await supabase.auth.signInWithPassword({
-                      email: parsed.data.email,
-                      password: parsed.data.password
-                    });
-
-                    if (error) {
-                      throw error;
-                    }
-
-                    pushToast("Welcome back", "success");
-                    navigate(redirectTo);
-                    return;
-                  }
-
-                  const { data, error } = await supabase.auth.signUp({
-                    email: parsed.data.email,
-                    password: parsed.data.password,
-                    options: {
-                      data: {
-                        display_name: displayName
-                      }
-                    }
-                  });
-
-                  if (error) {
-                    throw error;
-                  }
-
-                  if (!data.session) {
-                    pushToast("Check your email to confirm your account", "info");
-                  } else {
-                    pushToast("Account created", "success");
-                    navigate(redirectTo);
-                  }
-                } catch (error) {
-                  pushToast(error instanceof Error ? error.message : "Authentication failed", "error");
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
-            >
-              {mode === "register" ? (
+            {mode === "register" && registerStep === "details" ? (
+              <form
+                className="mt-5 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void requestRegisterOtp();
+                }}
+              >
                 <div>
                   <label htmlFor="displayName" className="block text-sm font-medium text-sand-800">
-                    Display name
+                    Creative name
                   </label>
                   <input
                     id="displayName"
-                    value={displayName}
-                    onChange={(event) => setDisplayName(event.target.value)}
+                    value={registerDisplayName}
+                    onChange={(event) => setRegisterDisplayName(event.target.value)}
                     required
                     placeholder="How should buyers know you?"
                     className={inputClass}
                   />
                 </div>
-              ) : null}
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-sand-800">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  type="email"
-                  autoComplete="email"
-                  required
-                  placeholder="name@example.com"
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-sand-800">
-                  Password
-                </label>
-                <div className="relative mt-1">
-                  <input
-                    id="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    type={showPassword ? "text" : "password"}
-                    autoComplete={mode === "login" ? "current-password" : "new-password"}
-                    required
-                    minLength={6}
-                    placeholder={mode === "login" ? "Enter your password" : "At least 6 characters"}
-                    className={`${inputClass} pr-16 mt-0`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((value) => !value)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-cobalt-700 transition hover:bg-cobalt-50"
-                  >
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </div>
-
-              {mode === "register" ? (
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sand-700">Password strength</p>
-                      <p
-                        className={`text-xs font-semibold uppercase tracking-[0.12em] ${
-                          passwordStrength.level <= 1
-                            ? "text-sunset-700"
-                            : passwordStrength.level === 2
-                              ? "text-ember-700"
-                              : passwordStrength.level === 3
-                                ? "text-lagoon-700"
-                                : "text-forest-700"
-                        }`}
+                <div>
+                  <label htmlFor="registerPhone" className="block text-sm font-medium text-sand-800">
+                    Mobile number
+                  </label>
+                  <div className="mt-1 flex items-stretch gap-2">
+                    <div className="w-28 shrink-0">
+                      <label htmlFor="registerCountryCode" className="sr-only">
+                        Country code
+                      </label>
+                      <select
+                        id="registerCountryCode"
+                        value={registerCountryCode}
+                        onChange={(event) => setRegisterCountryCode(event.target.value)}
+                        className={`${inputClass} mt-0 w-full appearance-none px-2.5 pr-7 text-xs sm:text-sm`}
                       >
-                        {passwordStrength.label}
-                      </p>
+                        {ARKESEL_SUPPORTED_COUNTRIES.map((country) => (
+                          <option key={country.code} value={country.dialCode}>
+                            {country.country} ({country.dialCode})
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="mt-1 grid grid-cols-4 gap-1">
-                      {[1, 2, 3, 4].map((segment) => (
-                        <span
-                          key={segment}
-                          className={`h-1.5 rounded-full transition ${
-                            segment <= passwordStrength.level
-                              ? passwordStrength.level <= 1
-                                ? "bg-sunset-500"
-                                : passwordStrength.level === 2
-                                  ? "bg-ember-500"
-                                  : passwordStrength.level === 3
-                                    ? "bg-lagoon-500"
-                                    : "bg-forest-500"
-                              : "bg-sand-200"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="mt-1 text-xs text-sand-500">{passwordStrength.hint}</p>
+                    <input
+                      id="registerPhone"
+                      value={registerPhone}
+                      onChange={(event) => setRegisterPhone(event.target.value.replace(/[^\d\s()-]/g, ""))}
+                      autoComplete="tel-national"
+                      inputMode="tel"
+                      required
+                      placeholder={selectedRegisterCountry?.exampleLocalNumber ?? "0241234567"}
+                      className={`${inputClass} mt-0 min-w-0 flex-1`}
+                    />
                   </div>
+                </div>
 
+                <div>
+                  <label htmlFor="registerEmail" className="block text-sm font-medium text-sand-800">
+                    Email <span className="text-sand-500">(optional)</span>
+                  </label>
+                  <input
+                    id="registerEmail"
+                    value={registerEmail}
+                    onChange={(event) => setRegisterEmail(event.target.value)}
+                    type="email"
+                    autoComplete="email"
+                    placeholder="name@example.com"
+                    className={inputClass}
+                  />
+                  <p className="mt-1 text-xs text-sand-500">Useful for checkout receipts and future account recovery.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="registerPassword" className="block text-sm font-medium text-sand-800">
+                    Password
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      id="registerPassword"
+                      value={registerPassword}
+                      onChange={(event) => setRegisterPassword(event.target.value)}
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      required
+                      minLength={6}
+                      placeholder="At least 6 characters"
+                      className={`${inputClass} pr-16 mt-0`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-cobalt-700 transition hover:bg-cobalt-50"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <PasswordStrengthIndicator level={registerPasswordStrength.level} />
                   <div>
-                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-sand-800">
+                    <label htmlFor="registerConfirmPassword" className="block text-sm font-medium text-sand-800">
                       Confirm password
                     </label>
                     <input
-                      id="confirmPassword"
-                      value={confirmPassword}
-                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      id="registerConfirmPassword"
+                      value={registerConfirmPassword}
+                      onChange={(event) => setRegisterConfirmPassword(event.target.value)}
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
                       required
                       minLength={6}
                       placeholder="Re-enter your password"
-                      className={`${inputClass} ${confirmMismatch ? "border-sunset-300 focus:border-sunset-500 focus:ring-sunset-100" : ""}`}
+                      className={`${inputClass} ${registerConfirmMismatch ? "border-sunset-300 focus:border-sunset-500 focus:ring-sunset-100" : ""}`}
                     />
-                    <p className={`mt-1 text-xs ${confirmMismatch ? "text-sunset-700" : "text-sand-500"}`}>
-                      {confirmPassword.length === 0
+                    <p className={`mt-1 text-xs ${registerConfirmMismatch ? "text-sunset-700" : "text-sand-500"}`}>
+                      {registerConfirmPassword.length === 0
                         ? "Re-enter your password to confirm."
-                        : confirmMismatch
+                        : registerConfirmMismatch
                           ? "Passwords do not match yet."
                           : "Passwords match."}
                     </p>
                   </div>
                 </div>
-              ) : null}
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? "Please wait..." : formLabel}
-              </button>
-            </form>
+                {existingAccountHint ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-semibold text-amber-800">We found an account with those details.</p>
+                    <p className="mt-1 text-sm text-amber-700">
+                      Sign in with the existing account, or send a reset OTP to {existingAccountHint.destination}.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginIdentifier(existingAccountHint.identifier);
+                          handleModeChange("login");
+                        }}
+                        className="rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800 transition hover:bg-amber-100"
+                      >
+                        Sign in instead
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void requestResetOtp(existingAccountHint.identifier, true);
+                        }}
+                        className="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-amber-800 transition hover:bg-amber-100"
+                      >
+                        Send reset OTP
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
-            <p className="mt-4 text-center text-sm text-sand-700">
-              {mode === "login" ? "New to CRIB?" : "Already have an account?"}{" "}
-              <button
-                type="button"
-                onClick={() => handleModeChange(mode === "login" ? "register" : "login")}
-                className="font-semibold text-cobalt-700 hover:text-cobalt-800"
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Sending OTP..." : "Send verification OTP"}
+                </button>
+              </form>
+            ) : null}
+
+            {mode === "register" && registerStep === "verify" ? (
+              <form
+                className="mt-5 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void completeRegister();
+                }}
               >
-                {mode === "login" ? "Create account" : "Log in"}
-              </button>
-            </p>
+                <div className="auth-otp-summary rounded-2xl border border-cobalt-100 bg-cobalt-50/70 p-4">
+                  <p className="auth-otp-summary-label text-xs font-semibold uppercase tracking-[0.14em] text-cobalt-700">Verification destination</p>
+                  <p className="auth-otp-summary-value mt-1 text-sm font-semibold text-ink">{registerDestination || maskPhoneNumber(registerResolvedPhone)}</p>
+                  <p className="auth-otp-summary-copy mt-1 text-xs text-sand-600">Use the OTP we sent to complete your account setup.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="registerOtpCode" className="block text-sm font-medium text-sand-800">
+                    OTP code
+                  </label>
+                  <input
+                    id="registerOtpCode"
+                    value={registerOtpCode}
+                    onChange={(event) => setRegisterOtpCode(event.target.value.replace(/\D+/g, ""))}
+                    inputMode="numeric"
+                    maxLength={8}
+                    required
+                    placeholder="Enter code"
+                    className={inputClass}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Verifying..." : "Verify and create account"}
+                </button>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void requestRegisterOtp();
+                    }}
+                    disabled={submitting}
+                    className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Resend OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetRegisterVerificationState();
+                    }}
+                    disabled={submitting}
+                    className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Edit details
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
+            {mode === "reset" && resetStep === "details" ? (
+              <form
+                className="mt-5 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void requestResetOtp();
+                }}
+              >
+                <div>
+                  <label htmlFor="resetIdentifier" className="block text-sm font-medium text-sand-800">
+                    Email or mobile number
+                  </label>
+                  <input
+                    id="resetIdentifier"
+                    value={resetIdentifier}
+                    onChange={(event) => setResetIdentifier(event.target.value)}
+                    autoComplete="username"
+                    required
+                    placeholder="name@example.com or +233..."
+                    className={inputClass}
+                  />
+                  <p className="mt-1 text-xs text-sand-500">We will send the reset OTP to the mobile number linked to that account.</p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Sending OTP..." : "Send reset OTP"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleModeChange("login")}
+                  className="w-full text-sm font-semibold text-cobalt-700 hover:text-cobalt-800"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            ) : null}
+
+            {mode === "reset" && resetStep === "verify" ? (
+              <form
+                className="mt-5 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void completePasswordReset();
+                }}
+              >
+                <div className="auth-otp-summary rounded-2xl border border-cobalt-100 bg-cobalt-50/70 p-4">
+                  <p className="auth-otp-summary-label text-xs font-semibold uppercase tracking-[0.14em] text-cobalt-700">Reset destination</p>
+                  <p className="auth-otp-summary-value mt-1 text-sm font-semibold text-ink">{resetDestination || maskPhoneNumber(resetResolvedPhone)}</p>
+                  <p className="auth-otp-summary-copy mt-1 text-xs text-sand-600">Enter the OTP and choose your new password.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="resetOtpCode" className="block text-sm font-medium text-sand-800">
+                    OTP code
+                  </label>
+                  <input
+                    id="resetOtpCode"
+                    value={resetOtpCode}
+                    onChange={(event) => setResetOtpCode(event.target.value.replace(/\D+/g, ""))}
+                    inputMode="numeric"
+                    maxLength={8}
+                    required
+                    placeholder="Enter code"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="resetNewPassword" className="block text-sm font-medium text-sand-800">
+                    New password
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      id="resetNewPassword"
+                      value={resetNewPassword}
+                      onChange={(event) => setResetNewPassword(event.target.value)}
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      required
+                      minLength={6}
+                      placeholder="Choose a new password"
+                      className={`${inputClass} pr-16 mt-0`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((value) => !value)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-cobalt-700 transition hover:bg-cobalt-50"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                  <PasswordStrengthIndicator level={resetPasswordStrength.level} />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Resetting..." : "Verify OTP and reset password"}
+                </button>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void requestResetOtp(resetIdentifier);
+                    }}
+                    disabled={submitting}
+                    className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Resend OTP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetResetVerificationState();
+                    }}
+                    disabled={submitting}
+                    className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Change account
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
+            {isEditorialLogin ? (
+              <p className="mt-4 text-center text-sm text-sand-700">
+                Need an editor account? <span className="font-semibold text-cobalt-700">Ask a platform admin to provision editorial access for you.</span>
+              </p>
+            ) : (
+              <p className="mt-4 text-center text-sm text-sand-700">
+                {mode === "register" ? "Already have an account?" : "New to CRIB?"}{" "}
+                <button
+                  type="button"
+                  onClick={() => handleModeChange(mode === "register" ? "login" : "register")}
+                  className="font-semibold text-cobalt-700 hover:text-cobalt-800"
+                >
+                  {mode === "register" ? "Log in" : "Create account"}
+                </button>
+              </p>
+            )}
 
             <p className="mt-2 text-center text-sm text-sand-600">
               Want to browse first?{" "}
@@ -391,12 +990,26 @@ function ModeToggle({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
-function ValueCard({ label, value }: { label: string; value: string }) {
+function ValueCard({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
-    <article className="rounded-xl border border-sand-200 bg-white/90 p-3 landing-hover-lift">
-      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">{label}</p>
-      <p className="mt-1 font-display text-lg font-semibold text-ink">{value}</p>
+    <article className="rounded-[1.25rem] border border-white/14 bg-white/10 p-4 backdrop-blur-sm landing-hover-lift">
+      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-white/62">{label}</p>
+      <p className="mt-1 font-display text-lg font-semibold text-white">{value}</p>
+      <p className="mt-2 text-sm text-white/72">{detail}</p>
     </article>
+  );
+}
+
+function PasswordStrengthIndicator({ level }: { level: number }) {
+  const activeClass =
+    level <= 1 ? "bg-sunset-500" : level === 2 ? "bg-ember-500" : level === 3 ? "bg-lagoon-500" : "bg-forest-500";
+
+  return (
+    <div className="mt-2 grid grid-cols-4 gap-1" aria-label={`Password strength level ${level} of 4`}>
+      {[1, 2, 3, 4].map((segment) => (
+        <span key={segment} className={`h-1.5 rounded-full transition ${segment <= level ? activeClass : "bg-sand-200"}`} />
+      ))}
+    </div>
   );
 }
 

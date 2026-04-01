@@ -6,13 +6,7 @@ import { SearchInput } from "@/components/SearchInput";
 import { StarRating } from "@/components/StarRating";
 import { getCreatorDirectory } from "@/lib/api";
 import type { CreatorDirectoryEntry } from "@/lib/types";
-
-type CreatorSort = "trending" | "newest";
-
-const SORT_OPTIONS: Array<{ value: CreatorSort; label: string }> = [
-  { value: "trending", label: "Trending" },
-  { value: "newest", label: "Newest" }
-];
+import { useAuthStore } from "@/store/authStore";
 
 function initials(name: string) {
   const parts = name
@@ -46,14 +40,14 @@ function isNewCreator(createdAt: string) {
 }
 
 export function CreatorsPage() {
+  const user = useAuthStore((state) => state.user);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
-  const [sort, setSort] = useState<CreatorSort>("trending");
 
   const deferredSearch = useDeferredValue(search);
   const creatorsQuery = useQuery({
-    queryKey: ["creator-directory", deferredSearch, sort],
-    queryFn: () => getCreatorDirectory({ search: deferredSearch, sort })
+    queryKey: ["creator-directory", deferredSearch],
+    queryFn: () => getCreatorDirectory({ search: deferredSearch, sort: "newest" })
   });
 
   const creators = creatorsQuery.data ?? [];
@@ -76,14 +70,14 @@ export function CreatorsPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-600">Creator Discovery</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Browse Creator Profiles</h1>
             <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
-              Discover creatives by niche, category, and momentum. Follow trending talent and spot rising newcomers early.
+              Discover creatives by niche and category, then explore the profiles behind the work.
             </p>
           </div>
         </div>
       </header>
 
       <section className="surface-card creators-filter-panel space-y-3 p-3 sm:p-4">
-        <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr]">
+        <div className="grid gap-3 md:grid-cols-[2fr,1fr]">
           <SearchInput value={search} onChange={setSearch} placeholder="Search creator name, niche, category..." />
 
           <select
@@ -94,18 +88,6 @@ export function CreatorsPage() {
             {categories.map((item) => (
               <option key={item} value={item}>
                 {item === "all" ? "All categories" : item}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value as CreatorSort)}
-            className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
               </option>
             ))}
           </select>
@@ -128,7 +110,7 @@ export function CreatorsPage() {
           <h2 className="font-display text-2xl font-bold text-ink">All Creators</h2>
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {filteredCreators.map((creator) => (
-              <CreatorCard key={creator.id} creator={creator} />
+              <CreatorCard key={creator.id} creator={creator} canViewProfiles={Boolean(user)} />
             ))}
           </div>
         </section>
@@ -137,8 +119,11 @@ export function CreatorsPage() {
   );
 }
 
-function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
+function CreatorCard({ creator, canViewProfiles }: { creator: CreatorDirectoryEntry; canViewProfiles: boolean }) {
   const fresh = isNewCreator(creator.created_at);
+  const creatorProfilePath = canViewProfiles
+    ? `/profile/${creator.id}`
+    : `/auth?redirect=${encodeURIComponent(`/profile/${creator.id}`)}`;
 
   return (
     <article className="creator-profile-card group relative overflow-hidden rounded-2xl border border-sand-200 bg-white p-3 sm:p-4">
@@ -157,7 +142,7 @@ function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
             </div>
 
             <div className="min-w-0">
-              <Link to={`/profile/${creator.id}`} className="block truncate font-display text-lg font-bold text-ink transition hover:text-cobalt-700 sm:text-xl">
+              <Link to={creatorProfilePath} className="block truncate font-display text-lg font-bold text-ink transition hover:text-cobalt-700 sm:text-xl">
                 {creator.display_name}
               </Link>
               <p className="mt-0.5 text-xs text-sand-600 sm:text-sm">{creator.niche || creator.creator_category}</p>
@@ -182,7 +167,7 @@ function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
         </div>
 
         <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50/80 p-2.5 sm:mt-4 sm:p-3">
-          <p className="line-clamp-2 text-xs text-sand-700 sm:line-clamp-3 sm:text-sm">{creator.bio || "Creative building digital products on Crib."}</p>
+          <p className="line-clamp-2 text-xs text-sand-700 sm:line-clamp-3 sm:text-sm">{creator.bio || "Template creator building digital products on Crib."}</p>
         </div>
 
         <div className="mt-3 flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-2.5 py-2 text-xs text-sand-700 sm:mt-4">
@@ -203,10 +188,10 @@ function CreatorCard({ creator }: { creator: CreatorDirectoryEntry }) {
 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4">
           <Link
-            to={`/profile/${creator.id}`}
+            to={creatorProfilePath}
             className="inline-flex items-center justify-center rounded-full bg-cobalt-600 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-white transition hover:bg-cobalt-700 sm:px-4 sm:py-2 sm:text-xs sm:tracking-[0.1em]"
           >
-            View profile
+            {canViewProfiles ? "View profile" : "Sign in to view"}
           </Link>
           <Link
             to={`/market?q=${encodeURIComponent(creator.display_name)}`}

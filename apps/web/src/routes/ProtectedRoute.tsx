@@ -4,9 +4,10 @@ import { useAuthStore } from "@/store/authStore";
 
 type ProtectedRouteProps = {
   children?: ReactNode;
+  signInPath?: string;
 };
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, signInPath = "/auth" }: ProtectedRouteProps) {
   const initialized = useAuthStore((state) => state.initialized);
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
@@ -17,7 +18,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     const redirect = encodeURIComponent(`${location.pathname}${location.search}`);
-    return <Navigate to={`/auth?redirect=${redirect}`} replace />;
+    return <Navigate to={`${signInPath}?redirect=${redirect}`} replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;

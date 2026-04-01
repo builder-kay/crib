@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Modal } from "@/components/Modal";
-import { getProfile, getUnreadReleaseNotificationsCount, getWishlistCount } from "@/lib/api";
+import { getUserIdentityLabel } from "@/lib/auth";
+import { getProfile, getUnreadReleaseNotificationsCount, getWishlistCount, isCurrentUserAdmin, isCurrentUserEditorialAdmin } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
 const baseNavItems = [
@@ -11,7 +12,7 @@ const baseNavItems = [
   { to: "/editorial", label: "Editorial" }
 ];
 
-export function Navbar() {
+export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onToggleTheme: () => void }) {
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
   const location = useLocation();
@@ -39,24 +40,39 @@ export function Navbar() {
     enabled: Boolean(user?.id)
   });
 
+  const adminQuery = useQuery({
+    queryKey: ["is-admin", user?.id],
+    queryFn: () => isCurrentUserAdmin(user!.id),
+    enabled: Boolean(user?.id)
+  });
+
+  const editorialAdminQuery = useQuery({
+    queryKey: ["is-editorial-admin", user?.id],
+    queryFn: () => isCurrentUserEditorialAdmin(user!.id),
+    enabled: Boolean(user?.id)
+  });
+
   const navItems = useMemo(() => {
     const items = [...baseNavItems];
     if (user) {
       items.push({ to: "/dashboard", label: "Dashboard" });
+      if (adminQuery.data === true) {
+        items.push({ to: "/admin/overview", label: "Admin" });
+      }
+      if (editorialAdminQuery.data === true) {
+        items.push({ to: "/editorial-admin", label: "Editorial Desk" });
+      }
     }
     return items;
-  }, [user]);
+  }, [adminQuery.data, editorialAdminQuery.data, user]);
 
   const accountLabel = useMemo(() => {
     const profileName = profileQuery.data?.display_name?.trim();
     if (profileName) {
       return profileName;
     }
-    if (!user?.email) {
-      return "Account";
-    }
-    return user.email.split("@")[0] ?? "Account";
-  }, [profileQuery.data?.display_name, user?.email]);
+    return getUserIdentityLabel(user, "Account");
+  }, [profileQuery.data?.display_name, user]);
 
   const accountInitial = useMemo(() => accountLabel.charAt(0).toUpperCase() || "A", [accountLabel]);
 
@@ -147,7 +163,7 @@ export function Navbar() {
               <input
                 value={globalSearch}
                 onChange={(event) => setGlobalSearch(event.target.value)}
-                placeholder="Search projects, templates, beats, UI kits"
+                placeholder="Search templates, creators, or styles"
                 className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-sand-500"
               />
               <button type="submit" className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
@@ -157,6 +173,32 @@ export function Navbar() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className="theme-toggle-btn inline-flex h-10 items-center justify-center gap-2 rounded-full border border-sand-300 bg-white px-3 text-sm font-semibold text-sand-700 transition hover:bg-sand-100"
+              aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            >
+              {theme === "light" ? (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 3a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V4a1 1 0 0 1 1-1Z" />
+                  <path d="M12 18a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1Z" />
+                  <path d="M4.93 4.93a1 1 0 0 1 1.41 0l.7.7A1 1 0 0 1 5.63 7.04l-.7-.7a1 1 0 0 1 0-1.41Z" />
+                  <path d="M17.66 17.66a1 1 0 0 1 1.41 0l.7.7a1 1 0 0 1-1.41 1.41l-.7-.7a1 1 0 0 1 0-1.41Z" />
+                  <path d="M3 12a1 1 0 0 1 1-1h1a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1Z" />
+                  <path d="M18 12a1 1 0 0 1 1-1h1a1 1 0 1 1 0 2h-1a1 1 0 0 1-1-1Z" />
+                  <path d="M4.93 19.07a1 1 0 0 1 0-1.41l.7-.7a1 1 0 1 1 1.41 1.41l-.7.7a1 1 0 0 1-1.41 0Z" />
+                  <path d="M17.66 6.34a1 1 0 0 1 0-1.41l.7-.7a1 1 0 1 1 1.41 1.41l-.7.7a1 1 0 0 1-1.41 0Z" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+                </svg>
+              )}
+              <span className="hidden sm:inline">{theme === "light" ? "Dark mode" : "Light mode"}</span>
+            </button>
+
             {user ? (
               <div className="flex items-center gap-2">
                 <Link
@@ -224,6 +266,24 @@ export function Navbar() {
                       >
                         Profile
                       </Link>
+                      {adminQuery.data === true ? (
+                        <Link
+                          to="/admin/overview"
+                          onClick={() => setMenuOpen(false)}
+                          className="block px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-sand-100"
+                        >
+                          Admin platform
+                        </Link>
+                      ) : null}
+                      {editorialAdminQuery.data === true ? (
+                        <Link
+                          to="/editorial-admin"
+                          onClick={() => setMenuOpen(false)}
+                          className="block px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-sand-100"
+                        >
+                          Editorial desk
+                        </Link>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => {

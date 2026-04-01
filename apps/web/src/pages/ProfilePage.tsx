@@ -5,6 +5,7 @@ import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
+import { getUserContactEmail, getUserIdentityLabel } from "@/lib/auth";
 import {
   deleteCreatorReview,
   followCreator,
@@ -31,6 +32,22 @@ const PAYOUT_COUNTRY_OPTIONS = [
   { value: "kenya", label: "Kenya" },
   { value: "south africa", label: "South Africa" }
 ] as const;
+
+type ProfileTabId = "overview" | "portfolio" | "reviews" | "payout" | "edit";
+
+type ProfileTabOption = {
+  id: ProfileTabId;
+  label: string;
+  badge?: string;
+};
+
+const PROFILE_TAB_TONE_CLASS: Record<ProfileTabId, string> = {
+  overview: "tab-tone-cobalt",
+  portfolio: "tab-tone-lagoon",
+  reviews: "tab-tone-sunset",
+  payout: "tab-tone-forest",
+  edit: "tab-tone-rose"
+};
 
 function initialsFromName(name: string) {
   const parts = name
@@ -75,6 +92,7 @@ export function ProfilePage() {
   const queryClient = useQueryClient();
 
   const userId = user?.id ?? "";
+  const userContactEmail = getUserContactEmail(user);
   const profileId = routeProfileId ?? userId;
   const isOwnProfile = Boolean(userId) && (routeProfileId ? routeProfileId === userId : true);
 
@@ -109,8 +127,8 @@ export function ProfilePage() {
   });
 
   const purchaseEligibilityQuery = useQuery({
-    queryKey: ["creator-review-eligibility", profileId, user?.id, user?.email],
-    queryFn: () => hasPaidOrderWithCreator(profileId, user!.id, user?.email),
+    queryKey: ["creator-review-eligibility", profileId, user?.id, userContactEmail],
+    queryFn: () => hasPaidOrderWithCreator(profileId, user!.id, userContactEmail),
     enabled: Boolean(user?.id && profileId && !isOwnProfile)
   });
 
@@ -140,6 +158,7 @@ export function ProfilePage() {
   const [xHandle, setXHandle] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ProfileTabId>("overview");
 
   useEffect(() => {
     if (!profileQuery.data) {
@@ -178,6 +197,10 @@ export function ProfilePage() {
     setPayoutBankCode("");
     setPayoutAccountNumber("");
   }, [profileId]);
+
+  useEffect(() => {
+    setActiveTab("overview");
+  }, [isOwnProfile, profileId]);
 
   useEffect(() => {
     if (!isOwnProfile || hasHydratedPayoutForm || !payoutSetupQuery.data) {
@@ -405,11 +428,11 @@ export function ProfilePage() {
     if (profileQuery.data?.display_name) {
       return profileQuery.data.display_name;
     }
-    if (isOwnProfile && user?.email) {
-      return user.email.split("@")[0] ?? "Creator";
+    if (isOwnProfile) {
+      return getUserIdentityLabel(user, "Creator");
     }
     return "Creator";
-  }, [profileQuery.data?.display_name, isOwnProfile, user?.email]);
+  }, [profileQuery.data?.display_name, isOwnProfile, user]);
 
   const portfolioAssets = useMemo(() => {
     const assets = assetsQuery.data ?? [];
@@ -462,6 +485,29 @@ export function ProfilePage() {
   const creatorRatingSummary = creatorRatingSummaryQuery.data ?? { average_rating: 0, review_count: 0 };
   const creatorReviews = creatorReviewsQuery.data ?? [];
   const canLeaveCreatorReview = Boolean(user?.id) && !isOwnProfile && purchaseEligibilityQuery.data === true;
+  const profileTabs = useMemo<ProfileTabOption[]>(() => {
+    const baseTabs: ProfileTabOption[] = [
+      { id: "overview", label: "Overview" },
+      { id: "portfolio", label: "Portfolio", badge: new Intl.NumberFormat("en-US").format(listedWorksCount) },
+      { id: "reviews", label: "Reviews", badge: new Intl.NumberFormat("en-US").format(creatorRatingSummary.review_count) }
+    ];
+
+    if (isOwnProfile) {
+      baseTabs.push({
+        id: "payout",
+        label: hasPayoutAccount ? "Payout" : "Payout setup"
+      });
+      baseTabs.push({ id: "edit", label: "Edit profile" });
+    }
+
+    return baseTabs;
+  }, [creatorRatingSummary.review_count, hasPayoutAccount, isOwnProfile, listedWorksCount]);
+
+  useEffect(() => {
+    if (!profileTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab(profileTabs[0]?.id ?? "overview");
+    }
+  }, [activeTab, profileTabs]);
 
   return (
     <div className="profile-shell space-y-6">
@@ -488,8 +534,30 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <section className={`grid items-start gap-5 ${isOwnProfile ? "xl:grid-cols-[0.82fr,1.18fr]" : ""}`}>
-        <div className="space-y-5">
+      <section className="surface-card profile-tab-strip p-2">
+        <div
+          className="flex gap-2 overflow-x-auto pb-1 sm:pb-0"
+          role="tablist"
+          aria-label={isOwnProfile ? "Your profile sections" : "Creator profile sections"}
+        >
+          {profileTabs.map((tab) => (
+            <ProfileTabButton
+              key={tab.id}
+              tab={tab}
+              active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {activeTab === "overview" ? (
+        <section
+          id="profile-tab-panel-overview"
+          role="tabpanel"
+          aria-labelledby="profile-tab-overview"
+          className="mx-auto w-full max-w-5xl"
+        >
           <article className="surface-card profile-summary-panel profile-summary-panel-enhanced relative overflow-hidden p-5 md:p-6">
           <div className="pointer-events-none absolute -right-16 top-6 h-36 w-36 rounded-full bg-cobalt-100/55 blur-3xl" />
           <div className="relative z-10 flex items-start gap-4">
@@ -512,7 +580,7 @@ export function ProfilePage() {
                 </span>
               </div>
               <p className="mt-1 text-sm text-sand-600">{profileQuery.data?.niche || "Creative entrepreneur"}</p>
-              {isOwnProfile && user?.email ? <p className="mt-1 text-xs text-sand-500">{user.email}</p> : null}
+              {isOwnProfile && userContactEmail ? <p className="mt-1 text-xs text-sand-500">{userContactEmail}</p> : null}
             </div>
           </div>
 
@@ -553,12 +621,20 @@ export function ProfilePage() {
           <div className="mt-5 flex flex-wrap gap-2">
             {isOwnProfile ? (
               <>
-                <Link
-                  to="/dashboard"
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("edit")}
                   className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
                 >
-                  Dashboard
-                </Link>
+                  Edit profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("payout")}
+                  className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink transition hover:bg-sand-100"
+                >
+                  {hasPayoutAccount ? "Manage payout" : "Set up payout"}
+                </button>
                 <Link
                   to="/dashboard/upload"
                   className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700"
@@ -596,7 +672,16 @@ export function ProfilePage() {
             )}
           </div>
           </article>
+        </section>
+      ) : null}
 
+      {activeTab === "reviews" ? (
+        <section
+          id="profile-tab-panel-reviews"
+          role="tabpanel"
+          aria-labelledby="profile-tab-reviews"
+          className="mx-auto w-full max-w-5xl"
+        >
           <article className="surface-card p-5 md:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -687,9 +772,17 @@ export function ProfilePage() {
               ))}
             </div>
           </article>
+        </section>
+      ) : null}
 
-          {isOwnProfile ? (
-            <article className="surface-card relative overflow-hidden border-2 border-sunset-200 bg-gradient-to-br from-sunset-50 via-white to-ember-50 p-5 shadow-glow md:p-6">
+      {isOwnProfile && activeTab === "payout" ? (
+        <section
+          id="profile-tab-panel-payout"
+          role="tabpanel"
+          aria-labelledby="profile-tab-payout"
+          className="mx-auto w-full max-w-4xl"
+        >
+          <article className="surface-card profile-payout-panel relative overflow-hidden border-2 border-sunset-200 bg-gradient-to-br from-sunset-50 via-white to-ember-50 p-5 shadow-glow md:p-6">
               <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sunset-200/70 blur-3xl" />
               <div className="pointer-events-none absolute -bottom-12 left-8 h-36 w-36 rounded-full bg-cobalt-100/70 blur-3xl" />
               <div className="relative z-10">
@@ -877,12 +970,18 @@ export function ProfilePage() {
                   Platform commission is automatically deducted at checkout before payout.
                 </p>
               </div>
-            </article>
-          ) : null}
-        </div>
+          </article>
+        </section>
+      ) : null}
 
-        {isOwnProfile ? (
-          <article className="surface-card profile-edit-panel profile-edit-panel-enhanced p-5 md:p-6 xl:sticky xl:top-24">
+      {isOwnProfile && activeTab === "edit" ? (
+        <section
+          id="profile-tab-panel-edit"
+          role="tabpanel"
+          aria-labelledby="profile-tab-edit"
+          className="mx-auto w-full max-w-5xl"
+        >
+          <article className="surface-card profile-edit-panel profile-edit-panel-enhanced p-5 md:p-6">
             <div className="rounded-xl border border-cobalt-100 bg-white/80 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Profile Editor</p>
               <h2 className="mt-1 font-display text-2xl font-semibold text-ink">Edit Profile</h2>
@@ -950,7 +1049,7 @@ export function ProfilePage() {
                       disabled={!avatarFile || uploadAvatarMutation.isPending}
                       className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {uploadAvatarMutation.isPending ? "Uploading..." : "Upload photo"}
+                      {uploadAvatarMutation.isPending ? "Saving..." : "Save Photo"}
                     </button>
                   </div>
                 </div>
@@ -996,10 +1095,16 @@ export function ProfilePage() {
               </button>
             </form>
           </article>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="space-y-3">
+      {activeTab === "portfolio" ? (
+        <section
+          id="profile-tab-panel-portfolio"
+          role="tabpanel"
+          aria-labelledby="profile-tab-portfolio"
+          className="space-y-3"
+        >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-2xl font-bold text-ink">{isOwnProfile ? "Your Portfolio" : "Portfolio"}</h2>
           <span className="rounded-full border border-sand-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sand-700">
@@ -1007,17 +1112,43 @@ export function ProfilePage() {
           </span>
         </div>
 
-        {assetsQuery.isLoading ? <div className="surface-card p-5 text-sm text-sand-600">Loading assets...</div> : null}
-        {assetsQuery.isError ? <div className="surface-card p-5 text-sm text-rose-700">Could not load assets.</div> : null}
+        {assetsQuery.isLoading ? <div className="surface-card p-5 text-sm text-sand-600">Loading listings...</div> : null}
+        {assetsQuery.isError ? <div className="surface-card p-5 text-sm text-rose-700">Could not load listings.</div> : null}
         {assetsQuery.data && portfolioAssets.length === 0 ? (
           <EmptyState
-            title="No assets yet"
+            title="No listings yet"
             body={isOwnProfile ? "Publish your first listing to start selling." : "This creator has no published listings yet."}
           />
         ) : null}
         {assetsQuery.data && portfolioAssets.length > 0 ? <AssetGrid assets={portfolioAssets} /> : null}
-      </section>
+        </section>
+      ) : null}
     </div>
+  );
+}
+
+function ProfileTabButton({
+  tab,
+  active,
+  onClick
+}: {
+  tab: ProfileTabOption;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      id={`profile-tab-${tab.id}`}
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={`profile-tab-panel-${tab.id}`}
+      onClick={onClick}
+      className={`profile-tab-button ${PROFILE_TAB_TONE_CLASS[tab.id]} ${active ? "profile-tab-button-active" : ""}`}
+    >
+      <span>{tab.label}</span>
+      {tab.badge ? <span className="profile-tab-badge">{tab.badge}</span> : null}
+    </button>
   );
 }
 

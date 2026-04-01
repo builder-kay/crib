@@ -8,6 +8,9 @@ type UploadDropzoneProps = {
   files: File[];
   onFilesChange: (files: File[]) => void;
   helperText?: string;
+  badge?: string;
+  emptyStateHint?: string;
+  tone?: "cobalt" | "lagoon";
 };
 
 export function UploadDropzone({
@@ -16,25 +19,25 @@ export function UploadDropzone({
   multiple = false,
   files,
   onFilesChange,
-  helperText
+  helperText,
+  badge,
+  emptyStateHint,
+  tone = "cobalt"
 }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const openPicker = () => inputRef.current?.click();
 
   return (
-    <div className="rounded-2xl border border-dashed border-cobalt-200 bg-gradient-to-br from-cobalt-50/60 via-white to-sand-50 p-4">
+    <div className={`upload-dropzone upload-dropzone-${tone}`}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
+          {badge ? <p className="upload-dropzone-badge">{badge}</p> : null}
           <h4 className="font-display text-sm font-semibold text-ink">{label}</h4>
-          {helperText ? <p className="text-xs text-sand-600">{helperText}</p> : null}
+          {helperText ? <p className="mt-1 text-xs text-sand-600">{helperText}</p> : null}
         </div>
 
-        <button
-          type="button"
-          onClick={openPicker}
-          className="rounded-lg border border-cobalt-200 bg-white px-3 py-2 text-xs font-semibold text-cobalt-700 transition hover:border-cobalt-300 hover:bg-cobalt-50"
-        >
+        <button type="button" onClick={openPicker} className="upload-dropzone-picker">
           Choose file{multiple ? "s" : ""}
         </button>
       </div>
@@ -53,14 +56,26 @@ export function UploadDropzone({
 
       <div className="mt-3 space-y-2">
         {files.length === 0 ? (
-          <div className="rounded-lg border border-cobalt-100 bg-white px-3 py-2.5 text-sm text-sand-500">
-            No files selected yet.
+          <div className="upload-dropzone-empty">
+            <p className="text-sm font-semibold text-ink">No files selected yet.</p>
+            <p className="mt-1 text-xs text-sand-500">
+              {emptyStateHint ?? `Choose ${multiple ? "files" : "a file"} to attach to this listing.`}
+            </p>
           </div>
         ) : null}
-        {files.map((file) => (
-          <div key={file.name + file.size} className="rounded-lg border border-sand-200 bg-white px-3 py-2 text-sm text-sand-700">
-            <span className="font-medium text-ink">{file.name}</span>
-            <span className="ml-2 text-xs text-sand-500">({formatFileSize(file.size)})</span>
+        {files.map((file, index) => (
+          <div key={file.name + file.size + index} className="upload-file-chip">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-ink">{file.name}</p>
+              <p className="text-xs text-sand-500">{formatFileSize(file.size)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onFilesChange(files.filter((_, itemIndex) => itemIndex !== index))}
+              className="upload-file-remove"
+            >
+              Remove
+            </button>
           </div>
         ))}
       </div>

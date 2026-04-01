@@ -1,7 +1,7 @@
 # CRIB Architecture
 
 ## Overview
-CRIB is a marketplace-first platform where creators list and sell digital assets (templates, beats, presets, fonts, photos, videos, and more).
+CRIB is a marketplace-first platform currently focused on Creative Cloud templates, presets, and source files for apps like Photoshop, Illustrator, InDesign, Lightroom, Premiere Pro, and After Effects.
 
 - Frontend: Vite + React + TypeScript + Tailwind + React Router + TanStack Query + Zustand + Zod
 - Backend: Supabase Auth + Postgres + Storage + Edge Functions

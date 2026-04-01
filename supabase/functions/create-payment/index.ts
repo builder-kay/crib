@@ -33,6 +33,10 @@ function parseEmail(input: unknown): string | null {
   return emailPattern.test(value) ? value : null;
 }
 
+function parseUserContactEmail(user: { email?: string | null; user_metadata?: Record<string, unknown> | null }): string | null {
+  return parseEmail(user.email) ?? parseEmail(user.user_metadata?.contact_email);
+}
+
 function hasUnsupportedBuyerDomain(email: string): boolean {
   const [, domain = ""] = email.split("@");
   const normalizedDomain = domain.trim().toLowerCase();
@@ -100,7 +104,7 @@ Deno.serve(async (request) => {
     const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
     if (!authError && authData.user) {
       buyerId = authData.user.id;
-      buyerEmail = parseEmail(authData.user.email) ?? buyerEmail;
+      buyerEmail = parseUserContactEmail(authData.user) ?? buyerEmail;
     }
   }
 

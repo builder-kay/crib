@@ -5,31 +5,15 @@ import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterBar } from "@/components/FilterBar";
 import { SkeletonCard } from "@/components/SkeletonCard";
+import { getUserContactEmail } from "@/lib/auth";
 import { getPublishedAssets, trackAnalyticsEvent } from "@/lib/api";
 import type { Asset } from "@/lib/types";
-import { ASSET_CATEGORIES } from "@/lib/validators/asset";
+import { ADOBE_APP_CATEGORIES, MARKET_FILE_FILTERS } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
-
-type FeedMode = "for-you" | "recent";
-
-function sortFeed(assets: Asset[], mode: FeedMode) {
-  const source = [...assets];
-
-  if (mode === "recent") {
-    return source.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }
-
-  return source.sort((a, b) => {
-    const byTags = (b.tags?.length ?? 0) - (a.tags?.length ?? 0);
-    if (byTags !== 0) {
-      return byTags;
-    }
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-}
 
 export function MarketPage() {
   const user = useAuthStore((state) => state.user);
+  const userContactEmail = getUserContactEmail(user);
   const [searchParams, setSearchParams] = useSearchParams();
   const querySearch = searchParams.get("q") ?? "";
   const [search, setSearch] = useState(querySearch);
@@ -38,7 +22,6 @@ export function MarketPage() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [fileType, setFileType] = useState("all");
-  const [feedMode, setFeedMode] = useState<FeedMode>("for-you");
 
   useEffect(() => {
     setSearch((previous) => (previous === querySearch ? previous : querySearch));
@@ -78,7 +61,12 @@ export function MarketPage() {
     queryFn: () => getPublishedAssets(filters)
   });
 
-  const displayAssets = useMemo(() => sortFeed(assetsQuery.data ?? [], feedMode), [assetsQuery.data, feedMode]);
+  const displayAssets = assetsQuery.data ?? [];
+  const fileTypeLabel = useMemo(
+    () => MARKET_FILE_FILTERS.find((item) => item.value === fileType)?.label ?? fileType,
+    [fileType]
+  );
+  const selectedAdobeCategory = (ADOBE_APP_CATEGORIES as readonly string[]).includes(category) ? category : "";
   const hasActiveFilters =
     search.trim().length > 0 ||
     category !== "all" ||
@@ -134,10 +122,9 @@ export function MarketPage() {
         assetId: asset.id,
         creatorId: asset.creator_id,
         actorUserId: user?.id,
-        actorEmail: user?.email,
+        actorEmail: userContactEmail,
         metadata: {
-          page: "market",
-          feed_mode: feedMode
+          page: "market"
         }
       });
     }
@@ -145,7 +132,7 @@ export function MarketPage() {
     if (nextSeen.size !== seen.size) {
       window.sessionStorage.setItem(storageKey, JSON.stringify(Array.from(nextSeen)));
     }
-  }, [displayAssets, feedMode, user?.email, user?.id]);
+  }, [displayAssets, user?.id, userContactEmail]);
 
   return (
     <div className="discover-shell space-y-5">
@@ -156,62 +143,72 @@ export function MarketPage() {
         <div className="relative z-10 space-y-4">
           <div className="flex flex-col gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Discover</p>
-              <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Creative Assets Marketplace</h1>
-              <p className="mt-1 max-w-3xl text-sm text-sand-700 md:text-base">
-                Explore curated digital products from designers, producers, and visual storytellers.
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Template Discovery</p>
+              <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Marketplace</h1>
+              <p className="mt-1 max-w-3xl text-sm text-sand-700 md:text-base">Buy and Sell Creative Templates</p>
             </div>
 
             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.1em]">
-              <span className="rounded-full border border-cobalt-200 bg-white/90 px-3 py-1 text-cobalt-700">Curated digital catalog</span>
-              <span className="rounded-full border border-cobalt-200 bg-white/90 px-3 py-1 text-cobalt-700">Creator-first marketplace</span>
-              <span className="rounded-full border border-cobalt-200 bg-white/90 px-3 py-1 text-cobalt-700">Instant purchase flow</span>
+              <span className="rounded-full border border-cobalt-200 bg-white/90 px-3 py-1 text-cobalt-700">Editable files</span>
+              <span className="rounded-full border border-cobalt-200 bg-white/90 px-3 py-1 text-cobalt-700">Curated creator templates</span>
+              <span className="rounded-full border border-cobalt-200 bg-white/90 px-3 py-1 text-cobalt-700">Instant downloads</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto pb-1">
-            <div className="flex w-max items-center gap-2 pr-2">
-              <button
-                type="button"
-                onClick={() => setCategory("all")}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                  category === "all"
-                    ? "border-cobalt-600 bg-cobalt-600 text-white"
-                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-                }`}
-              >
-                All
-              </button>
-              {ASSET_CATEGORIES.map((item) => (
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-500">Browse by platform</p>
+            <div className="overflow-x-auto pb-1">
+              <div className="flex w-max items-center gap-2 pr-2">
                 <button
-                  key={item}
                   type="button"
-                  onClick={() => setCategory(item)}
+                  onClick={() => setCategory("all")}
                   className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                    category === item
+                    category === "all"
                       ? "border-cobalt-600 bg-cobalt-600 text-white"
                       : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
                   }`}
                 >
-                  {item}
+                  Explore all
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setCategory("Figma Templates")}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                    category === "Figma Templates"
+                      ? "border-cobalt-600 bg-cobalt-600 text-white"
+                      : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
+                  }`}
+                >
+                  Figma
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCategory("Canva Templates")}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                    category === "Canva Templates"
+                      ? "border-cobalt-600 bg-cobalt-600 text-white"
+                      : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
+                  }`}
+                >
+                  Canva
+                </button>
+                <select
+                  value={selectedAdobeCategory}
+                  onChange={(event) => setCategory(event.target.value || "all")}
+                  className="shrink-0 rounded-full border border-sand-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-sand-700 outline-none transition hover:border-cobalt-200 focus:border-cobalt-300"
+                >
+                  <option value="">Adobe apps</option>
+                  {ADOBE_APP_CATEGORIES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
       </header>
-
-      <section className="surface-card discover-mode-bar flex flex-wrap items-center gap-2 p-2">
-        <FeedTab mode={feedMode} value="for-you" label="For You" onSelect={setFeedMode} />
-        <FeedTab mode={feedMode} value="recent" label="Latest" onSelect={setFeedMode} />
-
-        <div className="ml-auto flex items-center gap-2 text-xs text-sand-600">
-          <span className="rounded-full border border-sand-200 bg-white px-2.5 py-1 font-semibold uppercase tracking-[0.1em]">
-            {assetsQuery.isLoading ? "Loading..." : `${displayAssets.length} results`}
-          </span>
-        </div>
-      </section>
 
       <FilterBar
         search={search}
@@ -235,7 +232,7 @@ export function MarketPage() {
           <span className="font-medium uppercase tracking-[0.1em] text-sand-500">Active filters</span>
           {category !== "all" ? <FilterPill label={category} onClear={() => setCategory("all")} /> : null}
           {creator.trim() ? <FilterPill label={`Creator ${creator.trim()}`} onClear={() => setCreator("")} /> : null}
-          {fileType !== "all" ? <FilterPill label={fileType} onClear={() => setFileType("all")} /> : null}
+          {fileType !== "all" ? <FilterPill label={fileTypeLabel} onClear={() => setFileType("all")} /> : null}
           {minPrice ? <FilterPill label={`Min ${minPrice}`} onClear={() => setMinPrice("")} /> : null}
           {maxPrice ? <FilterPill label={`Max ${maxPrice}`} onClear={() => setMaxPrice("")} /> : null}
           {search.trim() ? <FilterPill label={`"${search.trim()}"`} onClear={() => setSearch("")} /> : null}
@@ -260,37 +257,9 @@ export function MarketPage() {
       {displayAssets.length > 0 ? <AssetGrid assets={displayAssets} /> : null}
 
       {assetsQuery.data && assetsQuery.data.length === 0 ? (
-        <EmptyState title="No assets found" body="Adjust your filters or check back soon for fresh creative work." />
+        <EmptyState title="No templates found" body="Adjust your filters or check back soon for fresh creator releases." />
       ) : null}
     </div>
-  );
-}
-
-function FeedTab({
-  mode,
-  value,
-  label,
-  onSelect
-}: {
-  mode: FeedMode;
-  value: FeedMode;
-  label: string;
-  onSelect: (value: FeedMode) => void;
-}) {
-  const isActive = mode === value;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(value)}
-      className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-        isActive
-          ? "border-cobalt-600 bg-cobalt-600 text-white"
-          : "border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { ActionConfirmationModal } from "@/components/ActionConfirmationModal";
 import { EmptyState } from "@/components/EmptyState";
 import { useToast } from "@/components/Toast";
 import {
@@ -8,7 +9,7 @@ import {
   deleteEditorialPost,
   getEditorialPostsFromDb,
   getProfile,
-  isCurrentUserAdmin,
+  isCurrentUserEditorialAdmin,
   updateEditorialPost
 } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -18,7 +19,9 @@ const CATEGORY_OPTIONS: EditorialPost["category"][] = ["Industry", "Creator Econ
 
 export function EditorialAdminPage() {
   const user = useAuthStore((state) => state.user);
+  const signOut = useAuthStore((state) => state.signOut);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { pushToast } = useToast();
 
   const [title, setTitle] = useState("");
@@ -36,10 +39,13 @@ export function EditorialAdminPage() {
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editingPostSlug, setEditingPostSlug] = useState("");
   const [preservedSections, setPreservedSections] = useState<EditorialPost["sections"]>([]);
+  const [confirmSignOutOpen, setConfirmSignOutOpen] = useState(false);
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [pendingDeletePost, setPendingDeletePost] = useState<EditorialPost | null>(null);
 
   const adminQuery = useQuery({
-    queryKey: ["is-admin", user?.id],
-    queryFn: () => isCurrentUserAdmin(user!.id),
+    queryKey: ["is-editorial-admin", user?.id],
+    queryFn: () => isCurrentUserEditorialAdmin(user!.id),
     enabled: Boolean(user?.id)
   });
 
@@ -212,6 +218,17 @@ export function EditorialAdminPage() {
     }
   });
 
+  const signOutMutation = useMutation({
+    mutationFn: signOut,
+    onSuccess: () => {
+      pushToast("Signed out of editorial workspace", "success");
+      navigate("/editorial-login", { replace: true });
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not sign out", "error");
+    }
+  });
+
   const posts = postsQuery.data ?? [];
   const postCountLabel = `${posts.length} post${posts.length === 1 ? "" : "s"}`;
   const spotlightCount = useMemo(() => posts.filter((post) => post.spotlight).length, [posts]);
@@ -241,17 +258,30 @@ export function EditorialAdminPage() {
   }
 
   if (adminQuery.data !== true) {
-    return <EmptyState title="Admin writers only" body="Your account is not currently assigned to editorial admin access." />;
+    return <EmptyState title="Editors only" body="Your account is not currently assigned to the editorial workspace." />;
   }
 
   return (
     <div className="space-y-4 md:space-y-5">
       <header className="surface-card-vivid p-5 md:p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Editorial Admin</p>
-        <h1 className="mt-1 font-display text-3xl font-bold text-ink md:text-4xl">Write, track, and manage Editorial Spotlight posts</h1>
-        <p className="mt-2 text-sm text-sand-700">
-          This page is intentionally not linked in the main app navigation. Access it directly via <code>/editorial-admin</code>.
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Editorial Desk</p>
+            <h1 className="mt-1 font-display text-3xl font-bold text-ink md:text-4xl">Write, track, and manage editorial stories</h1>
+            <p className="mt-2 text-sm text-sand-700">
+              This workspace is reserved for editorial accounts and has its own access path through <code>/editorial-login</code>.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Link to="/editorial" className="admin-action-button admin-action-button-secondary">
+              View live desk
+            </Link>
+            <button type="button" onClick={() => setConfirmSignOutOpen(true)} className="admin-action-button admin-action-button-rose">
+              Sign out
+            </button>
+          </div>
+        </div>
       </header>
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
@@ -267,11 +297,7 @@ export function EditorialAdminPage() {
             className="mt-4 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (isEditing) {
-                updateMutation.mutate();
-                return;
-              }
-              createMutation.mutate();
+              setConfirmSaveOpen(true);
             }}
           >
             <Field label="Title">
@@ -418,13 +444,7 @@ export function EditorialAdminPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        const confirmed = window.confirm(`Delete "${post.title}"? This action cannot be undone.`);
-                        if (!confirmed) {
-                          return;
-                        }
-                        deleteMutation.mutate(post);
-                      }}
+                      onClick={() => setPendingDeletePost(post)}
                       disabled={deleteMutation.isPending}
                       className="rounded-full border border-rose-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -443,6 +463,119 @@ export function EditorialAdminPage() {
           </section>
         </aside>
       </div>
+
+      <ActionConfirmationModal
+        open={confirmSaveOpen}
+        tone="cobalt"
+        eyebrow={isEditing ? "Save Changes" : "Publish Story"}
+        title={isEditing ? "Save updates to this editorial post?" : "Publish this editorial post?"}
+        description={
+          isEditing
+            ? "Your edits will replace the current live version of this story and update it across the editorial desk."
+            : "This story will be added to the editorial desk as soon as the save completes."
+        }
+        confirmLabel={isEditing ? "Save changes" : "Publish article"}
+        isPending={isSaving}
+        onClose={() => {
+          if (!isSaving) {
+            setConfirmSaveOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          setConfirmSaveOpen(false);
+          if (isEditing) {
+            updateMutation.mutate();
+            return;
+          }
+          createMutation.mutate();
+        }}
+        details={
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Title</p>
+              <p className="action-confirm-stat-value">{title.trim() || "Untitled story"}</p>
+            </div>
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Category</p>
+              <p className="action-confirm-stat-value">{category}</p>
+            </div>
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Spotlight</p>
+              <p className="action-confirm-stat-value">{spotlight ? "Featured" : "Standard"}</p>
+            </div>
+          </div>
+        }
+      />
+
+      <ActionConfirmationModal
+        open={confirmSignOutOpen}
+        tone="rose"
+        eyebrow="End Editorial Session"
+        title="Sign out of editorial admin?"
+        description="You are about to leave the editorial workspace. Your drafts stay intact, and you can sign back in through the editorial login page."
+        confirmLabel="Sign out"
+        isPending={signOutMutation.isPending}
+        onClose={() => {
+          if (!signOutMutation.isPending) {
+            setConfirmSignOutOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          setConfirmSignOutOpen(false);
+          signOutMutation.mutate();
+        }}
+        details={
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Workspace</p>
+              <p className="action-confirm-stat-value">Editorial Desk</p>
+            </div>
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Mode</p>
+              <p className="action-confirm-stat-value">{isEditing ? "Editing post" : "Drafting new story"}</p>
+            </div>
+          </div>
+        }
+      />
+
+      <ActionConfirmationModal
+        open={Boolean(pendingDeletePost)}
+        tone="rose"
+        eyebrow="Delete Story"
+        title="Delete this editorial post?"
+        description="This action cannot be undone. The story will be removed from the editorial desk and from the editing workspace."
+        confirmLabel="Delete post"
+        isPending={deleteMutation.isPending}
+        onClose={() => {
+          if (!deleteMutation.isPending) {
+            setPendingDeletePost(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!pendingDeletePost) {
+            return;
+          }
+          deleteMutation.mutate(pendingDeletePost, {
+            onSettled: () => {
+              setPendingDeletePost(null);
+            }
+          });
+        }}
+        details={
+          pendingDeletePost ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="action-confirm-stat sm:col-span-2">
+                <p className="action-confirm-stat-label">Story</p>
+                <p className="action-confirm-stat-value">{pendingDeletePost.title}</p>
+              </div>
+              <div className="action-confirm-stat">
+                <p className="action-confirm-stat-label">Category</p>
+                <p className="action-confirm-stat-value">{pendingDeletePost.category}</p>
+              </div>
+            </div>
+          ) : null
+        }
+      />
     </div>
   );
 }

@@ -1,16 +1,38 @@
 import { z } from "zod";
 
 export const ASSET_CATEGORIES = [
-  "Templates",
-  "Beats",
-  "Presets",
-  "UI Kits",
-  "Fonts",
-  "Photos",
-  "Videos",
-  "Mockups",
-  "Other"
+  "Figma Templates",
+  "Canva Templates",
+  "Photoshop Templates",
+  "Illustrator Templates",
+  "InDesign Templates",
+  "Lightroom Presets",
+  "Premiere Pro Templates",
+  "After Effects Templates",
+  "Creative Cloud Bundles",
+  "Other Creative Cloud Assets"
 ] as const;
+
+export const ADOBE_APP_CATEGORIES = [
+  "Photoshop Templates",
+  "Illustrator Templates",
+  "InDesign Templates",
+  "Lightroom Presets",
+  "Premiere Pro Templates",
+  "After Effects Templates"
+] as const;
+
+export const MARKET_FILE_FILTERS = [
+  { value: "all", label: "Any format" },
+  { value: "editable", label: "Editable files" },
+  { value: "document", label: "Documents / PDF" },
+  { value: "image", label: "Images / exports" },
+  { value: "motion", label: "Motion / video" },
+  { value: "bundle", label: "Bundles / ZIP" }
+] as const;
+
+export const PRIMARY_ASSET_ACCEPT =
+  ".zip,.pdf,.psd,.psb,.ai,.eps,.indd,.indt,.idml,.aep,.aet,.mogrt,.prproj,.prfpset,.xmp,.lrtemplate,.lrcat,.fig,.figjam,.sketch,.xd,.svg,.jpg,.jpeg,.png";
 
 export const uploadAssetSchema = z.object({
   title: z.string().min(3).max(120),

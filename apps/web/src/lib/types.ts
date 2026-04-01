@@ -75,7 +75,7 @@ export type Order = {
   amount_kobo: number;
   currency: string;
   created_at: string;
-  asset?: Pick<Asset, "id" | "title" | "category"> & {
+  asset?: Pick<Asset, "id" | "title" | "category" | "files"> & {
     previews?: AssetPreview[];
   };
 };
@@ -124,6 +124,102 @@ export type CreatorFunnelSummary = {
   asset_clicks: number;
   checkout_starts: number;
   purchases: number;
+};
+
+export type AdminCurrencySummary = {
+  currency: string;
+  amount_kobo: number;
+  order_count: number;
+};
+
+export type PlatformSocialSettings = {
+  instagram_handle: string;
+  x_handle: string;
+  tiktok_handle: string;
+  linkedin_handle: string;
+  facebook_handle: string;
+  whatsapp_channel: string;
+  support_email: string;
+  admin_whatsapp_number: string;
+  admin_whatsapp_message: string;
+};
+
+export type AdminOverview = {
+  total_profiles: number;
+  active_creators: number;
+  total_admins: number;
+  total_assets: number;
+  published_assets: number;
+  draft_assets: number;
+  archived_assets: number;
+  total_orders: number;
+  paid_orders: number;
+  pending_orders: number;
+  failed_orders: number;
+  refunded_orders: number;
+  order_volume: AdminCurrencySummary[];
+  active_payout_accounts: number;
+  editorial_posts: number;
+  asset_reviews: number;
+  creator_reviews: number;
+  wishlists: number;
+  creator_follows: number;
+};
+
+export type AdminOrderRecord = {
+  id: string;
+  buyer_id: string | null;
+  email: string;
+  status: Order["status"];
+  amount_kobo: number;
+  currency: string;
+  created_at: string;
+  paid_at: string | null;
+  payment:
+    | {
+        provider: string;
+        reference: string;
+        status: "pending" | "paid" | "failed" | "refunded";
+        updated_at: string | null;
+      }
+    | null;
+  asset:
+    | {
+        id: string;
+        title: string;
+        category: string;
+        creator_id: string;
+        creator: Pick<Profile, "display_name" | "avatar_url" | "creator_category" | "is_verified"> | null;
+      }
+    | null;
+};
+
+export type AdminCreatorRecord = {
+  id: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  creator_category: string;
+  niche: string | null;
+  sales_count: number;
+  is_verified: boolean;
+  created_at: string;
+  asset_count: number;
+  published_assets: number;
+  draft_assets: number;
+  archived_assets: number;
+  latest_asset_at: string | null;
+  follower_count: number;
+  wallet_balance_kobo: number;
+  payout_account:
+    | {
+        status: "active" | "inactive";
+        country: string;
+        payout_type: "bank" | "mobile_money";
+        settlement_bank_name: string | null;
+        updated_at: string;
+      }
+    | null;
 };
 
 export type PayoutAccount = {

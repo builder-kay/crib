@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
+import { getUserContactEmail } from "@/lib/auth";
 import { trackAnalyticsEvent } from "@/lib/api";
 import type { Asset } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
@@ -17,16 +18,25 @@ type AssetCardProps = {
 
 function categoryChipClass(category: string) {
   const key = category.toLowerCase();
-  if (key.includes("beat") || key.includes("audio")) {
-    return "bg-orchid-600 text-white";
-  }
-  if (key.includes("photo") || key.includes("video")) {
+  if (key.includes("figma")) {
     return "bg-lagoon-600 text-white";
   }
-  if (key.includes("template") || key.includes("ui")) {
+  if (key.includes("canva")) {
+    return "bg-sunset-600 text-white";
+  }
+  if (key.includes("after effects") || key.includes("premiere")) {
+    return "bg-orchid-600 text-white";
+  }
+  if (key.includes("lightroom")) {
+    return "bg-lagoon-600 text-white";
+  }
+  if (key.includes("photoshop")) {
     return "bg-cobalt-600 text-white";
   }
-  if (key.includes("font")) {
+  if (key.includes("illustrator")) {
+    return "bg-forest-600 text-white";
+  }
+  if (key.includes("indesign")) {
     return "bg-sunset-600 text-white";
   }
   return "bg-ink text-white";
@@ -34,13 +44,17 @@ function categoryChipClass(category: string) {
 
 export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: AssetCardProps) {
   const user = useAuthStore((state) => state.user);
+  const userContactEmail = getUserContactEmail(user);
   const creatorName = asset.profile?.display_name ?? "Creator";
-  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Creative";
+  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Template Creator";
   const creatorSales = Math.max(0, asset.profile?.sales_count ?? 0);
   const creatorSalesLabel = `${new Intl.NumberFormat("en-US").format(creatorSales)} sold`;
   const isVerified = Boolean(asset.profile?.is_verified);
   const rating = asset.average_rating ?? 0;
   const reviewCount = asset.review_count ?? 0;
+  const creatorProfilePath = user
+    ? `/profile/${asset.creator_id}`
+    : `/auth?redirect=${encodeURIComponent(`/profile/${asset.creator_id}`)}`;
 
   function handleAssetClick(surface: "image" | "title" | "cta") {
     void trackAnalyticsEvent({
@@ -48,7 +62,7 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
       assetId: asset.id,
       creatorId: asset.creator_id,
       actorUserId: user?.id,
-      actorEmail: user?.email,
+      actorEmail: userContactEmail,
       metadata: { surface }
     });
   }
@@ -103,7 +117,7 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
             </Link>
             <p className="mt-0.5 text-xs text-sand-600">
               by{" "}
-              <Link to={`/profile/${asset.creator_id}`} className="font-medium text-sand-700 hover:text-cobalt-700">
+              <Link to={creatorProfilePath} className="font-medium text-sand-700 hover:text-cobalt-700">
                 {creatorName}
               </Link>
               {isVerified ? <span className="ml-1 rounded-full bg-forest-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-forest-700">Verified</span> : null}

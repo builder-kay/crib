@@ -1,6 +1,6 @@
 # CRIB
 
-Production-ready MVP scaffold for **CRIB** - an African-first digital marketplace for creators selling digital assets.
+Production-ready MVP scaffold for **CRIB** - an African-first digital marketplace currently focused on Creative Cloud templates, presets, and source packs.
 
 ## Stack
 
@@ -31,7 +31,7 @@ crib/
 - Auth (signup/login) with Supabase
 - Creator profile editing
 - Asset uploads to private storage (`assets`) + public previews (`previews`)
-- Marketplace browse/search/filter
+- Creative Cloud marketplace browse/search/filter
 - Asset detail and purchase kickoff via Paystack
 - Paystack webhook verification and payment/order updates
 - Creator wallet crediting with configurable commission

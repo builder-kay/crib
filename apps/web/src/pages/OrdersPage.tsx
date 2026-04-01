@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
+import { getUserContactEmail } from "@/lib/auth";
 import { generateDownload, getBuyerOrders, getReviewedAssetIdsForUser, upsertAssetReview, verifyPayment } from "@/lib/api";
+import { getAssetAppLabel, getAssetFormatLabel } from "@/lib/assetCatalog";
 import { formatDate } from "@/lib/format";
 import { useAuthStore } from "@/store/authStore";
 
 export function OrdersPage() {
   const initialized = useAuthStore((state) => state.initialized);
   const user = useAuthStore((state) => state.user);
+  const userContactEmail = getUserContactEmail(user);
+  const location = useLocation();
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -27,7 +31,7 @@ export function OrdersPage() {
   const reference = params.get("reference") ?? "";
 
   const ordersQuery = useQuery({
-    queryKey: ["orders", user?.id, user?.email, token],
+    queryKey: ["orders", user?.id, userContactEmail, token],
     queryFn: () =>
       getBuyerOrders({
         userId: user?.id,
@@ -55,7 +59,7 @@ export function OrdersPage() {
   });
 
   useEffect(() => {
-    if (!reference || !initialized) {
+    if (!reference || !initialized || (!user && !token)) {
       return;
     }
 
@@ -65,7 +69,7 @@ export function OrdersPage() {
 
     verifiedReferenceRef.current = reference;
     verifyMutation.mutate();
-  }, [reference, initialized, verifyMutation]);
+  }, [reference, initialized, token, user, verifyMutation]);
 
   const headline = useMemo(() => {
     if (reference) {
@@ -73,6 +77,7 @@ export function OrdersPage() {
     }
     return "Your purchases and secure download links.";
   }, [reference]);
+  const signInRedirect = `/auth?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
 
   const orders = ordersQuery.data ?? [];
   const paidOrdersWithAssets = useMemo(
@@ -146,7 +151,7 @@ export function OrdersPage() {
 
       const selectedOrder = orders.find((order) => order.id === reviewOrderId);
       if (!selectedOrder?.asset?.id) {
-        throw new Error("No asset selected for review.");
+        throw new Error("No listing selected for review.");
       }
 
       if (reviewRating < 1 || reviewRating > 5) {
@@ -257,8 +262,8 @@ export function OrdersPage() {
     return (
       <EmptyState
         title="No order access yet"
-        body="Sign in to view your orders, or open your email-link order token URL."
-        action={<Link to="/auth" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">Sign in</Link>}
+        body="Sign in to view your orders, verify payment, and unlock downloads."
+        action={<Link to={signInRedirect} className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">Sign in</Link>}
       />
     );
   }
@@ -305,7 +310,7 @@ export function OrdersPage() {
       {!ordersQuery.isLoading && orders.length === 0 ? (
         <EmptyState
           title="No orders yet"
-          body="After your first purchase, paid downloads show up here."
+          body="After your first purchase, your template downloads show up here."
           action={
             <Link to="/market" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">
               Browse marketplace
@@ -318,29 +323,34 @@ export function OrdersPage() {
         {orders.map((order) => {
           const previewUrl = order.asset?.previews?.[0]?.preview_url;
           const canDownload = order.status === "paid";
+          const appLabel = order.asset ? getAssetAppLabel(order.asset) : "Creative App";
+          const formatLabel = order.asset ? getAssetFormatLabel(order.asset) : "Source files";
 
           return (
             <article key={order.id} className="surface-card overflow-hidden">
               <div className="grid gap-0 md:grid-cols-[220px,1fr]">
                 <div className="relative min-h-36 overflow-hidden bg-sand-100">
                   {previewUrl ? (
-                    <img src={previewUrl} alt={order.asset?.title ?? "Asset preview"} className="h-full w-full object-cover" />
+                    <img src={previewUrl} alt={order.asset?.title ?? "Listing preview"} className="h-full w-full object-cover" />
                   ) : (
                     <div className="grid h-full w-full place-items-center text-sm font-semibold uppercase tracking-wide text-sand-500">
                       No preview
                     </div>
                   )}
                   <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink">
-                    {order.asset?.category ?? "Asset"}
+                    {order.asset?.category ?? "Listing"}
                   </span>
                 </div>
 
                 <div className="p-4 md:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-display text-lg font-semibold text-ink">{order.asset?.title ?? "Asset"}</h3>
+                      <h3 className="font-display text-lg font-semibold text-ink">{order.asset?.title ?? "Listing"}</h3>
                       <p className="mt-1 text-xs text-sand-600">
                         Order #{order.id.slice(0, 8)} - {formatDate(order.created_at)}
+                      </p>
+                      <p className="mt-1 text-xs text-sand-500">
+                        {appLabel} - {formatLabel}
                       </p>
                     </div>
 
@@ -361,7 +371,7 @@ export function OrdersPage() {
                           const payload = await generateDownload(order.id, token || undefined);
                           const link = document.createElement("a");
                           link.href = payload.url;
-                          link.download = payload.filename || "asset";
+                          link.download = payload.filename || "creative-cloud-download";
                           link.rel = "noopener noreferrer";
                           document.body.appendChild(link);
                           link.click();
@@ -392,7 +402,7 @@ export function OrdersPage() {
       >
         <div className="space-y-3">
           <p className="text-sm text-sand-700">
-            How was <span className="font-semibold text-ink">{selectedReviewOrder?.asset?.title ?? "this asset"}</span>?
+            How was <span className="font-semibold text-ink">{selectedReviewOrder?.asset?.title ?? "this listing"}</span>?
           </p>
 
           <div>
@@ -455,7 +465,7 @@ function statusDescription(status: "pending" | "paid" | "failed" | "refunded") {
     return "Payment initiated. We are waiting for confirmation from the payment provider.";
   }
   if (status === "failed") {
-    return "Payment failed. Try purchasing again if you still want this asset.";
+    return "Payment failed. Try purchasing again if you still want this listing.";
   }
   return "This order was refunded. Download access may be restricted.";
 }

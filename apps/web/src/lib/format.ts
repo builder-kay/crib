@@ -1,19 +1,28 @@
 const formatterCache = new Map<string, Intl.NumberFormat>();
 
 export function formatCurrency(amountKobo: number, currency = "GHS") {
-  const cacheKey = currency;
-  if (!formatterCache.has(cacheKey)) {
-    formatterCache.set(
-      cacheKey,
-      new Intl.NumberFormat("en-GH", {
-        style: "currency",
-        currency,
-        minimumFractionDigits: 2
-      })
-    );
-  }
+  const cacheKey = currency.toUpperCase();
 
-  return formatterCache.get(cacheKey)!.format(amountKobo / 100);
+  try {
+    if (!formatterCache.has(cacheKey)) {
+      formatterCache.set(
+        cacheKey,
+        new Intl.NumberFormat("en-GH", {
+          style: "currency",
+          currency: cacheKey,
+          minimumFractionDigits: 2
+        })
+      );
+    }
+
+    return formatterCache.get(cacheKey)!.format(amountKobo / 100);
+  } catch {
+    return `${cacheKey} ${(amountKobo / 100).toFixed(2)}`;
+  }
+}
+
+export function formatMajorCurrency(amount: number, currency = "GHS") {
+  return formatCurrency(Math.round(amount * 100), currency);
 }
 
 export function formatDate(input: string) {

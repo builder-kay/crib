@@ -14,3 +14,15 @@ verify_jwt = false
 
 [functions.manage-payout-account]
 verify_jwt = false
+
+[functions.resolve-auth-identifier]
+verify_jwt = false
+
+[functions.send-auth-otp]
+verify_jwt = false
+
+[functions.verify-auth-otp]
+verify_jwt = false
+
+[functions.provision-editorial-admin]
+verify_jwt = false

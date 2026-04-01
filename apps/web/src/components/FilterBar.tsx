@@ -1,4 +1,4 @@
-import { ASSET_CATEGORIES } from "@/lib/validators/asset";
+import { ASSET_CATEGORIES, MARKET_FILE_FILTERS } from "@/lib/validators/asset";
 import { SearchInput } from "@/components/SearchInput";
 
 type FilterBarProps = {
@@ -17,14 +17,6 @@ type FilterBarProps = {
   onResetFilters?: () => void;
   canResetFilters?: boolean;
 };
-
-const FILE_TYPES = [
-  { value: "all", label: "Any file" },
-  { value: "image", label: "Image" },
-  { value: "audio", label: "Audio" },
-  { value: "video", label: "Video" },
-  { value: "application", label: "Document / ZIP" }
-];
 
 export function FilterBar({
   search,
@@ -45,14 +37,14 @@ export function FilterBar({
   return (
     <section className="surface-card discover-filter-panel space-y-3 p-3 md:p-4">
       <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr,1.2fr,1fr]">
-        <SearchInput value={search} onChange={onSearchChange} placeholder="Search projects, tools, presets..." />
+        <SearchInput value={search} onChange={onSearchChange} placeholder="Search templates, creators, apps, or styles..." />
 
         <select
           value={category}
           onChange={(event) => onCategoryChange(event.target.value)}
           className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
         >
-          <option value="all">All categories</option>
+          <option value="all">All template categories</option>
           {ASSET_CATEGORIES.map((item) => (
             <option key={item} value={item}>
               {item}
@@ -63,7 +55,7 @@ export function FilterBar({
         <input
           value={creator}
           onChange={(event) => onCreatorChange(event.target.value)}
-          placeholder="Creator name"
+          placeholder="Creator or brand"
           className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
         />
 
@@ -73,7 +65,7 @@ export function FilterBar({
             min={0}
             value={minPrice}
             onChange={(event) => onMinPriceChange(event.target.value)}
-            placeholder="Min GHS"
+            placeholder="Min price"
             className="w-full bg-transparent text-sm outline-none placeholder:text-sand-400"
           />
           <span className="text-sand-400">-</span>
@@ -82,7 +74,7 @@ export function FilterBar({
             min={0}
             value={maxPrice}
             onChange={(event) => onMaxPriceChange(event.target.value)}
-            placeholder="Max GHS"
+            placeholder="Max price"
             className="w-full bg-transparent text-sm outline-none placeholder:text-sand-400"
           />
         </div>
@@ -92,7 +84,7 @@ export function FilterBar({
           onChange={(event) => onFileTypeChange(event.target.value)}
           className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
         >
-          {FILE_TYPES.map((item) => (
+          {MARKET_FILE_FILTERS.map((item) => (
             <option key={item.value} value={item.value}>
               {item.label}
             </option>

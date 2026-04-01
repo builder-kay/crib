@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
+import { getUserContactEmail } from "@/lib/auth";
 import {
   addAssetToWishlist,
   createPayment,
@@ -17,6 +18,7 @@ import {
   trackAnalyticsEvent,
   upsertAssetReview
 } from "@/lib/api";
+import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFormatLabel, getAssetPrimaryFilename } from "@/lib/assetCatalog";
 import { formatDate } from "@/lib/format";
 import { startPaystackCheckout } from "@/lib/paystack";
 import { useAuthStore } from "@/store/authStore";
@@ -24,14 +26,15 @@ import { useAuthStore } from "@/store/authStore";
 export function AssetDetailPage() {
   const { id = "" } = useParams();
   const user = useAuthStore((state) => state.user);
+  const userContactEmail = getUserContactEmail(user);
+  const navigate = useNavigate();
   const { pushToast } = useToast();
   const queryClient = useQueryClient();
 
-  const [guestEmail, setGuestEmail] = useState("");
-  const [showGuestModal, setShowGuestModal] = useState(false);
   const [showPurchasedModal, setShowPurchasedModal] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
+  const [checkoutEmail, setCheckoutEmail] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -54,8 +57,8 @@ export function AssetDetailPage() {
   });
 
   const existingPurchaseQuery = useQuery({
-    queryKey: ["asset-paid-order", id, user?.id, user?.email],
-    queryFn: () => hasPaidOrderForAsset(id, user!.id, user?.email),
+    queryKey: ["asset-paid-order", id, user?.id, userContactEmail],
+    queryFn: () => hasPaidOrderForAsset(id, user!.id, userContactEmail),
     enabled: Boolean(id && user?.id)
   });
 
@@ -111,20 +114,20 @@ export function AssetDetailPage() {
       assetId: assetQuery.data.id,
       creatorId: assetQuery.data.creator_id,
       actorUserId: user?.id,
-      actorEmail: user?.email,
+      actorEmail: userContactEmail,
       metadata: {
         page: "asset_detail"
       }
     });
-  }, [assetQuery.data, user?.email, user?.id]);
+  }, [assetQuery.data, user?.id, userContactEmail]);
 
   const paymentMutation = useMutation({
-    mutationFn: async (email?: string) => {
+    mutationFn: async () => {
       if (!assetQuery.data) {
-        throw new Error("Asset is not loaded");
+        throw new Error("Listing is not loaded");
       }
 
-      return createPayment(assetQuery.data.id, email);
+      return createPayment(assetQuery.data.id, checkoutEmail.trim() || undefined);
     },
     onSuccess: (payload) => {
       if (assetQuery.data) {
@@ -134,7 +137,7 @@ export function AssetDetailPage() {
           creatorId: assetQuery.data.creator_id,
           orderId: payload.order_id,
           actorUserId: user?.id,
-          actorEmail: user?.email ?? payload.email ?? null,
+          actorEmail: userContactEmail ?? payload.email ?? (checkoutEmail.trim() || null),
           metadata: {
             page: "asset_detail"
           }
@@ -156,13 +159,12 @@ export function AssetDetailPage() {
       const fallbackMessage = error instanceof Error ? error.message : "Payment failed";
 
       if (paymentError.code === "already_purchased") {
-        setShowGuestModal(false);
         setShowPurchasedModal(true);
         return;
       }
 
       if (paymentError.code === "own_asset") {
-        pushToast("You cannot purchase your own asset.", "info");
+        pushToast("You cannot purchase your own listing.", "info");
         return;
       }
 
@@ -172,7 +174,6 @@ export function AssetDetailPage() {
       }
 
       if (fallbackMessage.toLowerCase().includes("already purchased")) {
-        setShowGuestModal(false);
         setShowPurchasedModal(true);
         return;
       }
@@ -237,7 +238,7 @@ export function AssetDetailPage() {
   const wishlistMutation = useMutation({
     mutationFn: async (nextState: boolean) => {
       if (!user?.id || !assetQuery.data) {
-        throw new Error("Sign in to save assets.");
+        throw new Error("Sign in to save listings.");
       }
 
       if (nextState) {
@@ -258,14 +259,14 @@ export function AssetDetailPage() {
   });
 
   if (assetQuery.isLoading) {
-    return <div className="surface-card p-6 text-sm text-sand-600">Loading asset...</div>;
+    return <div className="surface-card p-6 text-sm text-sand-600">Loading listing...</div>;
   }
 
   if (assetQuery.isError || !assetQuery.data) {
     return (
       <div className="surface-card p-6">
-        <h2 className="font-display text-xl font-semibold">Asset unavailable</h2>
-        <p className="mt-2 text-sm text-sand-700">{assetQuery.error instanceof Error ? assetQuery.error.message : "Try another asset."}</p>
+        <h2 className="font-display text-xl font-semibold">Listing unavailable</h2>
+        <p className="mt-2 text-sm text-sand-700">{assetQuery.error instanceof Error ? assetQuery.error.message : "Try another listing."}</p>
       </div>
     );
   }
@@ -273,31 +274,41 @@ export function AssetDetailPage() {
   const asset = assetQuery.data;
   const isOwnAsset = Boolean(user?.id) && user?.id === asset.creator_id;
   const alreadyPurchased = existingPurchaseQuery.data === true;
-  const canPurchase = asset.status === "published" && !isOwnAsset && !alreadyPurchased;
+  const purchaseAvailable = asset.status === "published" && !isOwnAsset && !alreadyPurchased;
   const canReview = Boolean(user?.id) && alreadyPurchased && !isOwnAsset;
   const buyButtonLabel = paymentMutation.isPending
     ? "Processing..."
     : asset.status !== "published"
       ? "Not available"
       : isOwnAsset
-        ? "Your asset"
+        ? "Your listing"
         : alreadyPurchased
           ? "Purchased"
-          : "Buy now";
+          : !user
+            ? "Sign in to buy"
+            : "Buy now";
   const creatorName = asset.profile?.display_name ?? "Creator";
   const creatorSalesCount = Math.max(0, asset.profile?.sales_count ?? 0);
   const creatorSalesLabel = `${new Intl.NumberFormat("en-US").format(creatorSalesCount)} sales`;
   const creatorVerified = Boolean(asset.profile?.is_verified);
-  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Creative";
-  const ordersPath = user ? "/dashboard/orders" : "/orders";
+  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Template Creator";
+  const checkoutContactEmail = userContactEmail ?? checkoutEmail.trim();
+  const appLabel = getAssetAppLabel(asset);
+  const formatLabel = getAssetFormatLabel(asset);
+  const deliveryLabel = getAssetDeliveryLabel(asset);
+  const primaryFileName = getAssetPrimaryFilename(asset);
+  const ordersPath = user ? "/dashboard/orders" : `/auth?redirect=${encodeURIComponent("/dashboard/orders")}`;
+  const creatorProfilePath = user
+    ? `/profile/${asset.creator_id}`
+    : `/auth?redirect=${encodeURIComponent(`/profile/${asset.creator_id}`)}`;
   const primaryPreview =
     previews[0]?.preview_url ?? "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
   const unavailableReason =
     asset.status !== "published"
-      ? "Only published assets can be purchased."
+      ? "Only published listings can be purchased."
       : isOwnAsset
-        ? "Creators cannot purchase their own assets."
-        : "You already purchased this asset. Open Orders to download it.";
+        ? "Creators cannot purchase their own listings."
+        : "You already purchased this listing. Open Orders to download it.";
   const reviewCount = asset.review_count ?? 0;
   const averageRating = asset.average_rating ?? 0;
   const reviews = assetReviewsQuery.data ?? [];
@@ -334,7 +345,7 @@ export function AssetDetailPage() {
           ) : null}
 
           <article className="surface-card p-5 md:p-6">
-            <h2 className="font-display text-xl font-semibold text-ink">About This Project</h2>
+            <h2 className="font-display text-xl font-semibold text-ink">About This Listing</h2>
             <p className="mt-3 text-sm leading-relaxed text-sand-700">{asset.description}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -345,11 +356,11 @@ export function AssetDetailPage() {
               ))}
             </div>
 
-            <div className="mt-5 grid gap-3 rounded-xl border border-sand-200 bg-sand-50 p-4 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 rounded-xl border border-sand-200 bg-sand-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">Creator</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <Link to={`/profile/${asset.creator_id}`} className="inline-block text-sm font-semibold text-cobalt-700 hover:text-cobalt-800">
+                  <Link to={creatorProfilePath} className="inline-block text-sm font-semibold text-cobalt-700 hover:text-cobalt-800">
                     {creatorName}
                   </Link>
                   {creatorVerified ? (
@@ -362,9 +373,19 @@ export function AssetDetailPage() {
                   {creatorCategory} - {creatorSalesLabel}
                 </p>
               </div>
-              <MetaItem label="Uploaded" value={formatDate(asset.created_at)} />
+              <MetaItem label="Compatible App" value={appLabel} preserveCase />
+              <MetaItem label="Primary Format" value={formatLabel} preserveCase />
+              <MetaItem label="Delivery" value={deliveryLabel} preserveCase />
+              <MetaItem label="Uploaded" value={formatDate(asset.created_at)} preserveCase />
               <MetaItem label="Status" value={asset.status} />
             </div>
+
+            {primaryFileName ? (
+              <div className="mt-3 rounded-xl border border-sand-200 bg-white px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">Primary file</p>
+                <p className="mt-1 break-all font-mono text-xs text-sand-700">{primaryFileName}</p>
+              </div>
+            ) : null}
 
             <section className="mt-6 space-y-4 rounded-xl border border-sand-200 bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -425,10 +446,10 @@ export function AssetDetailPage() {
               ) : (
                 <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2 text-xs text-sand-700">
                   {isOwnAsset
-                    ? "Creators cannot review their own asset."
+                    ? "Creators cannot review their own listing."
                     : user
-                      ? "You can leave a review after purchasing this asset."
-                      : "Sign in and purchase this asset to leave a review."}
+                      ? "You can leave a review after purchasing this listing."
+                      : "Sign in and purchase this listing to leave a review."}
                 </div>
               )}
 
@@ -460,13 +481,16 @@ export function AssetDetailPage() {
           <h1 className="mt-3 font-display text-3xl font-bold leading-tight text-ink">{asset.title}</h1>
           <p className="mt-2 text-sm text-sand-700">
             by{" "}
-            <Link to={`/profile/${asset.creator_id}`} className="font-medium text-cobalt-700 hover:text-cobalt-800">
+            <Link to={creatorProfilePath} className="font-medium text-cobalt-700 hover:text-cobalt-800">
               {creatorName}
             </Link>
             {creatorVerified ? <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-forest-700">Verified</span> : null}
           </p>
           <p className="mt-1 text-xs text-sand-600">
             {creatorCategory} - {creatorSalesLabel}
+          </p>
+          <p className="mt-2 text-xs text-sand-600">
+            Compatible with {appLabel}. Delivered as {deliveryLabel.toLowerCase()}.
           </p>
 
           <div className="mt-3 flex items-center gap-2 text-sm text-sand-700">
@@ -481,33 +505,55 @@ export function AssetDetailPage() {
 
           <button
             type="button"
-            disabled={paymentMutation.isPending || !canPurchase}
+            disabled={paymentMutation.isPending || asset.status !== "published" || isOwnAsset || alreadyPurchased}
             onClick={() => {
-              if (!canPurchase) {
-                if (asset.status !== "published") {
-                  pushToast("This asset is not published yet.", "info");
-                  return;
-                }
-                if (isOwnAsset) {
-                  pushToast("You cannot purchase your own asset.", "info");
-                  return;
-                }
-                if (alreadyPurchased) {
-                  setShowPurchasedModal(true);
-                  return;
-                }
-              }
-
-              if (user?.email) {
-                paymentMutation.mutate(user.email);
+              if (asset.status !== "published") {
+                pushToast("This listing is not published yet.", "info");
                 return;
               }
-              setShowGuestModal(true);
+              if (isOwnAsset) {
+                pushToast("You cannot purchase your own listing.", "info");
+                return;
+              }
+              if (alreadyPurchased) {
+                setShowPurchasedModal(true);
+                return;
+              }
+              if (!user) {
+                pushToast("Sign in to buy templates and access your downloads.", "info");
+                navigate(`/auth?redirect=${encodeURIComponent(`/asset/${asset.id}`)}`);
+                return;
+              }
+              if (!checkoutContactEmail) {
+                pushToast("Add an email for checkout so we can initialize payment.", "info");
+                return;
+              }
+
+              paymentMutation.mutate();
             }}
             className="mt-6 w-full rounded-full bg-cobalt-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {buyButtonLabel}
           </button>
+
+          {user && !userContactEmail ? (
+            <div className="mt-3 rounded-2xl border border-sand-200 bg-sand-50 p-3">
+              <label htmlFor="checkoutEmail" className="block text-xs font-semibold uppercase tracking-[0.1em] text-sand-600">
+                Checkout email
+              </label>
+              <input
+                id="checkoutEmail"
+                value={checkoutEmail}
+                onChange={(event) => setCheckoutEmail(event.target.value)}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                className="mt-2 w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
+              />
+              <p className="mt-2 text-xs text-sand-500">Paystack needs a real email for checkout. This does not change your sign-in method.</p>
+            </div>
+          ) : null}
 
           {user ? (
             <button
@@ -527,7 +573,13 @@ export function AssetDetailPage() {
             </Link>
           )}
 
-          {!canPurchase ? (
+          {purchaseAvailable && !user ? (
+            <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">
+              Sign in to buy this template, verify payment, and access creator profiles.
+            </div>
+          ) : null}
+
+          {!purchaseAvailable ? (
             <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">{unavailableReason}</div>
           ) : null}
 
@@ -543,32 +595,6 @@ export function AssetDetailPage() {
           </p>
         </aside>
       </div>
-
-      <Modal open={showGuestModal} title="Continue as guest" onClose={() => setShowGuestModal(false)}>
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            paymentMutation.mutate(guestEmail);
-          }}
-        >
-          <label className="block text-sm font-medium text-sand-800">Email</label>
-          <input
-            value={guestEmail}
-            onChange={(event) => setGuestEmail(event.target.value)}
-            type="email"
-            required
-            className="w-full rounded-xl border border-sand-300 px-3 py-2.5 outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
-          />
-          <button
-            type="submit"
-            className="w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cobalt-700"
-            disabled={paymentMutation.isPending}
-          >
-            {paymentMutation.isPending ? "Starting checkout..." : "Proceed to Paystack"}
-          </button>
-        </form>
-      </Modal>
 
       <Modal open={showPurchasedModal} title="Already Purchased" onClose={() => setShowPurchasedModal(false)}>
         <div className="space-y-3">
@@ -589,11 +615,11 @@ export function AssetDetailPage() {
   );
 }
 
-function MetaItem({ label, value }: { label: string; value: string }) {
+function MetaItem({ label, value, preserveCase = false }: { label: string; value: string; preserveCase?: boolean }) {
   return (
     <div>
       <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold capitalize text-ink">{value}</p>
+      <p className={`mt-1 text-sm font-semibold text-ink ${preserveCase ? "" : "capitalize"}`}>{value}</p>
     </div>
   );
 }
