@@ -11,6 +11,15 @@ const footerSocialClassName: Record<string, string> = {
   WhatsApp: "app-footer-social app-footer-social-whatsapp"
 };
 
+const footerSocialIconClassName: Record<string, string> = {
+  Instagram: "app-footer-social-icon-wrap app-footer-social-icon-wrap-instagram",
+  X: "app-footer-social-icon-wrap app-footer-social-icon-wrap-x",
+  TikTok: "app-footer-social-icon-wrap app-footer-social-icon-wrap-tiktok",
+  LinkedIn: "app-footer-social-icon-wrap app-footer-social-icon-wrap-linkedin",
+  Facebook: "app-footer-social-icon-wrap app-footer-social-icon-wrap-facebook",
+  WhatsApp: "app-footer-social-icon-wrap app-footer-social-icon-wrap-whatsapp"
+};
+
 function SocialIcon({ label }: { label: string }) {
   switch (label) {
     case "Instagram":
@@ -143,12 +152,16 @@ export function AppFooter() {
                       rel="noreferrer"
                       className={footerSocialClassName[item.label] ?? "app-footer-social"}
                     >
-                      <SocialIcon label={item.label} />
+                      <span className={footerSocialIconClassName[item.label] ?? "app-footer-social-icon-wrap"}>
+                        <SocialIcon label={item.label} />
+                      </span>
                       <span>{item.label}</span>
                     </a>
                   ) : (
                     <span key={item.label} className="app-footer-social-disabled" title={item.handle || `${item.label} not set`}>
-                      <SocialIcon label={item.label} />
+                      <span className={footerSocialIconClassName[item.label] ?? "app-footer-social-icon-wrap"}>
+                        <SocialIcon label={item.label} />
+                      </span>
                       <span>{item.label}</span>
                     </span>
                   )
