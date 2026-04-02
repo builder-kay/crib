@@ -118,9 +118,9 @@ export function AdminCreatorsPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+        <div className="mt-5 space-y-4">
           {!creatorsLoading && filteredCreators.length === 0 ? (
-            <div className="xl:col-span-2">
+            <div>
               <EmptyState title="No creators match this search" body="Try a shorter search term or clear the filter to see everyone." />
             </div>
           ) : null}

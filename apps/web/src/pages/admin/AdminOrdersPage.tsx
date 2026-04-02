@@ -331,7 +331,7 @@ export function AdminOrdersPage() {
               <p className="mt-2 text-sm text-rose-800">{selectedOrder.scam_report_reason?.trim() || "No buyer reason was recorded."}</p>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
               <label className="admin-input-group">
                 <span>Admin note</span>
                 <textarea

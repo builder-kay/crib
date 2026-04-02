@@ -167,7 +167,7 @@ export function AdminSettingsPage() {
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[1.05fr,0.95fr]">
+      <div className="space-y-5">
         <section className="surface-card admin-panel p-5">
           <SectionHeader
             eyebrow="Footer and support"
@@ -188,7 +188,7 @@ export function AdminSettingsPage() {
                 <p className="admin-form-section-copy">These values drive the public social pills in the footer.</p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-3">
                 <label className="admin-input-group">
                   <span>Instagram handle</span>
                   <input
@@ -297,7 +297,7 @@ export function AdminSettingsPage() {
           </form>
         </section>
 
-        <aside className="space-y-5">
+        <div className="space-y-5">
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Live preview" title="See what the footer will use" body="As soon as you save, these values become the source of truth for the public footer socials and support actions." />
             <div className="mt-4 space-y-3">
@@ -323,7 +323,7 @@ export function AdminSettingsPage() {
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Why this changed" title="Manage contact paths without code edits" body="The footer now reads these values from the database, so admins can update public support details from the back office instead of editing env variables." />
           </section>
-        </aside>
+        </div>
       </div>
 
       <ActionConfirmationModal

@@ -2353,25 +2353,25 @@
   .admin-glance-grid {
     display: grid;
     gap: 0.75rem;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-summary-grid {
     display: grid;
     gap: 0.75rem;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-detail-grid {
     display: grid;
     gap: 0.75rem;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-hero-rail-summary-grid {
     display: grid;
     gap: 0.75rem;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-hero-glance-eyebrow {
@@ -2451,12 +2451,12 @@
     display: grid;
     gap: 0.75rem;
     min-width: 0;
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-toolbar-copy {
     min-width: 0;
-    max-width: 19rem;
+    max-width: none;
   }
 
   .admin-toolbar-label {
@@ -2634,20 +2634,13 @@
 
   @media (min-width: 768px) {
     .admin-hero-summary-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .admin-toolbar-layout {
-      grid-template-columns: minmax(0, 1fr) minmax(14rem, 19rem);
-      align-items: end;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
   @media (min-width: 1100px) {
     .admin-page-hero-grid {
-      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.88fr);
+      grid-template-columns: minmax(0, 1fr);
       align-items: start;
     }
 

@@ -70,7 +70,7 @@ export function AdminOverviewPage() {
           </aside>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-[1.1fr,0.9fr]">
+        <div className="mt-5">
           <div className="admin-hero-summary-grid">
             <InsightCard label="Accounts" value={overview ? `${overview.total_profiles}` : "Loading..."} helper={overview ? `${overview.total_admins} platform admins` : "Checking access"} tone="cobalt" />
             <InsightCard label="Catalog" value={overview ? `${overview.published_assets} published` : "Loading..."} helper={overview ? `${overview.draft_assets} drafts waiting` : "Checking listings"} tone="forest" />
@@ -86,11 +86,11 @@ export function AdminOverviewPage() {
         <MetricCard label="Network" value={overview ? `${overview.creator_follows}` : "Loading..."} helper={overview ? `${overview.wishlists} wishlist saves` : "Loading growth signals"} tone="forest" />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.15fr,0.85fr]">
+      <section className="space-y-5">
         <section className="surface-card admin-panel p-5">
           <SectionHeader eyebrow="Recent activity" title="Latest listings and orders" body="A quick pulse check across the storefront areas that usually need the fastest admin response." />
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="mt-4 space-y-4">
             <div className="admin-subpanel">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-display text-lg font-semibold text-ink">Newest listings</h3>
@@ -142,7 +142,7 @@ export function AdminOverviewPage() {
           </div>
         </section>
 
-        <aside className="space-y-5">
+        <div className="space-y-5">
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Operations" title="Signals worth watching" body="Marketplace admins stay focused on reviews, payouts, and general storefront health." />
             <div className="mt-4 space-y-3">
@@ -180,7 +180,7 @@ export function AdminOverviewPage() {
               <SummaryPill label="Reported" value={overview ? `${overview.scam_reported_orders}` : "..."} tone="rose" />
             </div>
           </section>
-        </aside>
+        </div>
       </section>
     </div>
   );

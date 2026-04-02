@@ -89,8 +89,8 @@ export function AdminEditorsPage() {
         </div>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[0.95fr,1.05fr]">
-        <aside className="surface-card admin-panel p-5">
+      <div className="space-y-5">
+        <section className="surface-card admin-panel p-5">
           <SectionHeader eyebrow="Workspace boundary" title="Keep editorial access separate" body="Use a dedicated email or phone login for editorial staff. Marketplace admins should not share the same credentials." />
           <div className="mt-4 space-y-3">
             <div className="admin-step-card admin-step-card-cobalt">
@@ -115,7 +115,7 @@ export function AdminEditorsPage() {
               </div>
             </div>
           </div>
-        </aside>
+        </section>
 
         <section className="surface-card admin-panel p-5">
           <SectionHeader eyebrow="Provisioning" title="Create or update an editor login" body="This form gives editors their own credentials without granting marketplace-admin rights." />
