@@ -148,6 +148,7 @@ export function AssetDetailPage() {
       void startPaystackCheckout({
         authorizationUrl: payload.authorization_url,
         reference: payload.reference,
+        orderToken: payload.order_token,
         email: payload.email,
         amountKobo: payload.amount_kobo,
         currency: payload.currency,
