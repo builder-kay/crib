@@ -93,6 +93,17 @@ type OrderRow = {
   amount_kobo: number;
   currency: string;
   created_at: string;
+  paid_at?: string | null;
+  commission_kobo?: number | null;
+  seller_net_amount_kobo?: number | null;
+  escrow_status?: Order["escrow_status"];
+  escrow_due_at?: string | null;
+  buyer_opened_at?: string | null;
+  buyer_confirmed_at?: string | null;
+  buyer_reported_at?: string | null;
+  escrow_released_at?: string | null;
+  escrow_release_reason?: string | null;
+  scam_report_reason?: string | null;
   asset?:
     | {
         id: string;
@@ -109,7 +120,6 @@ type OrderRow = {
         files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
       }>;
 };
-
 type CreatorProfileRow = {
   id: string;
   display_name: string;
@@ -285,6 +295,17 @@ function mapOrder(row: OrderRow): Order {
     amount_kobo: row.amount_kobo,
     currency: row.currency,
     created_at: row.created_at,
+    paid_at: row.paid_at ?? null,
+    commission_kobo: row.commission_kobo ?? 0,
+    seller_net_amount_kobo: row.seller_net_amount_kobo ?? Math.max(row.amount_kobo - (row.commission_kobo ?? 0), 0),
+    escrow_status: row.escrow_status ?? (row.status === "paid" ? "released" : null),
+    escrow_due_at: row.escrow_due_at ?? null,
+    buyer_opened_at: row.buyer_opened_at ?? null,
+    buyer_confirmed_at: row.buyer_confirmed_at ?? null,
+    buyer_reported_at: row.buyer_reported_at ?? null,
+    escrow_released_at: row.escrow_released_at ?? null,
+    escrow_release_reason: row.escrow_release_reason ?? null,
+    scam_report_reason: row.scam_report_reason ?? null,
     asset: asset
       ? {
           id: asset.id,
@@ -297,6 +318,40 @@ function mapOrder(row: OrderRow): Order {
   };
 }
 
+function createOrderAccessClient(emailToken?: string) {
+  if (!emailToken) {
+    return supabase;
+  }
+
+  return createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, {
+    global: {
+      headers: {
+        "x-order-token": emailToken
+      }
+    }
+  });
+}
+
+async function getOrderRpcClient(emailToken?: string) {
+  if (!emailToken) {
+    return supabase;
+  }
+
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) {
+    return supabase;
+  }
+
+  return createOrderAccessClient(emailToken);
+}
+
+async function syncDueOrderEscrows(client = supabase) {
+  const { error } = await client.rpc("release_due_order_escrows");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
 function mapAssetReview(row: AssetReviewRow): AssetReview {
   const reviewer = Array.isArray(row.reviewer) ? row.reviewer[0] : row.reviewer;
 
@@ -373,8 +428,8 @@ type AdminOverviewOrderRow = {
   status: Order["status"];
   amount_kobo: number;
   currency: string;
+  escrow_status: Order["escrow_status"];
 };
-
 type AdminOrderRow = {
   id: string;
   buyer_id: string | null;
@@ -384,6 +439,16 @@ type AdminOrderRow = {
   currency: string;
   created_at: string;
   paid_at: string | null;
+  commission_kobo: number;
+  seller_net_amount_kobo: number;
+  escrow_status: Order["escrow_status"];
+  escrow_due_at: string | null;
+  buyer_opened_at: string | null;
+  buyer_confirmed_at: string | null;
+  buyer_reported_at: string | null;
+  escrow_released_at: string | null;
+  escrow_release_reason: string | null;
+  scam_report_reason: string | null;
   asset?:
     | {
         id: string;
@@ -415,7 +480,6 @@ type AdminOrderRow = {
       }>
     | null;
 };
-
 type AdminCreatorPayoutRow = {
   creator_id: string;
   status: "active" | "inactive";
@@ -1897,12 +1961,57 @@ export async function verifyPayment(reference: string, emailToken?: string) {
     ok: boolean;
     order_status: "pending" | "paid" | "failed" | "refunded";
     payment_status: "pending" | "paid" | "failed" | "refunded";
-    credited?: boolean;
-    net_payout?: number;
-    commission?: number;
+    escrow_status?: Order["escrow_status"];
+    escrow_due_at?: string | null;
+    escrow_released_at?: string | null;
+    escrow_release_reason?: string | null;
+    seller_net_amount_kobo?: number;
+    commission_kobo?: number;
   };
 }
 
+export async function confirmOrderEscrow(orderId: string, emailToken?: string) {
+  const client = await getOrderRpcClient(emailToken);
+  const { data, error } = await client.rpc("confirm_order_escrow", {
+    p_order_id: orderId
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    orderId: String(row?.order_id ?? orderId),
+    escrowStatus: (row?.escrow_status ?? "released") as NonNullable<Order["escrow_status"]>,
+    credited: Boolean(row?.credited),
+    sellerNetAmountKobo: Number(row?.seller_net_amount_kobo ?? 0),
+    commissionKobo: Number(row?.commission_kobo ?? 0),
+    escrowDueAt: row?.escrow_due_at ?? null,
+    escrowReleasedAt: row?.escrow_released_at ?? null,
+    escrowReleaseReason: row?.escrow_release_reason ?? null
+  };
+}
+
+export async function reportOrderFileScam(orderId: string, reason: string, emailToken?: string) {
+  const client = await getOrderRpcClient(emailToken);
+  const { data, error } = await client.rpc("report_order_file_scam", {
+    p_order_id: orderId,
+    p_reason: reason.trim()
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    orderId: String(row?.order_id ?? orderId),
+    escrowStatus: (row?.escrow_status ?? "scam_reported") as NonNullable<Order["escrow_status"]>,
+    reportedAt: row?.reported_at ?? null,
+    scamReportReason: row?.scam_report_reason ?? ""
+  };
+}
 export async function getBuyerOrders(options: {
   userId?: string;
   emailToken?: string;
@@ -1911,15 +2020,8 @@ export async function getBuyerOrders(options: {
     return [];
   }
 
-  const client = options.emailToken && !options.userId
-    ? createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, {
-        global: {
-          headers: {
-            "x-order-token": options.emailToken
-          }
-        }
-      })
-    : supabase;
+  const client = options.userId ? supabase : createOrderAccessClient(options.emailToken);
+  await syncDueOrderEscrows(client);
 
   let query = client
     .from("orders")
@@ -1931,6 +2033,17 @@ export async function getBuyerOrders(options: {
       amount_kobo,
       currency,
       created_at,
+      paid_at,
+      commission_kobo,
+      seller_net_amount_kobo,
+      escrow_status,
+      escrow_due_at,
+      buyer_opened_at,
+      buyer_confirmed_at,
+      buyer_reported_at,
+      escrow_released_at,
+      escrow_release_reason,
+      scam_report_reason,
       asset:assets(id, title, category, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
     )
     .order("created_at", { ascending: false });
@@ -1947,7 +2060,6 @@ export async function getBuyerOrders(options: {
 
   return ((data ?? []) as OrderRow[]).map(mapOrder);
 }
-
 export async function hasPaidOrderForAsset(assetId: string, userId: string, userEmail?: string | null): Promise<boolean> {
   let query = supabase
     .from("orders")
@@ -1994,6 +2106,8 @@ export async function hasPaidOrderWithCreator(creatorId: string, userId: string,
 }
 
 export async function getCreatorDashboard(userId: string): Promise<CreatorDashboard> {
+  await syncDueOrderEscrows();
+
   const [{ count, error: countError }, { data: ordersData, error: ordersError }, { data: walletData, error: walletError }] =
     await Promise.all([
       supabase.from("assets").select("id", { count: "exact", head: true }).eq("creator_id", userId),
@@ -2007,6 +2121,17 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
           amount_kobo,
           currency,
           created_at,
+          paid_at,
+          commission_kobo,
+          seller_net_amount_kobo,
+          escrow_status,
+          escrow_due_at,
+          buyer_opened_at,
+          buyer_confirmed_at,
+          buyer_reported_at,
+          escrow_released_at,
+          escrow_release_reason,
+          scam_report_reason,
           asset:assets!inner(id, title, category, creator_id, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
         )
         .eq("assets.creator_id", userId)
@@ -2028,18 +2153,21 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
   }
 
   const recentOrders = ((ordersData ?? []) as OrderRow[]).map(mapOrder);
-  const paidOrders = recentOrders.filter((order) => order.status === "paid");
-  const totalRevenueKobo = paidOrders.reduce((total, order) => total + order.amount_kobo, 0);
+  const releasedOrders = recentOrders.filter((order) => order.status === "paid" && order.escrow_status === "released");
+  const pendingEscrowOrders = recentOrders.filter((order) => order.status === "paid" && order.escrow_status === "awaiting_review");
+  const totalRevenueKobo = releasedOrders.reduce((total, order) => total + order.seller_net_amount_kobo, 0);
+  const escrowPendingAmountKobo = pendingEscrowOrders.reduce((total, order) => total + order.seller_net_amount_kobo, 0);
 
   return {
     assetCount: count ?? 0,
-    paidOrders: paidOrders.length,
+    paidOrders: releasedOrders.length,
+    escrowPendingOrders: pendingEscrowOrders.length,
+    escrowPendingAmountKobo,
     totalRevenueKobo,
     walletBalanceKobo: walletData?.balance_kobo ?? 0,
     recentOrders
   };
 }
-
 export async function getEditorialPostsFromDb(): Promise<EditorialPost[]> {
   const { data, error } = await supabase
     .from("editorial_posts")
@@ -2318,6 +2446,8 @@ export async function updatePlatformSocialSettings(input: PlatformSocialSettings
 }
 
 export async function getAdminOverview(): Promise<AdminOverview> {
+  await syncDueOrderEscrows();
+
   const [
     profileCountResult,
     adminCountResult,
@@ -2333,7 +2463,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("admins").select("user_id", { count: "exact", head: true }),
     supabase.from("assets").select("creator_id, status"),
-    supabase.from("orders").select("status, amount_kobo, currency"),
+    supabase.from("orders").select("status, amount_kobo, currency, escrow_status"),
     supabase.from("creator_payout_accounts").select("creator_id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("editorial_posts").select("id", { count: "exact", head: true }),
     supabase.from("asset_reviews").select("id", { count: "exact", head: true }),
@@ -2396,6 +2526,9 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   let pendingOrders = 0;
   let failedOrders = 0;
   let refundedOrders = 0;
+  let escrowPendingOrders = 0;
+  let releasedOrders = 0;
+  let scamReportedOrders = 0;
   const volumeByCurrency = new Map<string, { amount_kobo: number; order_count: number }>();
 
   for (const order of orders) {
@@ -2407,6 +2540,14 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       current.amount_kobo += order.amount_kobo;
       current.order_count += 1;
       volumeByCurrency.set(currency, current);
+
+      if (order.escrow_status === "awaiting_review") {
+        escrowPendingOrders += 1;
+      } else if (order.escrow_status === "scam_reported") {
+        scamReportedOrders += 1;
+      } else {
+        releasedOrders += 1;
+      }
       continue;
     }
 
@@ -2436,6 +2577,9 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     pending_orders: pendingOrders,
     failed_orders: failedOrders,
     refunded_orders: refundedOrders,
+    escrow_pending_orders: escrowPendingOrders,
+    released_orders: releasedOrders,
+    scam_reported_orders: scamReportedOrders,
     order_volume: Array.from(volumeByCurrency.entries())
       .map(([currency, entry]) => ({
         currency,
@@ -2451,8 +2595,9 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     creator_follows: followsCountResult.count ?? 0
   };
 }
-
 export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
+  await syncDueOrderEscrows();
+
   const { data, error } = await supabase
     .from("orders")
     .select(
@@ -2464,6 +2609,16 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
       currency,
       created_at,
       paid_at,
+      commission_kobo,
+      seller_net_amount_kobo,
+      escrow_status,
+      escrow_due_at,
+      buyer_opened_at,
+      buyer_confirmed_at,
+      buyer_reported_at,
+      escrow_released_at,
+      escrow_release_reason,
+      scam_report_reason,
       asset:assets(
         id,
         title,
@@ -2494,6 +2649,16 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
       currency: row.currency,
       created_at: row.created_at,
       paid_at: row.paid_at,
+      commission_kobo: row.commission_kobo ?? 0,
+      seller_net_amount_kobo: row.seller_net_amount_kobo ?? Math.max(row.amount_kobo - (row.commission_kobo ?? 0), 0),
+      escrow_status: row.escrow_status ?? (row.status === "paid" ? "released" : null),
+      escrow_due_at: row.escrow_due_at,
+      buyer_opened_at: row.buyer_opened_at,
+      buyer_confirmed_at: row.buyer_confirmed_at,
+      buyer_reported_at: row.buyer_reported_at,
+      escrow_released_at: row.escrow_released_at,
+      escrow_release_reason: row.escrow_release_reason,
+      scam_report_reason: row.scam_report_reason,
       payment: payment
         ? {
             provider: payment.provider,
@@ -2521,7 +2686,6 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
     };
   });
 }
-
 export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]> {
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")

@@ -7,10 +7,6 @@ type CreatePaymentPayload = {
   email?: string;
 };
 
-type PayoutFlags = {
-  testMode: boolean;
-};
-
 function parseCommissionBps(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "1000", 10);
   if (Number.isNaN(parsed) || parsed < 0) {
@@ -45,17 +41,6 @@ function hasUnsupportedBuyerDomain(email: string): boolean {
   }
 
   return normalizedDomain === "localhost" || normalizedDomain.endsWith(".local");
-}
-
-function parsePayoutFlags(metadata: unknown): PayoutFlags {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return { testMode: false };
-  }
-
-  const record = metadata as Record<string, unknown>;
-  return {
-    testMode: record.test_mode === true
-  };
 }
 
 Deno.serve(async (request) => {
@@ -184,38 +169,8 @@ Deno.serve(async (request) => {
     );
   }
 
-  const { data: payoutAccount, error: payoutAccountError } = await supabase
-    .from("creator_payout_accounts")
-    .select("subaccount_code, status, metadata")
-    .eq("creator_id", asset.creator_id)
-    .eq("provider", "paystack")
-    .maybeSingle();
-
-  if (payoutAccountError) {
-    return jsonResponse({ error: "Unable to load creator payout setup", details: payoutAccountError.message }, 500);
-  }
-
-  if (!payoutAccount || payoutAccount.status !== "active") {
-    return jsonResponse(
-      {
-        error: "Creator has not configured payout account yet",
-        code: "creator_payout_unavailable"
-      },
-      409
-    );
-  }
-
-  const payoutFlags = parsePayoutFlags(payoutAccount.metadata);
-  const useSplitPayout = !payoutFlags.testMode;
-  if (useSplitPayout && !payoutAccount.subaccount_code) {
-    return jsonResponse(
-      {
-        error: "Creator payout account is incomplete",
-        code: "creator_payout_unavailable"
-      },
-      409
-    );
-  }
+  const commission = Math.floor((asset.price_kobo * commissionBps) / 10_000);
+  const sellerNetAmount = Math.max(asset.price_kobo - commission, 0);
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
@@ -225,9 +180,11 @@ Deno.serve(async (request) => {
       asset_id: asset.id,
       amount_kobo: asset.price_kobo,
       currency: asset.currency,
-      status: "pending"
+      status: "pending",
+      commission_kobo: commission,
+      seller_net_amount_kobo: sellerNetAmount
     })
-    .select("id, email_token, amount_kobo, currency")
+    .select("id, email_token, amount_kobo, currency, commission_kobo, seller_net_amount_kobo")
     .single();
 
   if (orderError || !order) {
@@ -235,7 +192,6 @@ Deno.serve(async (request) => {
   }
 
   const reference = `crib_${order.id.replace(/-/g, "")}_${Date.now()}`;
-  const commission = Math.floor((order.amount_kobo * commissionBps) / 10_000);
 
   try {
     const paystackPayload = {
@@ -253,29 +209,11 @@ Deno.serve(async (request) => {
         buyer_id: buyerId,
         creator_id: asset.creator_id,
         commission_bps: commissionBps,
-        commission_kobo: commission,
-        payout_mode: useSplitPayout ? "split_subaccount" : "test_no_split"
+        commission_kobo: order.commission_kobo,
+        seller_net_amount_kobo: order.seller_net_amount_kobo,
+        payout_mode: "escrow_hold"
       }
-    } as {
-      email: string;
-      amount: number;
-      currency: string;
-      reference: string;
-      callback_url: string;
-      metadata: Record<string, unknown>;
-      subaccount?: string;
-      transaction_charge?: number;
-      bearer?: "subaccount";
     };
-
-    if (useSplitPayout) {
-      paystackPayload.subaccount = payoutAccount.subaccount_code;
-      if (commission > 0) {
-        paystackPayload.transaction_charge = commission;
-      }
-      paystackPayload.bearer = "subaccount";
-      paystackPayload.metadata.creator_subaccount_code = payoutAccount.subaccount_code;
-    }
 
     const paystackResponse = await initializePaystackTransaction(paystackSecretKey, paystackPayload);
 
@@ -337,16 +275,6 @@ Deno.serve(async (request) => {
           code: "invalid_buyer_email"
         },
         400
-      );
-    }
-
-    if (normalizedError.includes("invalid subaccount")) {
-      return jsonResponse(
-        {
-          error: "Creator payout account is invalid. Ask creator to reconnect payout settings.",
-          code: "creator_payout_invalid"
-        },
-        409
       );
     }
 

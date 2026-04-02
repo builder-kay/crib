@@ -17,7 +17,15 @@ function parseCommissionBps(value: string | undefined): number {
   if (Number.isNaN(parsed) || parsed < 0) {
     return 1000;
   }
-  return parsed;
+  return Math.min(parsed, 10_000);
+}
+
+function getEscrowAmounts(amountKobo: number, commissionBps: number) {
+  const commission = Math.floor((amountKobo * commissionBps) / 10_000);
+  return {
+    commission,
+    sellerNetAmount: Math.max(amountKobo - commission, 0)
+  };
 }
 
 async function trackPurchaseEvent(input: {
@@ -106,7 +114,7 @@ Deno.serve(async (request) => {
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, amount_kobo, currency, status, asset_id, buyer_id, email, assets!inner(creator_id)")
+    .select("id, amount_kobo, currency, status, paid_at, asset_id, buyer_id, email, commission_kobo, seller_net_amount_kobo, escrow_status, escrow_due_at, assets!inner(creator_id)")
     .eq("id", payment.order_id)
     .single();
 
@@ -115,7 +123,6 @@ Deno.serve(async (request) => {
   }
 
   const creatorId = (order.assets as { creator_id: string }).creator_id;
-
   const failureEvents = new Set(["charge.failed", "paymentrequest.failed", "invoice.payment_failed"]);
 
   if (payload.event === "charge.success") {
@@ -129,7 +136,14 @@ Deno.serve(async (request) => {
         buyerEmail: order.email,
         reference
       });
-      return jsonResponse({ ok: true, idempotent: true }, 200);
+      return jsonResponse({
+        ok: true,
+        idempotent: true,
+        escrow_status: order.escrow_status ?? "released",
+        escrow_due_at: order.escrow_due_at,
+        seller_net_amount_kobo: order.seller_net_amount_kobo,
+        commission_kobo: order.commission_kobo
+      }, 200);
     }
 
     let verifyResponse;
@@ -149,7 +163,9 @@ Deno.serve(async (request) => {
     }
 
     const verifiedAmount = Number(verifyResponse.data.amount ?? 0);
-    if (!Number.isFinite(verifiedAmount) || verifiedAmount < order.amount_kobo) {
+    const verifiedCurrency = (verifyResponse.data.currency ?? "").toUpperCase();
+    const orderCurrency = String(order.currency ?? "").toUpperCase();
+    if (!Number.isFinite(verifiedAmount) || verifiedAmount < order.amount_kobo || (verifiedCurrency && verifiedCurrency !== orderCurrency)) {
       await supabase.from("payments").update({ status: "failed", raw: { webhook: payload, verify: verifyResponse, reason: "amount_mismatch" } }).eq("id", payment.id);
       await supabase.from("orders").update({ status: "failed" }).eq("id", order.id).neq("status", "paid");
       return jsonResponse({ ok: true, processed: "amount_mismatch" }, 200);
@@ -170,40 +186,24 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "Failed to update payment", details: paymentUpdateError.message }, 500);
     }
 
+    const paidAt = order.paid_at ?? new Date().toISOString();
+    const escrowDueAt = order.escrow_due_at ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { commission, sellerNetAmount } = getEscrowAmounts(order.amount_kobo, commissionBps);
+
     const { error: orderUpdateError } = await supabase
       .from("orders")
-      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .update({
+        status: "paid",
+        paid_at: paidAt,
+        commission_kobo: commission,
+        seller_net_amount_kobo: sellerNetAmount,
+        escrow_status: "awaiting_review",
+        escrow_due_at: escrowDueAt
+      })
       .eq("id", order.id);
 
     if (orderUpdateError) {
       return jsonResponse({ error: "Failed to update order", details: orderUpdateError.message }, 500);
-    }
-
-    const commission = Math.floor((order.amount_kobo * commissionBps) / 10_000);
-    const netPayout = Math.max(order.amount_kobo - commission, 0);
-
-    if (netPayout > 0) {
-      const { data: credited, error: creditError } = await supabase.rpc("credit_wallet", {
-        p_creator_id: creatorId,
-        p_order_id: order.id,
-        p_amount_kobo: netPayout
-      });
-
-      if (creditError) {
-        return jsonResponse({ error: "Failed to credit wallet", details: creditError.message }, 500);
-      }
-
-      await trackPurchaseEvent({
-        supabase,
-        orderId: order.id,
-        assetId: order.asset_id,
-        creatorId,
-        buyerId: order.buyer_id,
-        buyerEmail: order.email,
-        reference
-      });
-
-      return jsonResponse({ ok: true, credited, net_payout: netPayout, commission }, 200);
     }
 
     await trackPurchaseEvent({
@@ -216,7 +216,13 @@ Deno.serve(async (request) => {
       reference
     });
 
-    return jsonResponse({ ok: true, credited: false, net_payout: 0, commission }, 200);
+    return jsonResponse({
+      ok: true,
+      escrow_status: "awaiting_review",
+      escrow_due_at: escrowDueAt,
+      seller_net_amount_kobo: sellerNetAmount,
+      commission_kobo: commission
+    }, 200);
   }
 
   if (failureEvents.has(payload.event ?? "")) {

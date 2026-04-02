@@ -67,6 +67,8 @@ export type CreatorReview = {
   reviewer: Pick<Profile, "id" | "display_name" | "avatar_url"> | null;
 };
 
+export type OrderEscrowStatus = "awaiting_review" | "released" | "scam_reported";
+
 export type Order = {
   id: string;
   email: string;
@@ -75,6 +77,17 @@ export type Order = {
   amount_kobo: number;
   currency: string;
   created_at: string;
+  paid_at?: string | null;
+  commission_kobo: number;
+  seller_net_amount_kobo: number;
+  escrow_status: OrderEscrowStatus | null;
+  escrow_due_at: string | null;
+  buyer_opened_at: string | null;
+  buyer_confirmed_at: string | null;
+  buyer_reported_at: string | null;
+  escrow_released_at: string | null;
+  escrow_release_reason: string | null;
+  scam_report_reason: string | null;
   asset?: Pick<Asset, "id" | "title" | "category" | "files"> & {
     previews?: AssetPreview[];
   };
@@ -84,6 +97,8 @@ export type CreatorDashboard = {
   assetCount: number;
   totalRevenueKobo: number;
   paidOrders: number;
+  escrowPendingOrders: number;
+  escrowPendingAmountKobo: number;
   walletBalanceKobo: number;
   recentOrders: Order[];
 };
@@ -157,6 +172,9 @@ export type AdminOverview = {
   pending_orders: number;
   failed_orders: number;
   refunded_orders: number;
+  escrow_pending_orders: number;
+  released_orders: number;
+  scam_reported_orders: number;
   order_volume: AdminCurrencySummary[];
   active_payout_accounts: number;
   editorial_posts: number;
@@ -175,6 +193,16 @@ export type AdminOrderRecord = {
   currency: string;
   created_at: string;
   paid_at: string | null;
+  commission_kobo: number;
+  seller_net_amount_kobo: number;
+  escrow_status: OrderEscrowStatus | null;
+  escrow_due_at: string | null;
+  buyer_opened_at: string | null;
+  buyer_confirmed_at: string | null;
+  buyer_reported_at: string | null;
+  escrow_released_at: string | null;
+  escrow_release_reason: string | null;
+  scam_report_reason: string | null;
   payment:
     | {
         provider: string;
@@ -240,3 +268,5 @@ export type PayoutBank = {
   code: string;
   name: string;
 };
+
+

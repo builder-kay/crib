@@ -12,7 +12,15 @@ function parseCommissionBps(value: string | undefined): number {
   if (Number.isNaN(parsed) || parsed < 0) {
     return 1000;
   }
-  return parsed;
+  return Math.min(parsed, 10_000);
+}
+
+function getEscrowAmounts(amountKobo: number, commissionBps: number) {
+  const commission = Math.floor((amountKobo * commissionBps) / 10_000);
+  return {
+    commission,
+    sellerNetAmount: Math.max(amountKobo - commission, 0)
+  };
 }
 
 async function trackPurchaseEvent(input: {
@@ -109,7 +117,7 @@ Deno.serve(async (request) => {
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, asset_id, amount_kobo, currency, status, buyer_id, email, email_token, assets!inner(creator_id)")
+    .select("id, asset_id, amount_kobo, currency, status, paid_at, buyer_id, email, email_token, commission_kobo, seller_net_amount_kobo, escrow_status, escrow_due_at, assets!inner(creator_id)")
     .eq("id", payment.order_id)
     .single();
 
@@ -144,7 +152,11 @@ Deno.serve(async (request) => {
       ok: true,
       idempotent: true,
       order_status: "paid",
-      payment_status: "paid"
+      payment_status: "paid",
+      escrow_status: order.escrow_status ?? "released",
+      escrow_due_at: order.escrow_due_at,
+      seller_net_amount_kobo: order.seller_net_amount_kobo,
+      commission_kobo: order.commission_kobo
     });
   }
 
@@ -160,6 +172,8 @@ Deno.serve(async (request) => {
       ok: true,
       order_status: order.status,
       payment_status: payment.status,
+      escrow_status: order.escrow_status ?? null,
+      escrow_due_at: order.escrow_due_at,
       verification: "unavailable"
     });
   }
@@ -197,31 +211,24 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: "Unable to update payment", details: paymentUpdateError.message }, 500);
     }
 
+    const paidAt = order.paid_at ?? new Date().toISOString();
+    const escrowDueAt = order.escrow_due_at ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { commission, sellerNetAmount } = getEscrowAmounts(order.amount_kobo, commissionBps);
+
     const { error: orderUpdateError } = await supabase
       .from("orders")
-      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .update({
+        status: "paid",
+        paid_at: paidAt,
+        commission_kobo: commission,
+        seller_net_amount_kobo: sellerNetAmount,
+        escrow_status: "awaiting_review",
+        escrow_due_at: escrowDueAt
+      })
       .eq("id", order.id);
 
     if (orderUpdateError) {
       return jsonResponse({ error: "Unable to update order", details: orderUpdateError.message }, 500);
-    }
-
-    const commission = Math.floor((order.amount_kobo * commissionBps) / 10_000);
-    const netPayout = Math.max(order.amount_kobo - commission, 0);
-
-    let credited = false;
-    if (netPayout > 0) {
-      const { data: creditResult, error: creditError } = await supabase.rpc("credit_wallet", {
-        p_creator_id: creatorId,
-        p_order_id: order.id,
-        p_amount_kobo: netPayout
-      });
-
-      if (creditError) {
-        return jsonResponse({ error: "Unable to credit creator wallet", details: creditError.message }, 500);
-      }
-
-      credited = Boolean(creditResult);
     }
 
     await trackPurchaseEvent({
@@ -238,9 +245,10 @@ Deno.serve(async (request) => {
       ok: true,
       order_status: "paid",
       payment_status: "paid",
-      credited,
-      net_payout: netPayout,
-      commission
+      escrow_status: "awaiting_review",
+      escrow_due_at: escrowDueAt,
+      seller_net_amount_kobo: sellerNetAmount,
+      commission_kobo: commission
     });
   }
 
@@ -266,6 +274,8 @@ Deno.serve(async (request) => {
     ok: true,
     order_status: order.status,
     payment_status: payment.status,
+    escrow_status: order.escrow_status ?? null,
+    escrow_due_at: order.escrow_due_at,
     verification: transactionStatus
   });
 });

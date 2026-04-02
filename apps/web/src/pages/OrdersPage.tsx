@@ -7,9 +7,18 @@ import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
 import { getUserContactEmail } from "@/lib/auth";
-import { generateDownload, getBuyerOrders, getReviewedAssetIdsForUser, upsertAssetReview, verifyPayment } from "@/lib/api";
+import {
+  confirmOrderEscrow,
+  generateDownload,
+  getBuyerOrders,
+  getReviewedAssetIdsForUser,
+  reportOrderFileScam,
+  upsertAssetReview,
+  verifyPayment
+} from "@/lib/api";
 import { getAssetAppLabel, getAssetFormatLabel } from "@/lib/assetCatalog";
 import { formatDate } from "@/lib/format";
+import type { Order } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
 
 export function OrdersPage() {
@@ -26,6 +35,8 @@ export function OrdersPage() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [suppressedPromptOrderIds, setSuppressedPromptOrderIds] = useState<string[]>([]);
+  const [reportOrderId, setReportOrderId] = useState<string | null>(null);
+  const [scamReason, setScamReason] = useState("");
 
   const token = params.get("token") ?? "";
   const reference = params.get("reference") ?? "";
@@ -44,9 +55,13 @@ export function OrdersPage() {
     mutationFn: () => verifyPayment(reference, token || undefined),
     onSuccess: async (payload) => {
       if (payload.order_status === "paid") {
-        pushToast("Payment verified and order marked as paid", "success");
+        if (payload.escrow_status === "awaiting_review") {
+          pushToast("Payment verified. Download unlocked and escrow is now waiting for your file check.", "success");
+        } else {
+          pushToast("Payment verified and order marked as paid.", "success");
+        }
       } else if (payload.order_status === "pending") {
-        pushToast("Payment received, verification still pending", "info");
+        pushToast("Payment received, verification is still pending.", "info");
       } else {
         pushToast(`Payment status: ${payload.order_status}`, "info");
       }
@@ -73,32 +88,34 @@ export function OrdersPage() {
 
   const headline = useMemo(() => {
     if (reference) {
-      return "Payment received. If verification is complete, your order appears below.";
+      return "Payment is back with us now. Download the file below, inspect it, then confirm it is genuine or report a scam within 24 hours.";
     }
-    return "Your purchases and secure download links.";
+    return "Your purchases, secure downloads, and escrow confirmations live here.";
   }, [reference]);
-  const signInRedirect = `/auth?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
 
+  const signInRedirect = `/auth?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
   const orders = ordersQuery.data ?? [];
-  const paidOrdersWithAssets = useMemo(
-    () => orders.filter((order) => order.status === "paid" && Boolean(order.asset?.id)),
+
+  const releasedOrdersWithAssets = useMemo(
+    () => orders.filter((order) => order.status === "paid" && order.escrow_status === "released" && Boolean(order.asset?.id)),
     [orders]
   );
-  const paidAssetIds = useMemo(
-    () => Array.from(new Set(paidOrdersWithAssets.map((order) => order.asset!.id))),
-    [paidOrdersWithAssets]
+
+  const releasedAssetIds = useMemo(
+    () => Array.from(new Set(releasedOrdersWithAssets.map((order) => order.asset!.id))),
+    [releasedOrdersWithAssets]
   );
 
   const reviewedAssetIdsQuery = useQuery({
-    queryKey: ["reviewed-asset-ids", user?.id, paidAssetIds],
-    queryFn: () => getReviewedAssetIdsForUser(user!.id, paidAssetIds),
-    enabled: Boolean(user?.id && paidAssetIds.length > 0)
+    queryKey: ["reviewed-asset-ids", user?.id, releasedAssetIds],
+    queryFn: () => getReviewedAssetIdsForUser(user!.id, releasedAssetIds),
+    enabled: Boolean(user?.id && releasedAssetIds.length > 0)
   });
 
   const reviewedAssetIdsSet = useMemo(() => new Set(reviewedAssetIdsQuery.data ?? []), [reviewedAssetIdsQuery.data]);
 
   const reviewPromptOrder = useMemo(() => {
-    if (!user?.id || paidOrdersWithAssets.length === 0 || reviewedAssetIdsQuery.isLoading) {
+    if (!user?.id || releasedOrdersWithAssets.length === 0 || reviewedAssetIdsQuery.isLoading) {
       return null;
     }
 
@@ -119,14 +136,14 @@ export function OrdersPage() {
     }
 
     return (
-      paidOrdersWithAssets.find(
+      releasedOrdersWithAssets.find(
         (order) =>
           !reviewedAssetIdsSet.has(order.asset!.id) &&
           !dismissedOrderIds.has(order.id) &&
           !suppressedPromptOrderIds.includes(order.id)
       ) ?? null
     );
-  }, [paidOrdersWithAssets, reviewedAssetIdsQuery.isLoading, reviewedAssetIdsSet, suppressedPromptOrderIds, user?.id]);
+  }, [releasedOrdersWithAssets, reviewedAssetIdsQuery.isLoading, reviewedAssetIdsSet, suppressedPromptOrderIds, user?.id]);
 
   useEffect(() => {
     if (!reviewPromptOrder) {
@@ -208,9 +225,39 @@ export function OrdersPage() {
     }
   });
 
+  const confirmEscrowMutation = useMutation({
+    mutationFn: (orderId: string) => confirmOrderEscrow(orderId, token || undefined),
+    onSuccess: async () => {
+      pushToast("Thanks for confirming the file. The seller payout has been released.", "success");
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not confirm this order", "error");
+    }
+  });
+
+  const reportScamMutation = useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
+      reportOrderFileScam(orderId, reason, token || undefined),
+    onSuccess: async () => {
+      pushToast("File scam reported. The seller payout will stay on hold while this is reviewed.", "success");
+      setReportOrderId(null);
+      setScamReason("");
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not report this order", "error");
+    }
+  });
+
   const selectedReviewOrder = useMemo(
     () => orders.find((order) => order.id === reviewOrderId) ?? null,
     [orders, reviewOrderId]
+  );
+
+  const selectedReportOrder = useMemo(
+    () => orders.find((order) => order.id === reportOrderId) ?? null,
+    [orders, reportOrderId]
   );
 
   function dismissReviewPrompt() {
@@ -244,11 +291,41 @@ export function OrdersPage() {
   }
 
   const orderSummary = useMemo(() => {
-    const summary = { total: 0, paid: 0, pending: 0, failed: 0, refunded: 0 };
+    const summary = {
+      total: 0,
+      pending: 0,
+      failed: 0,
+      refunded: 0,
+      awaitingReview: 0,
+      released: 0,
+      reported: 0
+    };
 
     for (const order of orders) {
       summary.total += 1;
-      summary[order.status] += 1;
+
+      if (order.status === "pending") {
+        summary.pending += 1;
+        continue;
+      }
+
+      if (order.status === "failed") {
+        summary.failed += 1;
+        continue;
+      }
+
+      if (order.status === "refunded") {
+        summary.refunded += 1;
+        continue;
+      }
+
+      if (order.escrow_status === "awaiting_review") {
+        summary.awaitingReview += 1;
+      } else if (order.escrow_status === "scam_reported") {
+        summary.reported += 1;
+      } else {
+        summary.released += 1;
+      }
     }
 
     return summary;
@@ -262,7 +339,7 @@ export function OrdersPage() {
     return (
       <EmptyState
         title="No order access yet"
-        body="Sign in to view your orders, verify payment, and unlock downloads."
+        body="Sign in to view your orders, verify payment, unlock downloads, and confirm whether a file is genuine."
         action={<Link to={signInRedirect} className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">Sign in</Link>}
       />
     );
@@ -280,9 +357,9 @@ export function OrdersPage() {
 
           <div className="grid gap-2 sm:grid-cols-4">
             <OrderStatCard label="Total" value={String(orderSummary.total)} tone="cobalt" />
-            <OrderStatCard label="Paid" value={String(orderSummary.paid)} tone="forest" />
-            <OrderStatCard label="Pending" value={String(orderSummary.pending)} tone="sunset" />
-            <OrderStatCard label="Failed/Refunded" value={String(orderSummary.failed + orderSummary.refunded)} tone="sand" />
+            <OrderStatCard label="Awaiting Review" value={String(orderSummary.awaitingReview)} tone="sunset" />
+            <OrderStatCard label="Released" value={String(orderSummary.released)} tone="forest" />
+            <OrderStatCard label="Reported" value={String(orderSummary.reported)} tone="rose" />
           </div>
         </div>
       </header>
@@ -294,8 +371,8 @@ export function OrdersPage() {
             {verifyMutation.isPending
               ? "Verifying your payment reference now..."
               : verifyMutation.isSuccess
-                ? "Verification complete. Your order status was updated."
-                : "We received your payment callback. If your order is still pending, refresh shortly."}
+                ? "Verification complete. Your order has been refreshed with the current escrow state."
+                : "We received your payment callback. If your order is still pending, refresh again shortly."}
           </p>
         </section>
       ) : null}
@@ -310,7 +387,7 @@ export function OrdersPage() {
       {!ordersQuery.isLoading && orders.length === 0 ? (
         <EmptyState
           title="No orders yet"
-          body="After your first purchase, your template downloads show up here."
+          body="After your first purchase, your secure download and escrow confirmation steps show up here."
           action={
             <Link to="/market" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">
               Browse marketplace
@@ -325,6 +402,10 @@ export function OrdersPage() {
           const canDownload = order.status === "paid";
           const appLabel = order.asset ? getAssetAppLabel(order.asset) : "Creative App";
           const formatLabel = order.asset ? getAssetFormatLabel(order.asset) : "Source files";
+          const awaitingReview = order.status === "paid" && order.escrow_status === "awaiting_review";
+          const released = order.status === "paid" && order.escrow_status === "released";
+          const reported = order.status === "paid" && order.escrow_status === "scam_reported";
+          const escrowButtonsEnabled = awaitingReview && Boolean(order.buyer_opened_at);
 
           return (
             <article key={order.id} className="surface-card overflow-hidden">
@@ -354,13 +435,16 @@ export function OrdersPage() {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <PriceTag amountKobo={order.amount_kobo} currency={order.currency} />
                       <span className={statusChipClass(order.status)}>{order.status}</span>
+                      {order.status === "paid" ? (
+                        <span className={escrowChipClass(order.escrow_status)}>{escrowChipLabel(order.escrow_status)}</span>
+                      ) : null}
                     </div>
                   </div>
 
-                  <p className="mt-2 text-sm text-sand-700">{statusDescription(order.status)}</p>
+                  <p className="mt-2 text-sm text-sand-700">{statusDescription(order)}</p>
 
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <button
@@ -376,7 +460,13 @@ export function OrdersPage() {
                           document.body.appendChild(link);
                           link.click();
                           link.remove();
-                          pushToast("Download link generated", "success");
+                          pushToast(
+                            awaitingReview
+                              ? "Download opened. Inspect the file, then confirm it is genuine or report a scam."
+                              : "Download link generated.",
+                            "success"
+                          );
+                          await queryClient.invalidateQueries({ queryKey: ["orders"] });
                         } catch (error) {
                           pushToast(error instanceof Error ? error.message : "Download failed", "error");
                         }
@@ -388,6 +478,78 @@ export function OrdersPage() {
 
                     {!canDownload ? <p className="text-xs text-sand-600">Download unlocks after payment confirmation.</p> : null}
                   </div>
+
+                  {order.status === "paid" ? (
+                    <div className="mt-4 rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Escrow Review</p>
+                          <p className="mt-1 text-sm text-cobalt-900">
+                            Open the file and check that it matches the listing. If you do not confirm or report an issue by{" "}
+                            <span className="font-semibold">{formatDateTime(order.escrow_due_at) ?? "the end of the 24-hour review window"}</span>,
+                            we treat it as genuine and release the seller payout automatically.
+                          </p>
+                        </div>
+                        <span className={escrowChipClass(order.escrow_status)}>{escrowChipLabel(order.escrow_status)}</span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-xs text-cobalt-900/80 sm:grid-cols-3">
+                        <span className="rounded-xl bg-white/80 px-3 py-2">
+                          First download: {formatDateTime(order.buyer_opened_at) ?? "Not opened yet"}
+                        </span>
+                        <span className="rounded-xl bg-white/80 px-3 py-2">
+                          Confirmed: {formatDateTime(order.buyer_confirmed_at) ?? "Waiting"}
+                        </span>
+                        <span className="rounded-xl bg-white/80 px-3 py-2">
+                          Released: {formatDateTime(order.escrow_released_at) ?? "Still on hold"}
+                        </span>
+                      </div>
+
+                      {awaitingReview ? (
+                        <div className="mt-3 space-y-3">
+                          <p className="text-xs text-cobalt-900/80">
+                            {order.buyer_opened_at
+                              ? "You can confirm the file now or report a scam if the delivery is wrong."
+                              : "Download the file once to unlock the confirm and report buttons."}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={!escrowButtonsEnabled || confirmEscrowMutation.isPending}
+                              onClick={() => confirmEscrowMutation.mutate(order.id)}
+                              className="rounded-full bg-forest-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-forest-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {confirmEscrowMutation.isPending ? "Confirming..." : "Confirm Genuine File"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!escrowButtonsEnabled || reportScamMutation.isPending}
+                              onClick={() => {
+                                setReportOrderId(order.id);
+                                setScamReason(order.scam_report_reason ?? "");
+                              }}
+                              className="rounded-full border border-rose-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Report File Scam
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {released ? (
+                        <p className="mt-3 text-xs text-cobalt-900/80">
+                          Seller payout released{order.escrow_release_reason === "auto_timeout" ? " automatically after the 24-hour review window." : " after your confirmation."}
+                        </p>
+                      ) : null}
+
+                      {reported ? (
+                        <p className="mt-3 text-xs text-rose-700">
+                          Scam reported{order.buyer_reported_at ? ` on ${formatDateTime(order.buyer_reported_at)}` : ""}. The payout stays on hold while the issue is reviewed.
+                          {order.scam_report_reason ? ` Reason: ${order.scam_report_reason}` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </article>
@@ -440,11 +602,66 @@ export function OrdersPage() {
           </div>
         </div>
       </Modal>
+
+      <Modal
+        open={Boolean(selectedReportOrder)}
+        title="Report File Scam"
+        onClose={() => {
+          setReportOrderId(null);
+          setScamReason("");
+        }}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-sand-700">
+            Tell us what was wrong with <span className="font-semibold text-ink">{selectedReportOrder?.asset?.title ?? "this order"}</span>. The seller payout stays in escrow while this gets reviewed.
+          </p>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-sand-600">Reason</span>
+            <textarea
+              value={scamReason}
+              onChange={(event) => setScamReason(event.target.value)}
+              rows={4}
+              placeholder="Example: file format is wrong, asset is corrupt, preview does not match the download, or key layers are missing."
+              className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+            />
+          </label>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setReportOrderId(null);
+                setScamReason("");
+              }}
+              className="w-full rounded-lg border border-sand-300 px-4 py-2 text-sm font-semibold text-ink hover:bg-sand-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!selectedReportOrder) {
+                  return;
+                }
+                reportScamMutation.mutate({
+                  orderId: selectedReportOrder.id,
+                  reason: scamReason
+                });
+              }}
+              disabled={reportScamMutation.isPending}
+              className="w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reportScamMutation.isPending ? "Submitting..." : "Submit report"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
-function statusChipClass(status: "pending" | "paid" | "failed" | "refunded") {
+function statusChipClass(status: Order["status"]) {
   if (status === "paid") {
     return "rounded-full bg-forest-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-forest-700";
   }
@@ -457,17 +674,59 @@ function statusChipClass(status: "pending" | "paid" | "failed" | "refunded") {
   return "rounded-full bg-sand-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sand-700";
 }
 
-function statusDescription(status: "pending" | "paid" | "failed" | "refunded") {
-  if (status === "paid") {
-    return "Payment confirmed. Your download is available.";
+function escrowChipClass(status: Order["escrow_status"]) {
+  if (status === "released") {
+    return "rounded-full bg-forest-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-forest-700";
   }
-  if (status === "pending") {
+  if (status === "scam_reported") {
+    return "rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-rose-700";
+  }
+  return "rounded-full bg-cobalt-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cobalt-700";
+}
+
+function escrowChipLabel(status: Order["escrow_status"]) {
+  if (status === "released") {
+    return "Released";
+  }
+  if (status === "scam_reported") {
+    return "Reported";
+  }
+  return "In Escrow";
+}
+
+function statusDescription(order: Order) {
+  if (order.status === "pending") {
     return "Payment initiated. We are waiting for confirmation from the payment provider.";
   }
-  if (status === "failed") {
+  if (order.status === "failed") {
     return "Payment failed. Try purchasing again if you still want this listing.";
   }
-  return "This order was refunded. Download access may be restricted.";
+  if (order.status === "refunded") {
+    return "This order was refunded. Download access may be restricted.";
+  }
+  if (order.escrow_status === "scam_reported") {
+    return "Payment cleared, but you flagged the file for review. The seller payout is still on hold.";
+  }
+  if (order.escrow_status === "released") {
+    return "Payment cleared, the file was accepted, and the seller payout has been released.";
+  }
+  return "Payment cleared. Download the file, inspect it, then confirm it is genuine or report a scam within 24 hours.";
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(parsed);
 }
 
 function OrderStatCard({
@@ -477,7 +736,7 @@ function OrderStatCard({
 }: {
   label: string;
   value: string;
-  tone: "cobalt" | "forest" | "sunset" | "sand";
+  tone: "cobalt" | "forest" | "sunset" | "rose";
 }) {
   const toneClass =
     tone === "cobalt"
@@ -486,7 +745,7 @@ function OrderStatCard({
         ? "border-forest-200 bg-forest-100/70"
         : tone === "sunset"
           ? "border-sunset-200 bg-sunset-100"
-          : "border-sand-200 bg-sand-100";
+          : "border-rose-200 bg-rose-100/80";
 
   return (
     <article className={`rounded-xl border px-3 py-2 ${toneClass}`}>

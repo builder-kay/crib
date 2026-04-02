@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { InsightCard, MetricCard, SectionHeader, SignalRow, assetStatusChip, orderStatusChip, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
+import type { Order } from "@/lib/types";
+import { InsightCard, MetricCard, SectionHeader, SignalRow, SummaryPill, assetStatusChip, orderStatusChip, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
 
 export function AdminOverviewPage() {
   const { overview, assets, orders } = useAdminWorkspace();
@@ -13,7 +14,7 @@ export function AdminOverviewPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Marketplace Command Center</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Overview</h2>
             <p className="mt-2 text-sm text-sand-700 md:text-base">
-              Start here for the storefront pulse, then jump into moderation, payments, creator health, or editorial access from the sidebar.
+              Start here for the storefront pulse, including which paid orders are still sitting in escrow and which ones have already released to creators.
             </p>
           </div>
 
@@ -21,8 +22,8 @@ export function AdminOverviewPage() {
             <Link to="/admin/listings" className="admin-action-button">
               Review listings
             </Link>
-            <Link to="/admin/editors" className="admin-action-button admin-action-button-secondary">
-              Manage editors
+            <Link to="/admin/orders" className="admin-action-button admin-action-button-secondary">
+              Review orders
             </Link>
           </div>
         </div>
@@ -31,11 +32,11 @@ export function AdminOverviewPage() {
           <div className="admin-hero-summary-grid">
             <InsightCard label="Accounts" value={overview ? `${overview.total_profiles}` : "Loading..."} helper={overview ? `${overview.total_admins} platform admins` : "Checking access"} tone="cobalt" />
             <InsightCard label="Catalog" value={overview ? `${overview.published_assets} published` : "Loading..."} helper={overview ? `${overview.draft_assets} drafts waiting` : "Checking listings"} tone="forest" />
-            <InsightCard label="Orders" value={overview ? `${overview.paid_orders} paid` : "Loading..."} helper={overview ? `${overview.pending_orders} still pending` : "Checking checkout flow"} tone="sunset" />
+            <InsightCard label="Escrow" value={overview ? `${overview.escrow_pending_orders} held` : "Loading..."} helper={overview ? `${overview.released_orders} already released` : "Checking payout flow"} tone="sunset" />
           </div>
 
           <aside className="admin-hero-volume-panel">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Paid order volume</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Secured order volume</p>
             <p className="mt-2 font-display text-2xl font-bold text-ink">
               {overview?.order_volume[0] ? formatCurrency(overview.order_volume[0].amount_kobo, overview.order_volume[0].currency) : "No paid volume yet"}
             </p>
@@ -51,7 +52,7 @@ export function AdminOverviewPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Accounts" value={overview ? `${overview.total_profiles}` : "Loading..."} helper={overview ? `${overview.active_creators} creators with listings` : "Loading creator footprint"} tone="cobalt" />
         <MetricCard label="Listings" value={overview ? `${overview.total_assets}` : "Loading..."} helper={overview ? `${overview.published_assets} live / ${overview.draft_assets} draft` : "Loading listing totals"} tone="lagoon" />
-        <MetricCard label="Orders" value={overview ? `${overview.total_orders}` : "Loading..."} helper={overview ? `${overview.paid_orders} paid / ${overview.pending_orders} pending` : "Loading order totals"} tone="sunset" />
+        <MetricCard label="Paid Orders" value={overview ? `${overview.paid_orders}` : "Loading..."} helper={overview ? `${overview.escrow_pending_orders} held / ${overview.released_orders} released` : "Loading order totals"} tone="sunset" />
         <MetricCard label="Network" value={overview ? `${overview.creator_follows}` : "Loading..."} helper={overview ? `${overview.wishlists} wishlist saves` : "Loading growth signals"} tone="forest" />
       </section>
 
@@ -93,14 +94,15 @@ export function AdminOverviewPage() {
               </div>
               <div className="mt-3 space-y-3">
                 {orders.slice(0, 4).map((order) => (
-                  <article key={order.id} className="admin-compact-row">
-                    <div className="min-w-0">
+                  <article key={order.id} className="admin-compact-row admin-compact-row-stack">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-semibold text-ink">{order.asset?.title ?? "Order record"}</p>
-                      <p className="mt-0.5 text-xs text-sand-600">
-                        {order.asset?.creator?.display_name ?? "Marketplace"} - {formatDate(order.created_at)}
-                      </p>
+                      <span className={orderStatusChip(order.status)}>{order.status}</span>
+                      {order.status === "paid" ? <span className={escrowChip(order.escrow_status)}>{escrowLabel(order.escrow_status)}</span> : null}
                     </div>
-                    <span className={orderStatusChip(order.status)}>{order.status}</span>
+                    <span className="text-xs text-sand-600">
+                      {order.asset?.creator?.display_name ?? "Marketplace"} - {formatDate(order.created_at)}
+                    </span>
                   </article>
                 ))}
 
@@ -114,10 +116,11 @@ export function AdminOverviewPage() {
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Operations" title="Signals worth watching" body="Marketplace admins stay focused on reviews, payouts, and general storefront health." />
             <div className="mt-4 space-y-3">
+              <SignalRow label="Orders in escrow" value={overview ? `${overview.escrow_pending_orders}` : "Loading..."} tone="sunset" />
+              <SignalRow label="Reported file scams" value={overview ? `${overview.scam_reported_orders}` : "Loading..."} tone="rose" />
               <SignalRow label="Active payout setups" value={overview ? `${overview.active_payout_accounts}` : "Loading..."} tone="forest" />
               <SignalRow label="Asset reviews" value={overview ? `${overview.asset_reviews}` : "Loading..."} tone="lagoon" />
-              <SignalRow label="Creator reviews" value={overview ? `${overview.creator_reviews}` : "Loading..."} tone="rose" />
-              <SignalRow label="Editorial posts" value={overview ? `${overview.editorial_posts}` : "Loading..."} tone="sunset" />
+              <SignalRow label="Creator reviews" value={overview ? `${overview.creator_reviews}` : "Loading..."} tone="lagoon" />
             </div>
           </section>
 
@@ -129,8 +132,8 @@ export function AdminOverviewPage() {
                 <span className="text-xs text-sand-600">Review uploads, descriptions, and publish states.</span>
               </Link>
               <Link to="/admin/orders" className="admin-compact-row admin-compact-row-stack">
-                <span className="text-sm font-semibold text-ink">Orders and payments</span>
-                <span className="text-xs text-sand-600">Watch paid, pending, failed, and refunded orders.</span>
+                <span className="text-sm font-semibold text-ink">Orders and escrow</span>
+                <span className="text-xs text-sand-600">Track paid, held, released, and reported orders.</span>
               </Link>
               <Link to="/admin/editors" className="admin-compact-row admin-compact-row-stack">
                 <span className="text-sm font-semibold text-ink">Editor access</span>
@@ -138,8 +141,37 @@ export function AdminOverviewPage() {
               </Link>
             </div>
           </section>
+
+          <section className="surface-card admin-panel p-5">
+            <SectionHeader eyebrow="Escrow mix" title="Current payout state" body="A simple read on how many paid orders are still waiting on buyer action." />
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <SummaryPill label="Held" value={overview ? `${overview.escrow_pending_orders}` : "..."} tone="sunset" />
+              <SummaryPill label="Released" value={overview ? `${overview.released_orders}` : "..."} tone="forest" />
+              <SummaryPill label="Reported" value={overview ? `${overview.scam_reported_orders}` : "..."} tone="rose" />
+            </div>
+          </section>
         </aside>
       </section>
     </div>
   );
+}
+
+function escrowChip(status: Order["escrow_status"]) {
+  if (status === "released") {
+    return "admin-chip admin-chip-forest";
+  }
+  if (status === "scam_reported") {
+    return "admin-chip admin-chip-rose";
+  }
+  return "admin-chip admin-chip-cobalt";
+}
+
+function escrowLabel(status: Order["escrow_status"]) {
+  if (status === "released") {
+    return "released";
+  }
+  if (status === "scam_reported") {
+    return "reported";
+  }
+  return "in escrow";
 }

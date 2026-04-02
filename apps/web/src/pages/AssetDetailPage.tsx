@@ -503,6 +503,16 @@ export function AssetDetailPage() {
             <span className="text-xs text-sand-500">Updated {formatDate(asset.created_at)}</span>
           </div>
 
+          <div className="mt-4 rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Escrow Checkout</p>
+            <p className="mt-2 text-sm text-cobalt-900">
+              Payment unlocks your secure download, but the seller payout stays in escrow first. Open the file, make sure it is the correct delivery, then confirm it is genuine or report a file scam from Orders.
+            </p>
+            <p className="mt-2 text-xs text-cobalt-900/80">
+              If you do nothing for 24 hours after payment, we automatically treat the delivery as genuine and release the seller payout.
+            </p>
+          </div>
+
           <button
             type="button"
             disabled={paymentMutation.isPending || asset.status !== "published" || isOwnAsset || alreadyPurchased}
@@ -591,7 +601,7 @@ export function AssetDetailPage() {
           </Link>
 
           <p className="mt-3 text-center text-xs text-sand-500">
-            Secure checkout via Paystack. Download unlocks after successful payment.
+            Secure checkout via Paystack. Download unlocks after payment, and seller payout is released when you confirm the file or when the 24-hour review window closes with no scam report.
           </p>
         </aside>
       </div>

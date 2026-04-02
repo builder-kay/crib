@@ -67,7 +67,7 @@ Deno.serve(async (request) => {
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, status, asset_id, buyer_id, email, email_token, assets!inner(creator_id)")
+    .select("id, status, asset_id, buyer_id, email, email_token, buyer_opened_at, assets!inner(creator_id)")
     .eq("id", orderId)
     .single();
 
@@ -127,6 +127,14 @@ Deno.serve(async (request) => {
 
   if (signedError || !signedData) {
     return jsonResponse({ error: "Unable to create signed URL", details: signedError?.message }, 500);
+  }
+
+  if (!isCreatorOrAdmin && order.status === "paid" && !order.buyer_opened_at) {
+    await supabase
+      .from("orders")
+      .update({ buyer_opened_at: new Date().toISOString() })
+      .eq("id", order.id)
+      .is("buyer_opened_at", null);
   }
 
   return jsonResponse({

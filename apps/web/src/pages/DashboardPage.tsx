@@ -39,11 +39,31 @@ export function DashboardPage() {
     purchases: 0
   };
 
-  const orderBreakdown = useMemo(() => {
+  const paymentBreakdown = useMemo(() => {
     const initial = { paid: 0, pending: 0, failed: 0, refunded: 0 };
 
     return recentOrders.reduce((acc, order) => {
       acc[order.status] += 1;
+      return acc;
+    }, initial);
+  }, [recentOrders]);
+
+  const escrowBreakdown = useMemo(() => {
+    const initial = { released: 0, awaitingReview: 0, reported: 0 };
+
+    return recentOrders.reduce((acc, order) => {
+      if (order.status !== "paid") {
+        return acc;
+      }
+
+      if (order.escrow_status === "awaiting_review") {
+        acc.awaitingReview += 1;
+      } else if (order.escrow_status === "scam_reported") {
+        acc.reported += 1;
+      } else {
+        acc.released += 1;
+      }
+
       return acc;
     }, initial);
   }, [recentOrders]);
@@ -57,24 +77,26 @@ export function DashboardPage() {
     }, initial);
   }, [assetList]);
 
-  const avgPaidOrderLabel = useMemo(() => {
-    const paidCount = orderBreakdown.paid;
-    if (!dashboardQuery.data || paidCount === 0) {
+  const releasedOrderCount = dashboardQuery.data?.paidOrders ?? 0;
+  const escrowPendingOrderCount = dashboardQuery.data?.escrowPendingOrders ?? 0;
+  const escrowPendingAmountKobo = dashboardQuery.data?.escrowPendingAmountKobo ?? 0;
+  const avgReleasedOrderLabel = useMemo(() => {
+    if (!dashboardQuery.data || releasedOrderCount === 0) {
       return "GHS 0.00";
     }
-    return formatCurrency(Math.round(dashboardQuery.data.totalRevenueKobo / paidCount), "GHS");
-  }, [dashboardQuery.data, orderBreakdown.paid]);
+    return formatCurrency(Math.round(dashboardQuery.data.totalRevenueKobo / releasedOrderCount), "GHS");
+  }, [dashboardQuery.data, releasedOrderCount]);
 
   const conversionLabel = useMemo(() => {
     if (recentOrders.length === 0) {
       return "0%";
     }
-    const rate = Math.round((orderBreakdown.paid / recentOrders.length) * 100);
+    const rate = Math.round((paymentBreakdown.paid / recentOrders.length) * 100);
     return `${rate}%`;
-  }, [orderBreakdown.paid, recentOrders.length]);
+  }, [paymentBreakdown.paid, recentOrders.length]);
 
   const latestAsset = assetList[0];
-  const lastOrder = recentOrders[0];
+  const lastReleasedOrder = recentOrders.find((order) => order.status === "paid" && order.escrow_status === "released");
   const clickThrough = funnel.asset_views > 0 ? Math.round((funnel.asset_clicks / funnel.asset_views) * 100) : 0;
   const checkoutRate = funnel.asset_clicks > 0 ? Math.round((funnel.checkout_starts / funnel.asset_clicks) * 100) : 0;
   const purchaseRate = funnel.checkout_starts > 0 ? Math.round((funnel.purchases / funnel.checkout_starts) * 100) : 0;
@@ -91,7 +113,7 @@ export function DashboardPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-600">Creator Cockpit</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Dashboard</h1>
             <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
-              Track your sales performance, keep listings healthy, and jump straight to the actions that move revenue.
+              Track released revenue, payouts still in escrow, and the orders waiting on buyer confirmation before cash reaches your wallet.
             </p>
           </div>
 
@@ -107,8 +129,8 @@ export function DashboardPage() {
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <MiniInsight
-            label="Latest Sale"
-            value={lastOrder ? formatDate(lastOrder.created_at) : "No sales yet"}
+            label="Latest Released Sale"
+            value={lastReleasedOrder ? formatDate(lastReleasedOrder.created_at) : "No release yet"}
             tone="bg-forest-100/80 text-forest-700"
           />
           <MiniInsight
@@ -116,25 +138,34 @@ export function DashboardPage() {
             value={latestAsset ? latestAsset.title : "No listings yet"}
             tone="bg-cobalt-100/70 text-cobalt-700"
           />
-          <MiniInsight label="Paid Conversion" value={conversionLabel} tone="bg-sunset-100 text-sunset-700" />
+          <MiniInsight
+            label="In Escrow"
+            value={formatCurrency(escrowPendingAmountKobo, "GHS")}
+            tone="bg-sunset-100 text-sunset-700"
+          />
         </div>
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Revenue"
+          label="Released Revenue"
           value={formatCurrency(dashboardQuery.data?.totalRevenueKobo ?? 0, "GHS")}
-          helper={`From ${orderBreakdown.paid} paid orders`}
+          helper={`From ${releasedOrderCount} released orders`}
           tone="cobalt"
         />
         <MetricCard
           label="Wallet Balance"
           value={formatCurrency(dashboardQuery.data?.walletBalanceKobo ?? 0, "GHS")}
-          helper="Available for payout"
+          helper="Available after escrow release"
           tone="forest"
         />
+        <MetricCard
+          label="Escrow Holding"
+          value={formatCurrency(escrowPendingAmountKobo, "GHS")}
+          helper={`${escrowPendingOrderCount} order${escrowPendingOrderCount === 1 ? "" : "s"} awaiting buyer check`}
+          tone="sunset"
+        />
         <MetricCard label="Listing Count" value={String(dashboardQuery.data?.assetCount ?? 0)} helper="Total listings created" tone="lagoon" />
-        <MetricCard label="Avg Paid Order" value={avgPaidOrderLabel} helper="Average ticket size" tone="sunset" />
       </section>
 
       <section className="surface-card p-5">
@@ -164,7 +195,10 @@ export function DashboardPage() {
       <section className="grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
         <section className="surface-card p-5">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-xl font-semibold text-ink">Recent Orders</h2>
+            <div>
+              <h2 className="font-display text-xl font-semibold text-ink">Recent Orders</h2>
+              <p className="mt-1 text-sm text-sand-600">Paid orders now sit in escrow until the buyer confirms the file or the 24-hour review window ends.</p>
+            </div>
             <Link to="/dashboard/orders" className="text-xs font-semibold uppercase tracking-wide text-cobalt-700 hover:text-cobalt-800">
               View all
             </Link>
@@ -182,20 +216,22 @@ export function DashboardPage() {
               {recentOrders.map((order, index) => (
                 <article
                   key={order.id}
-                  className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
-                    index !== 0 ? "border-t border-sand-200" : ""
-                  }`}
+                  className={`flex flex-col gap-3 px-4 py-3 ${index !== 0 ? "border-t border-sand-200" : ""}`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-ink">{order.asset?.title ?? "Listing"}</p>
-                    <p className="mt-0.5 text-xs text-sand-600">
-                      #{order.id.slice(0, 8)} - {formatDate(order.created_at)}
-                    </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-ink">{order.asset?.title ?? "Listing"}</p>
+                      <p className="mt-0.5 text-xs text-sand-600">
+                        #{order.id.slice(0, 8)} - {formatDate(order.created_at)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <PriceTag amountKobo={order.amount_kobo} currency={order.currency} />
+                      <span className={statusChip(order.status)}>{order.status}</span>
+                      {order.status === "paid" ? <span className={escrowStatusChip(order)}>{escrowStatusLabel(order)}</span> : null}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <PriceTag amountKobo={order.amount_kobo} currency={order.currency} />
-                    <span className={statusChip(order.status)}>{order.status}</span>
-                  </div>
+                  <p className="text-xs text-sand-600">{orderEscrowNote(order)}</p>
                 </article>
               ))}
             </div>
@@ -207,10 +243,10 @@ export function DashboardPage() {
           <p className="mt-1 text-sm text-sand-600">Based on your latest {recentOrders.length} order records.</p>
 
           <div className="mt-4 space-y-3">
-            <PerformanceRow label="Paid" count={orderBreakdown.paid} total={recentOrders.length} barClass="bg-forest-500" />
-            <PerformanceRow label="Pending" count={orderBreakdown.pending} total={recentOrders.length} barClass="bg-sunset-500" />
-            <PerformanceRow label="Failed" count={orderBreakdown.failed} total={recentOrders.length} barClass="bg-rose-600" />
-            <PerformanceRow label="Refunded" count={orderBreakdown.refunded} total={recentOrders.length} barClass="bg-sand-500" />
+            <PerformanceRow label="Released" count={escrowBreakdown.released} total={recentOrders.length} barClass="bg-forest-500" />
+            <PerformanceRow label="In Escrow" count={escrowBreakdown.awaitingReview} total={recentOrders.length} barClass="bg-cobalt-500" />
+            <PerformanceRow label="Reported" count={escrowBreakdown.reported} total={recentOrders.length} barClass="bg-rose-600" />
+            <PerformanceRow label="Pending Payment" count={paymentBreakdown.pending} total={recentOrders.length} barClass="bg-sunset-500" />
           </div>
 
           <div className="mt-5 grid gap-3 rounded-xl border border-sand-200 bg-sand-50 p-4 sm:grid-cols-2">
@@ -219,9 +255,16 @@ export function DashboardPage() {
               <p className="mt-1 font-display text-2xl font-bold text-ink">{conversionLabel}</p>
             </div>
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">Avg Paid Order</p>
-              <p className="mt-1 font-display text-2xl font-bold text-ink">{avgPaidOrderLabel}</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">Avg Released Order</p>
+              <p className="mt-1 font-display text-2xl font-bold text-ink">{avgReleasedOrderLabel}</p>
             </div>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-cobalt-100 bg-cobalt-50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cobalt-700">Escrow Reminder</p>
+            <p className="mt-2 text-sm text-cobalt-800">
+              Buyer payments are held first. If the buyer does not confirm or report an issue within one day, the order auto-releases and the net amount moves into your wallet.
+            </p>
           </div>
         </aside>
       </section>
@@ -291,6 +334,45 @@ function statusChip(status: Order["status"]) {
     return "rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-rose-700";
   }
   return "rounded-full bg-sand-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-sand-700";
+}
+
+function escrowStatusChip(order: Order) {
+  if (order.escrow_status === "released") {
+    return "rounded-full bg-forest-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-forest-700";
+  }
+  if (order.escrow_status === "scam_reported") {
+    return "rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-rose-700";
+  }
+  return "rounded-full bg-cobalt-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-cobalt-700";
+}
+
+function escrowStatusLabel(order: Order) {
+  if (order.escrow_status === "released") {
+    return "Released";
+  }
+  if (order.escrow_status === "scam_reported") {
+    return "Reported";
+  }
+  return "In Escrow";
+}
+
+function orderEscrowNote(order: Order) {
+  if (order.status === "pending") {
+    return "Waiting for payment confirmation before escrow starts.";
+  }
+  if (order.status === "failed") {
+    return "Payment failed, so no payout is being held for this order.";
+  }
+  if (order.status === "refunded") {
+    return "This order was refunded.";
+  }
+  if (order.escrow_status === "scam_reported") {
+    return `Buyer reported a file issue${order.buyer_reported_at ? ` on ${formatDate(order.buyer_reported_at)}` : ""}. Payout stays on hold.`;
+  }
+  if (order.escrow_status === "released") {
+    return `Released to wallet${order.escrow_released_at ? ` on ${formatDate(order.escrow_released_at)}` : ""}.`;
+  }
+  return `Awaiting buyer confirmation${order.escrow_due_at ? ` until ${formatDate(order.escrow_due_at)}` : " for up to 24 hours"}.`;
 }
 
 function assetStatusChip(status: Asset["status"]) {
@@ -421,4 +503,3 @@ function AssetPreviewCard({ asset }: { asset: Asset }) {
     </article>
   );
 }
-
