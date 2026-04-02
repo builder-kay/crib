@@ -9,23 +9,65 @@ export function AdminOverviewPage() {
   return (
     <div className="admin-platform-shell space-y-5">
       <header className="surface-card-vivid admin-hero-panel overflow-hidden p-5 md:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="admin-page-hero-grid">
           <div className="max-w-4xl">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Marketplace Command Center</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Overview</h2>
             <p className="mt-2 text-sm text-sand-700 md:text-base">
               Start here for the storefront pulse, including which paid orders are still sitting in escrow and which ones have already released to creators.
             </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="admin-chip admin-chip-cobalt">Storefront health</span>
+              <span className="admin-chip admin-chip-sunset">Escrow monitoring</span>
+              <span className="admin-chip admin-chip-forest">Creator network</span>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link to="/admin/listings" className="admin-action-button">
+                Review listings
+              </Link>
+              <Link to="/admin/orders" className="admin-action-button admin-action-button-secondary">
+                Review orders
+              </Link>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link to="/admin/listings" className="admin-action-button">
-              Review listings
-            </Link>
-            <Link to="/admin/orders" className="admin-action-button admin-action-button-secondary">
-              Review orders
-            </Link>
-          </div>
+          <aside className="admin-page-hero-rail">
+            <div className="admin-hero-volume-panel">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Secured order volume</p>
+              <p className="mt-2 font-display text-2xl font-bold text-ink">
+                {overview?.order_volume[0] ? formatCurrency(overview.order_volume[0].amount_kobo, overview.order_volume[0].currency) : "No paid volume yet"}
+              </p>
+              <p className="mt-1 text-sm text-sand-700">
+                {overview?.order_volume[0]
+                  ? `${overview.order_volume[0].order_count} paid order${overview.order_volume[0].order_count === 1 ? "" : "s"} in the largest active currency bucket`
+                  : "Revenue totals will appear here once buyers start completing checkout."}
+              </p>
+            </div>
+
+            <div className="admin-hero-glance-card">
+              <p className="admin-hero-glance-eyebrow">Today's Watch</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="admin-hero-glance-item admin-hero-glance-item-sunset">
+                  <span>Escrow queue</span>
+                  <strong>{overview ? `${overview.escrow_pending_orders}` : "..."}</strong>
+                </div>
+                <div className="admin-hero-glance-item admin-hero-glance-item-rose">
+                  <span>Reported cases</span>
+                  <strong>{overview ? `${overview.scam_reported_orders}` : "..."}</strong>
+                </div>
+                <div className="admin-hero-glance-item admin-hero-glance-item-lagoon">
+                  <span>Draft listings</span>
+                  <strong>{overview ? `${overview.draft_assets}` : "..."}</strong>
+                </div>
+                <div className="admin-hero-glance-item admin-hero-glance-item-forest">
+                  <span>Payout-ready</span>
+                  <strong>{overview ? `${overview.active_payout_accounts}` : "..."}</strong>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[1.1fr,0.9fr]">
@@ -34,18 +76,6 @@ export function AdminOverviewPage() {
             <InsightCard label="Catalog" value={overview ? `${overview.published_assets} published` : "Loading..."} helper={overview ? `${overview.draft_assets} drafts waiting` : "Checking listings"} tone="forest" />
             <InsightCard label="Escrow" value={overview ? `${overview.escrow_pending_orders} held` : "Loading..."} helper={overview ? `${overview.released_orders} already released` : "Checking payout flow"} tone="sunset" />
           </div>
-
-          <aside className="admin-hero-volume-panel">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Secured order volume</p>
-            <p className="mt-2 font-display text-2xl font-bold text-ink">
-              {overview?.order_volume[0] ? formatCurrency(overview.order_volume[0].amount_kobo, overview.order_volume[0].currency) : "No paid volume yet"}
-            </p>
-            <p className="mt-1 text-sm text-sand-700">
-              {overview?.order_volume[0]
-                ? `${overview.order_volume[0].order_count} paid order${overview.order_volume[0].order_count === 1 ? "" : "s"} in the largest active currency bucket`
-                : "Revenue totals will appear here once buyers start completing checkout."}
-            </p>
-          </aside>
         </div>
       </header>
 

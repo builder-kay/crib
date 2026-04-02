@@ -26,7 +26,7 @@ export function AppLayout() {
   }, [theme]);
 
   return (
-    <div className={`min-h-screen text-ink transition-colors duration-300 ${isAdminWorkspace ? "bg-sand-100/80" : "bg-sand-50"}`}>
+    <div className={`min-h-screen text-ink transition-colors duration-300 ${isAdminWorkspace ? "admin-app-surface" : "bg-sand-50"}`}>
       {!isAdminWorkspace ? <Navbar theme={theme} onToggleTheme={() => setTheme((current) => (current === "light" ? "dark" : "light"))} /> : null}
       <main className={isAdminWorkspace ? "w-full px-0 py-0" : "mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8"}>
         <Outlet />

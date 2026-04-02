@@ -39,6 +39,15 @@ export function AdminOrdersPage() {
     [filteredOrders, orders, reviewingOrderId]
   );
 
+  const reportedOrders = useMemo(
+    () => orders.filter((order) => order.status === "paid" && order.escrow_status === "scam_reported"),
+    [orders]
+  );
+  const unresolvedReports = useMemo(
+    () => reportedOrders.filter((order) => order.scam_resolution_status !== "genuine_released" && order.scam_resolution_status !== "buyer_refunded"),
+    [reportedOrders]
+  );
+
   const inspectMutation = useMutation({
     mutationFn: async (orderId: string) => generateDownload(orderId),
     onSuccess: (payload) => {
@@ -132,36 +141,71 @@ export function AdminOrdersPage() {
   return (
     <section className="admin-platform-shell space-y-5">
       <header className="surface-card-vivid admin-hero-panel p-5 md:p-6">
-        <SectionHeader
-          eyebrow="Revenue flow"
-          title="Orders"
-          body="Watch checkout movement, inspect reported file deliveries, and decide whether each seller gets paid, warned, or suspended."
-        />
+        <div className="admin-page-hero-grid">
+          <SectionHeader
+            eyebrow="Revenue flow"
+            title="Orders"
+            body="Watch checkout movement, inspect reported file deliveries, and decide whether each seller gets paid, warned, or suspended."
+          />
+          <aside className="admin-page-hero-rail">
+            <div className="admin-hero-glance-card">
+              <p className="admin-hero-glance-eyebrow">Case Queue</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="admin-hero-glance-item admin-hero-glance-item-rose">
+                  <span>Unresolved</span>
+                  <strong>{unresolvedReports.length}</strong>
+                </div>
+                <div className="admin-hero-glance-item admin-hero-glance-item-sunset">
+                  <span>Held in escrow</span>
+                  <strong>{overview ? `${overview.escrow_pending_orders}` : "..."}</strong>
+                </div>
+                <div className="admin-hero-glance-item admin-hero-glance-item-forest">
+                  <span>Released</span>
+                  <strong>{overview ? `${overview.released_orders}` : "..."}</strong>
+                </div>
+                <div className="admin-hero-glance-item admin-hero-glance-item-lagoon">
+                  <span>Refunded</span>
+                  <strong>{orders.filter((order) => order.status === "refunded").length}</strong>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
       </header>
 
       <section className="surface-card admin-panel p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="admin-input-group lg:w-[240px]">
-              <span>Filter payment status</span>
-              <select value={orderStatusFilter} onChange={(event) => setOrderStatusFilter(event.target.value as Order["status"] | "all")} className="admin-input">
-                <option value="all">All payment states</option>
-                <option value="paid">Paid</option>
-                <option value="pending">Pending</option>
-                <option value="failed">Failed</option>
-                <option value="refunded">Refunded</option>
-              </select>
-            </label>
+        <div className="admin-toolbar">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="admin-input-group lg:w-[240px]">
+                <span>Filter payment status</span>
+                <select value={orderStatusFilter} onChange={(event) => setOrderStatusFilter(event.target.value as Order["status"] | "all")} className="admin-input">
+                  <option value="all">All payment states</option>
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+              </label>
 
-            <label className="admin-input-group lg:w-[240px]">
-              <span>Filter escrow state</span>
-              <select value={escrowStatusFilter} onChange={(event) => setEscrowStatusFilter(event.target.value as NonNullable<Order["escrow_status"]> | "all")} className="admin-input">
-                <option value="all">All escrow states</option>
-                <option value="awaiting_review">In escrow</option>
-                <option value="released">Released</option>
-                <option value="scam_reported">Reported</option>
-              </select>
-            </label>
+              <label className="admin-input-group lg:w-[240px]">
+                <span>Filter escrow state</span>
+                <select value={escrowStatusFilter} onChange={(event) => setEscrowStatusFilter(event.target.value as NonNullable<Order["escrow_status"]> | "all")} className="admin-input">
+                  <option value="all">All escrow states</option>
+                  <option value="awaiting_review">In escrow</option>
+                  <option value="released">Released</option>
+                  <option value="scam_reported">Reported</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="admin-toolbar-copy">
+              <p className="admin-toolbar-label">Filtered orders</p>
+              <p className="admin-toolbar-value">{filteredOrders.length}</p>
+              <p className="admin-toolbar-note">
+                Reported orders can be opened, inspected, and resolved here without leaving the moderation lane.
+              </p>
+            </div>
           </div>
         </div>
 

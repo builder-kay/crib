@@ -142,20 +142,28 @@ export function AdminSettingsPage() {
   return (
     <section className="admin-platform-shell space-y-5">
       <header className="surface-card-vivid admin-hero-panel p-5 md:p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="admin-page-hero-grid">
           <div className="max-w-4xl">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Public Platform Settings</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Settings</h2>
             <p className="mt-2 text-sm text-sand-700 md:text-base">
               Manage the marketplace social links and support contact buttons here instead of keeping them in the frontend env file. You can paste handles, profile URLs, direct admin contact details, and your support inbox.
             </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="admin-chip admin-chip-cobalt">Footer socials</span>
+              <span className="admin-chip admin-chip-lagoon">Support actions</span>
+              <span className="admin-chip admin-chip-sunset">Public contact paths</span>
+            </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <SummaryPill label="Configured fields" value={`${configuredCount}/9`} tone="cobalt" />
-            <SummaryPill label="Platform admins" value={overview ? `${overview.total_admins}` : "..."} tone="sunset" />
-            <SummaryPill label="Published assets" value={overview ? `${overview.published_assets}` : "..."} tone="forest" />
-          </div>
+          <aside className="admin-page-hero-rail">
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <SummaryPill label="Configured fields" value={`${configuredCount}/9`} tone="cobalt" />
+              <SummaryPill label="Platform admins" value={overview ? `${overview.total_admins}` : "..."} tone="sunset" />
+              <SummaryPill label="Published assets" value={overview ? `${overview.published_assets}` : "..."} tone="forest" />
+            </div>
+          </aside>
         </div>
       </header>
 
@@ -174,101 +182,117 @@ export function AdminSettingsPage() {
               setConfirmSaveOpen(true);
             }}
           >
-            <label className="admin-input-group">
-              <span>Instagram handle</span>
-              <input
-                value={instagramHandle}
-                onChange={(event) => setInstagramHandle(event.target.value)}
-                placeholder="@crib or https://instagram.com/crib"
-                className="admin-input"
-              />
-            </label>
+            <div className="admin-form-section">
+              <div className="admin-form-section-header">
+                <p className="admin-form-section-eyebrow">Social Channels</p>
+                <p className="admin-form-section-copy">These values drive the public social pills in the footer.</p>
+              </div>
 
-            <label className="admin-input-group">
-              <span>X handle</span>
-              <input
-                value={xHandle}
-                onChange={(event) => setXHandle(event.target.value)}
-                placeholder="@crib or https://x.com/crib"
-                className="admin-input"
-              />
-            </label>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="admin-input-group">
+                  <span>Instagram handle</span>
+                  <input
+                    value={instagramHandle}
+                    onChange={(event) => setInstagramHandle(event.target.value)}
+                    placeholder="@crib or https://instagram.com/crib"
+                    className="admin-input"
+                  />
+                </label>
 
-            <label className="admin-input-group">
-              <span>TikTok handle</span>
-              <input
-                value={tiktokHandle}
-                onChange={(event) => setTiktokHandle(event.target.value)}
-                placeholder="@crib or https://www.tiktok.com/@crib"
-                className="admin-input"
-              />
-            </label>
+                <label className="admin-input-group">
+                  <span>X handle</span>
+                  <input
+                    value={xHandle}
+                    onChange={(event) => setXHandle(event.target.value)}
+                    placeholder="@crib or https://x.com/crib"
+                    className="admin-input"
+                  />
+                </label>
 
-            <label className="admin-input-group">
-              <span>LinkedIn page</span>
-              <input
-                value={linkedinHandle}
-                onChange={(event) => setLinkedinHandle(event.target.value)}
-                placeholder="company/crib or https://linkedin.com/company/crib"
-                className="admin-input"
-              />
-            </label>
+                <label className="admin-input-group">
+                  <span>TikTok handle</span>
+                  <input
+                    value={tiktokHandle}
+                    onChange={(event) => setTiktokHandle(event.target.value)}
+                    placeholder="@crib or https://www.tiktok.com/@crib"
+                    className="admin-input"
+                  />
+                </label>
 
-            <label className="admin-input-group">
-              <span>Facebook page</span>
-              <input
-                value={facebookHandle}
-                onChange={(event) => setFacebookHandle(event.target.value)}
-                placeholder="crib or https://facebook.com/crib"
-                className="admin-input"
-              />
-            </label>
+                <label className="admin-input-group">
+                  <span>LinkedIn page</span>
+                  <input
+                    value={linkedinHandle}
+                    onChange={(event) => setLinkedinHandle(event.target.value)}
+                    placeholder="company/crib or https://linkedin.com/company/crib"
+                    className="admin-input"
+                  />
+                </label>
 
-            <label className="admin-input-group">
-              <span>WhatsApp channel</span>
-              <input
-                value={whatsAppChannel}
-                onChange={(event) => setWhatsAppChannel(event.target.value)}
-                placeholder="https://whatsapp.com/channel/... or +233..."
-                className="admin-input"
-              />
-            </label>
+                <label className="admin-input-group">
+                  <span>Facebook page</span>
+                  <input
+                    value={facebookHandle}
+                    onChange={(event) => setFacebookHandle(event.target.value)}
+                    placeholder="crib or https://facebook.com/crib"
+                    className="admin-input"
+                  />
+                </label>
 
-            <div className="pt-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Support buttons</p>
-              <p className="mt-1 text-xs text-sand-600">These power the footer actions for direct help requests.</p>
+                <label className="admin-input-group">
+                  <span>WhatsApp channel</span>
+                  <input
+                    value={whatsAppChannel}
+                    onChange={(event) => setWhatsAppChannel(event.target.value)}
+                    placeholder="https://whatsapp.com/channel/... or +233..."
+                    className="admin-input"
+                  />
+                </label>
+              </div>
             </div>
 
-            <label className="admin-input-group">
-              <span>Support email</span>
-              <input
-                type="email"
-                value={supportEmail}
-                onChange={(event) => setSupportEmail(event.target.value)}
-                placeholder="cribafrica@gmail.com"
-                className="admin-input"
-              />
-            </label>
+            <div className="admin-form-section">
+              <div className="admin-form-section-header">
+                <p className="admin-form-section-eyebrow">Support Buttons</p>
+                <p className="admin-form-section-copy">These power the footer actions for direct help requests.</p>
+              </div>
 
-            <label className="admin-input-group">
-              <span>Admin WhatsApp number</span>
-              <input
-                value={adminWhatsAppNumber}
-                onChange={(event) => setAdminWhatsAppNumber(event.target.value)}
-                placeholder="+233507438971"
-                className="admin-input"
-              />
-            </label>
+              <div className="pt-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Support buttons</p>
+              <p className="mt-1 text-xs text-sand-600">These power the footer actions for direct help requests.</p>
+              </div>
 
-            <label className="admin-input-group">
-              <span>Admin WhatsApp message</span>
-              <textarea
-                value={adminWhatsAppMessage}
-                onChange={(event) => setAdminWhatsAppMessage(event.target.value)}
-                placeholder="Hi CRIB admin, I need help with the marketplace."
-                className="admin-input min-h-[120px] resize-y"
-              />
-            </label>
+              <label className="admin-input-group">
+                <span>Support email</span>
+                <input
+                  type="email"
+                  value={supportEmail}
+                  onChange={(event) => setSupportEmail(event.target.value)}
+                  placeholder="cribafrica@gmail.com"
+                  className="admin-input"
+                />
+              </label>
+
+              <label className="admin-input-group">
+                <span>Admin WhatsApp number</span>
+                <input
+                  value={adminWhatsAppNumber}
+                  onChange={(event) => setAdminWhatsAppNumber(event.target.value)}
+                  placeholder="+233507438971"
+                  className="admin-input"
+                />
+              </label>
+
+              <label className="admin-input-group">
+                <span>Admin WhatsApp message</span>
+                <textarea
+                  value={adminWhatsAppMessage}
+                  onChange={(event) => setAdminWhatsAppMessage(event.target.value)}
+                  placeholder="Hi CRIB admin, I need help with the marketplace."
+                  className="admin-input min-h-[120px] resize-y"
+                />
+              </label>
+            </div>
 
             <button type="submit" disabled={settingsMutation.isPending || platformSettingsQuery.isLoading} className="admin-action-button admin-action-button-full">
               {settingsMutation.isPending ? "Saving settings..." : "Save platform settings"}
