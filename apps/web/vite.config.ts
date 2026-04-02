@@ -5,6 +5,17 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react()],
   envDir: path.resolve(__dirname, "../.."),
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          router: ["react-router-dom"],
+          query: ["@tanstack/react-query"],
+          supabase: ["@supabase/supabase-js"]
+        }
+      }
+    }
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src")

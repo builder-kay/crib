@@ -46,7 +46,8 @@ export function EditorialAdminPage() {
   const adminQuery = useQuery({
     queryKey: ["is-editorial-admin", user?.id],
     queryFn: () => isCurrentUserEditorialAdmin(user!.id),
-    enabled: Boolean(user?.id)
+    enabled: Boolean(user?.id),
+    staleTime: 5 * 60_000
   });
 
   const profileQuery = useQuery({

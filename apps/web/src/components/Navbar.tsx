@@ -43,13 +43,15 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   const adminQuery = useQuery({
     queryKey: ["is-admin", user?.id],
     queryFn: () => isCurrentUserAdmin(user!.id),
-    enabled: Boolean(user?.id)
+    enabled: Boolean(user?.id),
+    staleTime: 5 * 60_000
   });
 
   const editorialAdminQuery = useQuery({
     queryKey: ["is-editorial-admin", user?.id],
     queryFn: () => isCurrentUserEditorialAdmin(user!.id),
-    enabled: Boolean(user?.id)
+    enabled: Boolean(user?.id),
+    staleTime: 5 * 60_000
   });
 
   const navItems = useMemo(() => {

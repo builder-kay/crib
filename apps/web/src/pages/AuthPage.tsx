@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { useToast } from "@/components/Toast";
 import { ARKESEL_SUPPORTED_COUNTRIES, composeArkeselPhoneInput, getUserContactEmail, maskPhoneNumber, normalizeAuthPhoneInput } from "@/lib/auth";
 import { sendAuthOtp, signInWithIdentifier, verifyAuthOtp } from "@/lib/api";
+import { sanitizeAppRedirectPath } from "@/lib/navigation";
 import {
   authLoginSchema,
   authOtpCodeSchema,
@@ -37,7 +38,10 @@ export function AuthPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const isEditorialLogin = location.pathname === "/editorial-login";
-  const redirectTo = searchParams.get("redirect") || (isEditorialLogin ? "/editorial-admin" : "/market");
+  const redirectTo = sanitizeAppRedirectPath(
+    searchParams.get("redirect"),
+    isEditorialLogin ? "/editorial-admin" : "/market"
+  );
 
   const user = useAuthStore((state) => state.user);
   const setSession = useAuthStore((state) => state.setSession);

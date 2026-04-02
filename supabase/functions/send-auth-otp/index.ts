@@ -9,6 +9,13 @@ type SendOtpPayload = {
   identifier?: string;
 };
 
+type OtpChallengeSnapshot = {
+  consumed_at: string | null;
+  updated_at: string;
+};
+
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
 function otpSendStatus(code: string, message: string) {
   const normalizedMessage = message.toLowerCase();
   if (code === "1005" || normalizedMessage.includes("invalid")) {
@@ -16,6 +23,51 @@ function otpSendStatus(code: string, message: string) {
   }
 
   return 502;
+}
+
+async function enforceOtpResendCooldown(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  input: {
+    intent: "register" | "reset";
+    normalizedPhoneDigits: string;
+  }
+) {
+  const { data, error } = await supabase
+    .from("auth_otp_challenges")
+    .select("consumed_at, updated_at")
+    .eq("intent", input.intent)
+    .eq("normalized_phone", input.normalizedPhoneDigits)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const challenge = (data ?? null) as OtpChallengeSnapshot | null;
+
+  if (!challenge || challenge.consumed_at) {
+    return null;
+  }
+
+  const retryAfterSeconds = Math.ceil(
+    (Date.parse(challenge.updated_at) + OTP_RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000
+  );
+
+  if (!Number.isFinite(retryAfterSeconds) || retryAfterSeconds <= 0) {
+    return null;
+  }
+
+  return jsonResponse(
+    {
+      error: `Please wait ${retryAfterSeconds} second${retryAfterSeconds === 1 ? "" : "s"} before requesting another OTP.`,
+      code: "otp_recently_sent",
+      retry_after_seconds: retryAfterSeconds
+    },
+    429,
+    {
+      "Retry-After": String(retryAfterSeconds)
+    }
+  );
 }
 
 Deno.serve(async (request) => {
@@ -80,6 +132,15 @@ Deno.serve(async (request) => {
           },
           409
         );
+      }
+
+      const cooldownResponse = await enforceOtpResendCooldown(supabase, {
+        intent: "register",
+        normalizedPhoneDigits: normalizedPhone.digits
+      });
+
+      if (cooldownResponse) {
+        return cooldownResponse;
       }
 
       const sendResult = await sendArkeselOtp({
@@ -172,6 +233,15 @@ Deno.serve(async (request) => {
         },
         409
       );
+    }
+
+    const cooldownResponse = await enforceOtpResendCooldown(supabase, {
+      intent: "reset",
+      normalizedPhoneDigits: identityPhone.digits
+    });
+
+    if (cooldownResponse) {
+      return cooldownResponse;
     }
 
     const sendResult = await sendArkeselOtp({

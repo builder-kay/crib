@@ -12,7 +12,8 @@ export function AdminProtectedRoute() {
   const adminQuery = useQuery({
     queryKey: ["is-admin", user?.id],
     queryFn: () => isCurrentUserAdmin(user!.id),
-    enabled: Boolean(user?.id)
+    enabled: Boolean(user?.id),
+    staleTime: 5 * 60_000
   });
 
   if (!initialized) {

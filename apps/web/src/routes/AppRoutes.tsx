@@ -1,74 +1,104 @@
+import { Suspense, lazy, type ComponentType } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/routes/AppLayout";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { AdminProtectedRoute } from "@/routes/AdminProtectedRoute";
-import { LandingPage } from "@/pages/LandingPage";
-import { MarketPage } from "@/pages/MarketPage";
-import { AssetDetailPage } from "@/pages/AssetDetailPage";
-import { AuthPage } from "@/pages/AuthPage";
-import { DashboardPage } from "@/pages/DashboardPage";
-import { DashboardLayoutPage } from "@/pages/DashboardLayoutPage";
-import { UploadPage } from "@/pages/UploadPage";
-import { OrdersPage } from "@/pages/OrdersPage";
-import { AdminCreatorsPage, AdminEditorsPage, AdminListingsPage, AdminOrdersPage, AdminOverviewPage, AdminPage, AdminSettingsPage } from "@/pages/AdminPage";
-import { NotFoundPage } from "@/pages/NotFoundPage";
-import { ProfilePage } from "@/pages/ProfilePage";
-import { CreatorsPage } from "@/pages/CreatorsPage";
-import { EditorialPage } from "@/pages/EditorialPage";
-import { EditorialPostPage } from "@/pages/EditorialPostPage";
-import { EditorialAdminPage } from "@/pages/EditorialAdminPage";
-import { WishlistPage } from "@/pages/WishlistPage";
-import { NotificationsPage } from "@/pages/NotificationsPage";
+
+function lazyPage<TModule extends Record<string, unknown>, TExport extends keyof TModule>(
+  importer: () => Promise<TModule>,
+  exportName: TExport
+) {
+  return lazy(async () => {
+    const module = await importer();
+    return { default: module[exportName] as ComponentType<any> };
+  });
+}
+
+const LandingPage = lazyPage(() => import("@/pages/LandingPage"), "LandingPage");
+const MarketPage = lazyPage(() => import("@/pages/MarketPage"), "MarketPage");
+const CreatorsPage = lazyPage(() => import("@/pages/CreatorsPage"), "CreatorsPage");
+const EditorialPage = lazyPage(() => import("@/pages/EditorialPage"), "EditorialPage");
+const EditorialPostPage = lazyPage(() => import("@/pages/EditorialPostPage"), "EditorialPostPage");
+const AssetDetailPage = lazyPage(() => import("@/pages/AssetDetailPage"), "AssetDetailPage");
+const AuthPage = lazyPage(() => import("@/pages/AuthPage"), "AuthPage");
+const OrdersPage = lazyPage(() => import("@/pages/OrdersPage"), "OrdersPage");
+const DashboardPage = lazyPage(() => import("@/pages/DashboardPage"), "DashboardPage");
+const DashboardLayoutPage = lazyPage(() => import("@/pages/DashboardLayoutPage"), "DashboardLayoutPage");
+const UploadPage = lazyPage(() => import("@/pages/UploadPage"), "UploadPage");
+const WishlistPage = lazyPage(() => import("@/pages/WishlistPage"), "WishlistPage");
+const NotificationsPage = lazyPage(() => import("@/pages/NotificationsPage"), "NotificationsPage");
+const ProfilePage = lazyPage(() => import("@/pages/ProfilePage"), "ProfilePage");
+const AdminPage = lazyPage(() => import("@/pages/AdminPage"), "AdminPage");
+const AdminOverviewPage = lazyPage(() => import("@/pages/AdminPage"), "AdminOverviewPage");
+const AdminListingsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminListingsPage");
+const AdminOrdersPage = lazyPage(() => import("@/pages/AdminPage"), "AdminOrdersPage");
+const AdminCreatorsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminCreatorsPage");
+const AdminEditorsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminEditorsPage");
+const AdminSettingsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminSettingsPage");
+const EditorialAdminPage = lazyPage(() => import("@/pages/EditorialAdminPage"), "EditorialAdminPage");
+const NotFoundPage = lazyPage(() => import("@/pages/NotFoundPage"), "NotFoundPage");
+
+function RouteLoader() {
+  return (
+    <div className="mx-auto flex min-h-[42vh] w-full max-w-5xl items-center justify-center px-4 py-10">
+      <div className="rounded-2xl border border-sand-200 bg-white/90 px-5 py-3 text-sm font-medium text-sand-600 shadow-[0_18px_36px_-28px_rgba(16,19,36,0.35)]">
+        Loading page...
+      </div>
+    </div>
+  );
+}
 
 export function AppRoutes() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/market" element={<MarketPage />} />
-          <Route path="/creators" element={<CreatorsPage />} />
-          <Route path="/editorial" element={<EditorialPage />} />
-          <Route path="/editorial/:slug" element={<EditorialPostPage />} />
-          <Route path="/asset/:id" element={<AssetDetailPage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/editorial-login" element={<AuthPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
+      <Suspense fallback={<RouteLoader />}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/market" element={<MarketPage />} />
+            <Route path="/creators" element={<CreatorsPage />} />
+            <Route path="/editorial" element={<EditorialPage />} />
+            <Route path="/editorial/:slug" element={<EditorialPostPage />} />
+            <Route path="/asset/:id" element={<AssetDetailPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/editorial-login" element={<AuthPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route path="/profile/:id" element={<ProfilePage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/dashboard" element={<DashboardLayoutPage />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="orders" element={<OrdersPage />} />
-              <Route path="upload" element={<UploadPage />} />
-              <Route path="wishlist" element={<WishlistPage />} />
-              <Route path="notifications" element={<NotificationsPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/profile/:id" element={<ProfilePage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/dashboard" element={<DashboardLayoutPage />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="orders" element={<OrdersPage />} />
+                <Route path="upload" element={<UploadPage />} />
+                <Route path="wishlist" element={<WishlistPage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
+              </Route>
+              <Route path="/wishlist" element={<Navigate to="/dashboard/wishlist" replace />} />
+              <Route path="/notifications" element={<Navigate to="/dashboard/notifications" replace />} />
+              <Route path="/upload" element={<Navigate to="/dashboard/upload" replace />} />
             </Route>
-            <Route path="/wishlist" element={<Navigate to="/dashboard/wishlist" replace />} />
-            <Route path="/notifications" element={<Navigate to="/dashboard/notifications" replace />} />
-            <Route path="/upload" element={<Navigate to="/dashboard/upload" replace />} />
-          </Route>
 
-          <Route element={<AdminProtectedRoute />}>
-            <Route path="/admin" element={<AdminPage />}>
-              <Route index element={<Navigate to="overview" replace />} />
-              <Route path="overview" element={<AdminOverviewPage />} />
-              <Route path="listings" element={<AdminListingsPage />} />
-              <Route path="orders" element={<AdminOrdersPage />} />
-              <Route path="creators" element={<AdminCreatorsPage />} />
-              <Route path="editors" element={<AdminEditorsPage />} />
-              <Route path="settings" element={<AdminSettingsPage />} />
+            <Route element={<AdminProtectedRoute />}>
+              <Route path="/admin" element={<AdminPage />}>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route path="overview" element={<AdminOverviewPage />} />
+                <Route path="listings" element={<AdminListingsPage />} />
+                <Route path="orders" element={<AdminOrdersPage />} />
+                <Route path="creators" element={<AdminCreatorsPage />} />
+                <Route path="editors" element={<AdminEditorsPage />} />
+                <Route path="settings" element={<AdminSettingsPage />} />
+              </Route>
             </Route>
-          </Route>
 
-          <Route element={<ProtectedRoute signInPath="/editorial-login" />}>
-            <Route path="/editorial-admin" element={<EditorialAdminPage />} />
-          </Route>
+            <Route element={<ProtectedRoute signInPath="/editorial-login" />}>
+              <Route path="/editorial-admin" element={<EditorialAdminPage />} />
+            </Route>
 
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
