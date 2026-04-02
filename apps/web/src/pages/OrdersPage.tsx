@@ -262,6 +262,9 @@ export function OrdersPage() {
 
   function dismissReviewPrompt() {
     if (!user?.id || !reviewOrderId) {
+      setReviewOrderId(null);
+      setReviewRating(0);
+      setReviewComment("");
       setReviewModalOpen(false);
       return;
     }
@@ -287,6 +290,12 @@ export function OrdersPage() {
       }
     }
 
+    setSuppressedPromptOrderIds((previous) =>
+      previous.includes(reviewOrderId) ? previous : [...previous, reviewOrderId]
+    );
+    setReviewOrderId(null);
+    setReviewRating(0);
+    setReviewComment("");
     setReviewModalOpen(false);
   }
 
