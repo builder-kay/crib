@@ -544,7 +544,7 @@ export function CreatorCard({ creator }: { creator: AdminCreatorRecord }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 admin-detail-grid">
         <StatMini label="Listings" value={`${creator.asset_count}`} />
         <StatMini label="Live" value={`${creator.published_assets}`} />
         <StatMini label="Sales" value={`${creator.sales_count}`} />
@@ -563,9 +563,9 @@ export function CreatorCard({ creator }: { creator: AdminCreatorRecord }) {
 
 export function StatMini({ label, value }: { label: string; value: string }) {
   return (
-    <article className="rounded-2xl border border-sand-200 bg-white/85 px-3 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sand-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+    <article className="admin-stat-mini">
+      <p className="admin-stat-mini-label">{label}</p>
+      <p className="admin-stat-mini-value">{value}</p>
     </article>
   );
 }

@@ -80,7 +80,7 @@ export function AdminEditorsPage() {
           </div>
 
           <aside className="admin-page-hero-rail">
-            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="admin-hero-rail-summary-grid">
               <SummaryPill label="Platform admins" value={overview ? `${overview.total_admins}` : "..."} tone="cobalt" />
               <SummaryPill label="Editorial posts" value={overview ? `${overview.editorial_posts}` : "..."} tone="sunset" />
               <SummaryPill label="Active creators" value={overview ? `${overview.active_creators}` : "..."} tone="forest" />

@@ -158,7 +158,7 @@ export function AdminSettingsPage() {
           </div>
 
           <aside className="admin-page-hero-rail">
-            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="admin-hero-rail-summary-grid">
               <SummaryPill label="Configured fields" value={`${configuredCount}/9`} tone="cobalt" />
               <SummaryPill label="Platform admins" value={overview ? `${overview.total_admins}` : "..."} tone="sunset" />
               <SummaryPill label="Published assets" value={overview ? `${overview.published_assets}` : "..."} tone="forest" />
@@ -255,11 +255,6 @@ export function AdminSettingsPage() {
               <div className="admin-form-section-header">
                 <p className="admin-form-section-eyebrow">Support Buttons</p>
                 <p className="admin-form-section-copy">These power the footer actions for direct help requests.</p>
-              </div>
-
-              <div className="pt-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Support buttons</p>
-              <p className="mt-1 text-xs text-sand-600">These power the footer actions for direct help requests.</p>
               </div>
 
               <label className="admin-input-group">

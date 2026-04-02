@@ -150,7 +150,7 @@ export function AdminOrdersPage() {
           <aside className="admin-page-hero-rail">
             <div className="admin-hero-glance-card">
               <p className="admin-hero-glance-eyebrow">Case Queue</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 admin-glance-grid">
                 <div className="admin-hero-glance-item admin-hero-glance-item-rose">
                   <span>Unresolved</span>
                   <strong>{unresolvedReports.length}</strong>
@@ -175,9 +175,9 @@ export function AdminOrdersPage() {
 
       <section className="surface-card admin-panel p-5">
         <div className="admin-toolbar">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="admin-input-group lg:w-[240px]">
+          <div className="admin-toolbar-layout">
+            <div className="admin-toolbar-fields">
+              <label className="admin-input-group">
                 <span>Filter payment status</span>
                 <select value={orderStatusFilter} onChange={(event) => setOrderStatusFilter(event.target.value as Order["status"] | "all")} className="admin-input">
                   <option value="all">All payment states</option>
@@ -188,7 +188,7 @@ export function AdminOrdersPage() {
                 </select>
               </label>
 
-              <label className="admin-input-group lg:w-[240px]">
+              <label className="admin-input-group">
                 <span>Filter escrow state</span>
                 <select value={escrowStatusFilter} onChange={(event) => setEscrowStatusFilter(event.target.value as NonNullable<Order["escrow_status"]> | "all")} className="admin-input">
                   <option value="all">All escrow states</option>
@@ -209,7 +209,7 @@ export function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 admin-summary-grid">
           <SummaryPill label="In Escrow" value={overview ? `${overview.escrow_pending_orders}` : "..."} tone="sunset" />
           <SummaryPill label="Released" value={overview ? `${overview.released_orders}` : "..."} tone="forest" />
           <SummaryPill label="Reported" value={overview ? `${overview.scam_reported_orders}` : "..."} tone="rose" />
@@ -225,8 +225,8 @@ export function AdminOrdersPage() {
 
             return (
               <article key={order.id} className="admin-record-card">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 flex-1">
+                <div className="admin-record-layout">
+                  <div className="admin-record-primary">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-display text-xl font-semibold text-ink">{order.asset?.title ?? "Order record"}</p>
                       <span className={orderStatusChip(order.status)}>{order.status}</span>
@@ -235,7 +235,7 @@ export function AdminOrdersPage() {
                       {hasScamCase ? <span className={`admin-chip ${caseResolved ? "admin-chip-lagoon" : "admin-chip-rose"}`}>{caseResolved ? resolutionLabel(order) : "Needs admin review"}</span> : null}
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-4 admin-detail-grid">
                       <StatMini label="Buyer" value={order.email} />
                       <StatMini label="Creator" value={order.asset?.creator?.display_name ?? "Unknown creator"} />
                       <StatMini label="Created" value={formatDate(order.created_at)} />
@@ -319,7 +319,7 @@ export function AdminOrdersPage() {
       >
         {selectedOrder ? (
           <div className="space-y-5">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="admin-detail-grid">
               <StatMini label="Listing" value={selectedOrder.asset?.title ?? "Unknown listing"} />
               <StatMini label="Buyer" value={selectedOrder.email} />
               <StatMini label="Creator" value={selectedOrder.asset?.creator?.display_name ?? "Unknown creator"} />
@@ -355,7 +355,7 @@ export function AdminOrdersPage() {
               </label>
             </div>
 
-            <label className="admin-input-group lg:w-[320px]">
+            <label className="admin-input-group">
               <span>Refund action for seller account</span>
               <select value={sellerAction} onChange={(event) => setSellerAction(event.target.value as "none" | "warn" | "suspend")} className="admin-input">
                 <option value="none">Refund only</option>

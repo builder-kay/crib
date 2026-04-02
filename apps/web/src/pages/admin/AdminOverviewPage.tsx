@@ -48,7 +48,7 @@ export function AdminOverviewPage() {
 
             <div className="admin-hero-glance-card">
               <p className="admin-hero-glance-eyebrow">Today's Watch</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 admin-glance-grid">
                 <div className="admin-hero-glance-item admin-hero-glance-item-sunset">
                   <span>Escrow queue</span>
                   <strong>{overview ? `${overview.escrow_pending_orders}` : "..."}</strong>
@@ -79,7 +79,7 @@ export function AdminOverviewPage() {
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="admin-summary-grid gap-4">
         <MetricCard label="Accounts" value={overview ? `${overview.total_profiles}` : "Loading..."} helper={overview ? `${overview.active_creators} creators with listings` : "Loading creator footprint"} tone="cobalt" />
         <MetricCard label="Listings" value={overview ? `${overview.total_assets}` : "Loading..."} helper={overview ? `${overview.published_assets} live / ${overview.draft_assets} draft` : "Loading listing totals"} tone="lagoon" />
         <MetricCard label="Paid Orders" value={overview ? `${overview.paid_orders}` : "Loading..."} helper={overview ? `${overview.escrow_pending_orders} held / ${overview.released_orders} released` : "Loading order totals"} tone="sunset" />
@@ -174,7 +174,7 @@ export function AdminOverviewPage() {
 
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Escrow mix" title="Current payout state" body="A simple read on how many paid orders are still waiting on buyer action." />
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 admin-summary-grid">
               <SummaryPill label="Held" value={overview ? `${overview.escrow_pending_orders}` : "..."} tone="sunset" />
               <SummaryPill label="Released" value={overview ? `${overview.released_orders}` : "..."} tone="forest" />
               <SummaryPill label="Reported" value={overview ? `${overview.scam_reported_orders}` : "..."} tone="rose" />

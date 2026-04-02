@@ -49,7 +49,7 @@ export function AdminListingsPage() {
           <aside className="admin-page-hero-rail">
             <div className="admin-hero-glance-card">
               <p className="admin-hero-glance-eyebrow">Catalog Balance</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 admin-glance-grid">
                 <div className="admin-hero-glance-item admin-hero-glance-item-cobalt">
                   <span>Total listings</span>
                   <strong>{assetSummary.total}</strong>
@@ -74,13 +74,13 @@ export function AdminListingsPage() {
 
       <section className="surface-card admin-panel p-5">
         <div className="admin-toolbar">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="grid gap-3 sm:grid-cols-2 lg:w-[440px]">
-            <label className="admin-input-group">
+          <div className="admin-toolbar-layout">
+            <div className="admin-toolbar-fields">
+              <label className="admin-input-group">
               <span>Search listings</span>
               <input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Title, creator, category, or tag" className="admin-input" />
-            </label>
-            <label className="admin-input-group">
+              </label>
+              <label className="admin-input-group">
               <span>Status</span>
               <select value={assetStatusFilter} onChange={(event) => setAssetStatusFilter(event.target.value as Asset["status"] | "all")} className="admin-input">
                 <option value="all">All statuses</option>
@@ -88,8 +88,8 @@ export function AdminListingsPage() {
                 <option value="draft">Draft</option>
                 <option value="archived">Archived</option>
               </select>
-            </label>
-          </div>
+              </label>
+            </div>
 
             <div className="admin-toolbar-copy">
               <p className="admin-toolbar-label">Visible results</p>
@@ -101,7 +101,7 @@ export function AdminListingsPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 admin-summary-grid">
           <div className="admin-mini-insight admin-mini-insight-cobalt">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">Total</p>
             <p className="mt-2 font-display text-2xl font-bold">{assetSummary.total}</p>
@@ -132,7 +132,7 @@ export function AdminListingsPage() {
 
             return (
               <article key={asset.id} className="admin-record-card">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="admin-record-layout">
                   <div className="admin-record-media-shell">
                     {previewUrl ? (
                       <img src={previewUrl} alt={asset.title} className="admin-record-media" />
@@ -141,7 +141,7 @@ export function AdminListingsPage() {
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="admin-record-primary">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link to={`/asset/${asset.id}`} className="font-display text-xl font-semibold text-ink hover:text-cobalt-700">
                         {asset.title}
@@ -151,7 +151,7 @@ export function AdminListingsPage() {
                     </div>
                     <p className="mt-2 max-w-3xl text-sm text-sand-700">{asset.description || "No listing description yet."}</p>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="mt-4 admin-detail-grid">
                       <div className="admin-record-mini">
                         <p className="admin-record-mini-label">Creator</p>
                         <p className="admin-record-mini-value">{asset.profile?.display_name ?? "Unknown creator"}</p>

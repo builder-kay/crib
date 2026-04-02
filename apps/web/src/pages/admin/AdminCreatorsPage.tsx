@@ -52,7 +52,7 @@ export function AdminCreatorsPage() {
           <aside className="admin-page-hero-rail">
             <div className="admin-hero-glance-card">
               <p className="admin-hero-glance-eyebrow">Creator Health</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 admin-glance-grid">
                 <div className="admin-hero-glance-item admin-hero-glance-item-forest">
                   <span>Active</span>
                   <strong>{creatorSummary.active}</strong>
@@ -77,11 +77,13 @@ export function AdminCreatorsPage() {
 
       <section className="surface-card admin-panel p-5">
         <div className="admin-toolbar">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <label className="admin-input-group lg:w-[340px]">
-            <span>Search creators</span>
-            <input value={creatorSearch} onChange={(event) => setCreatorSearch(event.target.value)} placeholder="Name, category, niche, or bio" className="admin-input" />
-          </label>
+          <div className="admin-toolbar-layout">
+            <div className="admin-toolbar-fields">
+              <label className="admin-input-group">
+                <span>Search creators</span>
+                <input value={creatorSearch} onChange={(event) => setCreatorSearch(event.target.value)} placeholder="Name, category, niche, or bio" className="admin-input" />
+              </label>
+            </div>
 
             <div className="admin-toolbar-copy">
               <p className="admin-toolbar-label">Visible creators</p>
@@ -93,7 +95,7 @@ export function AdminCreatorsPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 admin-summary-grid">
           <div className="admin-mini-insight admin-mini-insight-cobalt">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">Total</p>
             <p className="mt-2 font-display text-2xl font-bold">{creatorSummary.total}</p>
