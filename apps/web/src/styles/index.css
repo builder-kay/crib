@@ -684,6 +684,19 @@
     @apply rounded-full border border-sand-200 bg-sand-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-sand-500;
   }
 
+  .app-footer-social,
+  .app-footer-social-disabled {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .app-footer-social-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex: 0 0 auto;
+  }
+
   .upload-shell {
     position: relative;
     isolation: isolate;
@@ -3144,3 +3157,4 @@
     transform: none;
   }
 }
+
