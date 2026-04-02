@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.provision-editorial-admin]
 verify_jwt = false
+
+[functions.resolve-order-scam-report]
+verify_jwt = false

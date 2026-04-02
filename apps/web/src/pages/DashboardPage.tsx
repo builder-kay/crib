@@ -80,6 +80,8 @@ export function DashboardPage() {
   const releasedOrderCount = dashboardQuery.data?.paidOrders ?? 0;
   const escrowPendingOrderCount = dashboardQuery.data?.escrowPendingOrders ?? 0;
   const escrowPendingAmountKobo = dashboardQuery.data?.escrowPendingAmountKobo ?? 0;
+  const sellerAccountStatus = dashboardQuery.data?.sellerAccountStatus ?? "active";
+  const sellerAccountNote = dashboardQuery.data?.sellerAccountNote ?? null;
   const avgReleasedOrderLabel = useMemo(() => {
     if (!dashboardQuery.data || releasedOrderCount === 0) {
       return "GHS 0.00";
@@ -107,6 +109,31 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {sellerAccountStatus !== "active" ? (
+        <section
+          className={`rounded-[1.6rem] border px-5 py-4 ${
+            sellerAccountStatus === "suspended"
+              ? "border-rose-200 bg-rose-50"
+              : "border-sunset-200 bg-sunset-50"
+          }`}
+        >
+          <p
+            className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
+              sellerAccountStatus === "suspended" ? "text-rose-700" : "text-sunset-700"
+            }`}
+          >
+            Seller account {sellerAccountStatus}
+          </p>
+          <p className={`mt-2 text-sm ${sellerAccountStatus === "suspended" ? "text-rose-800" : "text-sunset-800"}`}>
+            {sellerAccountNote?.trim()
+              ? sellerAccountNote
+              : sellerAccountStatus === "suspended"
+                ? "Marketplace admin paused this seller account while a file issue is being handled."
+                : "Marketplace admin added a warning to this seller account. Review your recent reported order notes below."}
+          </p>
+        </section>
+      ) : null}
+
       <header className="surface-card-vivid subtle-pattern overflow-hidden p-5 md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -364,10 +391,19 @@ function orderEscrowNote(order: Order) {
     return "Payment failed, so no payout is being held for this order.";
   }
   if (order.status === "refunded") {
-    return "This order was refunded.";
+    return order.seller_issue_note?.trim()
+      ? `This order was refunded. Seller note: ${order.seller_issue_note}`
+      : "This order was refunded.";
   }
   if (order.escrow_status === "scam_reported") {
-    return `Buyer reported a file issue${order.buyer_reported_at ? ` on ${formatDate(order.buyer_reported_at)}` : ""}. Payout stays on hold.`;
+    const resolutionCopy =
+      order.scam_resolution_status === "genuine_released"
+        ? "Admin reviewed the report and released payout."
+        : order.scam_resolution_status === "buyer_refunded"
+          ? "Admin reviewed the report and refunded the buyer."
+          : "Payout stays on hold.";
+    const sellerNote = order.seller_issue_note?.trim() ? ` Seller note: ${order.seller_issue_note}` : "";
+    return `Buyer reported a file issue${order.buyer_reported_at ? ` on ${formatDate(order.buyer_reported_at)}` : ""}. ${resolutionCopy}${sellerNote}`;
   }
   if (order.escrow_status === "released") {
     return `Released to wallet${order.escrow_released_at ? ` on ${formatDate(order.escrow_released_at)}` : ""}.`;

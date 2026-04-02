@@ -79,6 +79,21 @@ export type PaystackVerifyResponse = {
   };
 };
 
+export type PaystackRefundResponse = {
+  status: boolean;
+  message: string;
+  data?: {
+    id?: number;
+    transaction?: number;
+    status?: string;
+    reference?: string;
+    amount?: number;
+    currency?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+};
+
 export type PaystackSubaccountResponse = {
   status: boolean;
   message: string;
@@ -173,6 +188,22 @@ export async function verifyPaystackTransaction(secretKey: string, reference: st
       method: "GET"
     }
   );
+}
+
+export async function createPaystackRefund(
+  secretKey: string,
+  payload: {
+    transaction: string;
+    amount?: number;
+    currency?: string;
+    customer_note?: string;
+    merchant_note?: string;
+  }
+): Promise<PaystackRefundResponse> {
+  return paystackJsonRequest<PaystackRefundResponse>(secretKey, "https://api.paystack.co/refund", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 export async function listPaystackBanks(

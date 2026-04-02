@@ -60,9 +60,11 @@ type AssetProfileRow = {
   creator_category: string | null;
   sales_count: number | null;
   is_verified: boolean | null;
+  seller_account_status?: string | null;
+  seller_account_note?: string | null;
 };
 
-const PROFILE_FIELDS_SELECT = "display_name, avatar_url, niche, creator_category, sales_count, is_verified";
+const PROFILE_FIELDS_SELECT = "display_name, avatar_url, niche, creator_category, sales_count, is_verified, seller_account_status, seller_account_note";
 
 type AssetRow = {
   id: string;
@@ -104,6 +106,12 @@ type OrderRow = {
   escrow_released_at?: string | null;
   escrow_release_reason?: string | null;
   scam_report_reason?: string | null;
+  scam_resolution_status?: Order["scam_resolution_status"];
+  scam_resolution_note?: string | null;
+  seller_issue_note?: string | null;
+  seller_moderation_action?: Order["seller_moderation_action"];
+  refund_reference?: string | null;
+  refund_provider_status?: string | null;
   asset?:
     | {
         id: string;
@@ -130,6 +138,8 @@ type CreatorProfileRow = {
   sales_count: number | null;
   is_verified: boolean | null;
   created_at: string;
+  seller_account_status?: string | null;
+  seller_account_note?: string | null;
 };
 
 type CreatorAssetStatRow = {
@@ -306,6 +316,12 @@ function mapOrder(row: OrderRow): Order {
     escrow_released_at: row.escrow_released_at ?? null,
     escrow_release_reason: row.escrow_release_reason ?? null,
     scam_report_reason: row.scam_report_reason ?? null,
+    scam_resolution_status: row.scam_resolution_status ?? null,
+    scam_resolution_note: row.scam_resolution_note ?? null,
+    seller_issue_note: row.seller_issue_note ?? null,
+    seller_moderation_action: row.seller_moderation_action ?? null,
+    refund_reference: row.refund_reference ?? null,
+    refund_provider_status: row.refund_provider_status ?? null,
     asset: asset
       ? {
           id: asset.id,
@@ -449,6 +465,12 @@ type AdminOrderRow = {
   escrow_released_at: string | null;
   escrow_release_reason: string | null;
   scam_report_reason: string | null;
+  scam_resolution_status: Order["scam_resolution_status"];
+  scam_resolution_note: string | null;
+  seller_issue_note: string | null;
+  seller_moderation_action: Order["seller_moderation_action"];
+  refund_reference: string | null;
+  refund_provider_status: string | null;
   asset?:
     | {
         id: string;
@@ -757,6 +779,26 @@ export type ProvisionEditorialAdminResult = {
   display_name: string;
 };
 
+export type ResolveAdminOrderScamInput = {
+  orderId: string;
+  resolution: "genuine" | "refund";
+  sellerAction?: "none" | "warn" | "suspend";
+  adminNote?: string;
+  sellerNote?: string;
+};
+
+export type ResolveAdminOrderScamResult = {
+  ok: boolean;
+  order_id: string;
+  order_status: Order["status"];
+  escrow_status: Order["escrow_status"];
+  escrow_release_reason?: string | null;
+  scam_resolution_status: Order["scam_resolution_status"];
+  seller_moderation_action: Order["seller_moderation_action"];
+  refund_provider_status?: string | null;
+  seller_account_status: "active" | "warned" | "suspended";
+};
+
 export async function resolveAuthIdentifier(identifier: string): Promise<ResolveAuthIdentifierResult> {
   const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/resolve-auth-identifier`, {
     method: "POST",
@@ -849,6 +891,38 @@ export async function provisionEditorialAdmin(input: ProvisionEditorialAdminInpu
   return (await response.json()) as ProvisionEditorialAdminResult;
 }
 
+export async function resolveAdminOrderScam(input: ResolveAdminOrderScamInput): Promise<ResolveAdminOrderScamResult> {
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (!accessToken) {
+    throw new Error("You must be signed in to resolve reported orders.");
+  }
+
+  const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/resolve-order-scam-report`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({
+      order_id: input.orderId,
+      resolution: input.resolution,
+      seller_action: input.sellerAction ?? "none",
+      admin_note: input.adminNote ?? "",
+      seller_note: input.sellerNote ?? ""
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw buildApiError(response.status, text);
+  }
+
+  return (await response.json()) as ResolveAdminOrderScamResult;
+}
+
 export async function signInWithIdentifier(identifier: string, password: string) {
   const trimmedIdentifier = identifier.trim();
   if (!trimmedIdentifier) {
@@ -926,7 +1000,7 @@ function mapStorageUploadError(
 export async function getProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials")
+    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note")
     .eq("id", userId)
     .maybeSingle();
 
@@ -957,7 +1031,7 @@ export async function updateProfile(userId: string, input: ProfileInput) {
       },
       { onConflict: "id" }
     )
-    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials")
+    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note")
     .single();
 
   if (error) {
@@ -1757,6 +1831,24 @@ export async function createAssetListing(
   mainFile: File,
   previewFiles: File[]
 ): Promise<{ assetId: string }> {
+  const { data: moderationProfile, error: moderationProfileError } = await supabase
+    .from("profiles")
+    .select("seller_account_status, seller_account_note")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (moderationProfileError) {
+    throw new Error(moderationProfileError.message);
+  }
+
+  if (moderationProfile?.seller_account_status === "suspended") {
+    throw new Error(
+      moderationProfile.seller_account_note?.trim()
+        ? `Your seller account is suspended. ${moderationProfile.seller_account_note.trim()}`
+        : "Your seller account is suspended. Contact the marketplace admin before uploading again."
+    );
+  }
+
   const tags = input.tags
     .split(",")
     .map((value) => value.trim().toLowerCase())
@@ -2044,6 +2136,12 @@ export async function getBuyerOrders(options: {
       escrow_released_at,
       escrow_release_reason,
       scam_report_reason,
+      scam_resolution_status,
+      scam_resolution_note,
+      seller_issue_note,
+      seller_moderation_action,
+      refund_reference,
+      refund_provider_status,
       asset:assets(id, title, category, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
     )
     .order("created_at", { ascending: false });
@@ -2108,7 +2206,7 @@ export async function hasPaidOrderWithCreator(creatorId: string, userId: string,
 export async function getCreatorDashboard(userId: string): Promise<CreatorDashboard> {
   await syncDueOrderEscrows();
 
-  const [{ count, error: countError }, { data: ordersData, error: ordersError }, { data: walletData, error: walletError }] =
+  const [{ count, error: countError }, { data: ordersData, error: ordersError }, { data: walletData, error: walletError }, { data: profileData, error: profileError }] =
     await Promise.all([
       supabase.from("assets").select("id", { count: "exact", head: true }).eq("creator_id", userId),
       supabase
@@ -2132,12 +2230,19 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
           escrow_released_at,
           escrow_release_reason,
           scam_report_reason,
+          scam_resolution_status,
+          scam_resolution_note,
+          seller_issue_note,
+          seller_moderation_action,
+          refund_reference,
+          refund_provider_status,
           asset:assets!inner(id, title, category, creator_id, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
         )
         .eq("assets.creator_id", userId)
         .order("created_at", { ascending: false })
         .limit(25),
-      supabase.from("wallet").select("balance_kobo").eq("creator_id", userId).maybeSingle()
+      supabase.from("wallet").select("balance_kobo").eq("creator_id", userId).maybeSingle(),
+      supabase.from("profiles").select("seller_account_status, seller_account_note").eq("id", userId).maybeSingle()
     ]);
 
   if (countError) {
@@ -2150,6 +2255,9 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
 
   if (walletError) {
     throw new Error(walletError.message);
+  }
+  if (profileError) {
+    throw new Error(profileError.message);
   }
 
   const recentOrders = ((ordersData ?? []) as OrderRow[]).map(mapOrder);
@@ -2165,6 +2273,8 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
     escrowPendingAmountKobo,
     totalRevenueKobo,
     walletBalanceKobo: walletData?.balance_kobo ?? 0,
+    sellerAccountStatus: (profileData?.seller_account_status as CreatorDashboard["sellerAccountStatus"] | null) ?? "active",
+    sellerAccountNote: profileData?.seller_account_note ?? null,
     recentOrders
   };
 }
@@ -2619,12 +2729,18 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
       escrow_released_at,
       escrow_release_reason,
       scam_report_reason,
+      scam_resolution_status,
+      scam_resolution_note,
+      seller_issue_note,
+      seller_moderation_action,
+      refund_reference,
+      refund_provider_status,
       asset:assets(
         id,
         title,
         category,
         creator_id,
-        profile:profiles!assets_creator_id_fkey(display_name, avatar_url, creator_category, is_verified)
+        profile:profiles!assets_creator_id_fkey(display_name, avatar_url, creator_category, is_verified, seller_account_status, seller_account_note)
       ),
       payment:payments(provider, reference, status, updated_at)`
     )
@@ -2659,6 +2775,12 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
       escrow_released_at: row.escrow_released_at,
       escrow_release_reason: row.escrow_release_reason,
       scam_report_reason: row.scam_report_reason,
+      scam_resolution_status: row.scam_resolution_status ?? null,
+      scam_resolution_note: row.scam_resolution_note ?? null,
+      seller_issue_note: row.seller_issue_note ?? null,
+      seller_moderation_action: row.seller_moderation_action ?? null,
+      refund_reference: row.refund_reference ?? null,
+      refund_provider_status: row.refund_provider_status ?? null,
       payment: payment
         ? {
             provider: payment.provider,
@@ -2678,7 +2800,9 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
                   display_name: creator.display_name,
                   avatar_url: creator.avatar_url,
                   creator_category: creator.creator_category ?? "General",
-                  is_verified: Boolean(creator.is_verified)
+                  is_verified: Boolean(creator.is_verified),
+                  seller_account_status: (creator.seller_account_status as "active" | "warned" | "suspended" | null) ?? "active",
+                  seller_account_note: creator.seller_account_note ?? null
                 }
               : null
           }
@@ -2689,7 +2813,7 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
 export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]> {
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
-    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at")
+    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at, seller_account_status, seller_account_note")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -2803,6 +2927,8 @@ export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]
       latest_asset_at: stats.latest_asset_at,
       follower_count: followerCounts.get(profile.id) ?? 0,
       wallet_balance_kobo: walletByCreator.get(profile.id) ?? 0,
+      seller_account_status: (profile.seller_account_status as AdminCreatorRecord["seller_account_status"] | null) ?? "active",
+      seller_account_note: profile.seller_account_note ?? null,
       payout_account: payout
         ? {
             status: payout.status,

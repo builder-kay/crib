@@ -365,8 +365,15 @@ export function CreatorCard({ creator }: { creator: AdminCreatorRecord }) {
             </Link>
             {creator.is_verified ? <span className="admin-chip admin-chip-cobalt">Verified</span> : null}
             <span className="admin-chip admin-chip-sand">{creator.creator_category}</span>
+            {creator.seller_account_status === "warned" ? <span className="admin-chip admin-chip-sunset">Warned</span> : null}
+            {creator.seller_account_status === "suspended" ? <span className="admin-chip admin-chip-rose">Suspended</span> : null}
           </div>
           <p className="mt-2 text-sm text-sand-700">{creator.bio?.trim() || "No bio added yet."}</p>
+          {creator.seller_account_note?.trim() ? (
+            <p className="mt-3 rounded-2xl border border-sunset-200 bg-sunset-50 px-4 py-3 text-sm text-sunset-800">
+              Seller note: {creator.seller_account_note}
+            </p>
+          ) : null}
         </div>
       </div>
 

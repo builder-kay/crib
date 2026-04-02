@@ -8,6 +8,8 @@ export type Profile = {
   sales_count: number;
   is_verified: boolean;
   socials: Record<string, string>;
+  seller_account_status: SellerAccountStatus;
+  seller_account_note: string | null;
 };
 
 export type RatingSummary = {
@@ -68,6 +70,9 @@ export type CreatorReview = {
 };
 
 export type OrderEscrowStatus = "awaiting_review" | "released" | "scam_reported";
+export type OrderScamResolutionStatus = "pending_review" | "genuine_released" | "buyer_refunded";
+export type SellerModerationAction = "none" | "warned" | "suspended";
+export type SellerAccountStatus = "active" | "warned" | "suspended";
 
 export type Order = {
   id: string;
@@ -88,6 +93,12 @@ export type Order = {
   escrow_released_at: string | null;
   escrow_release_reason: string | null;
   scam_report_reason: string | null;
+  scam_resolution_status: OrderScamResolutionStatus | null;
+  scam_resolution_note: string | null;
+  seller_issue_note: string | null;
+  seller_moderation_action: SellerModerationAction | null;
+  refund_reference: string | null;
+  refund_provider_status: string | null;
   asset?: Pick<Asset, "id" | "title" | "category" | "files"> & {
     previews?: AssetPreview[];
   };
@@ -100,6 +111,8 @@ export type CreatorDashboard = {
   escrowPendingOrders: number;
   escrowPendingAmountKobo: number;
   walletBalanceKobo: number;
+  sellerAccountStatus: SellerAccountStatus;
+  sellerAccountNote: string | null;
   recentOrders: Order[];
 };
 
@@ -203,6 +216,12 @@ export type AdminOrderRecord = {
   escrow_released_at: string | null;
   escrow_release_reason: string | null;
   scam_report_reason: string | null;
+  scam_resolution_status: OrderScamResolutionStatus | null;
+  scam_resolution_note: string | null;
+  seller_issue_note: string | null;
+  seller_moderation_action: SellerModerationAction | null;
+  refund_reference: string | null;
+  refund_provider_status: string | null;
   payment:
     | {
         provider: string;
@@ -217,7 +236,7 @@ export type AdminOrderRecord = {
         title: string;
         category: string;
         creator_id: string;
-        creator: Pick<Profile, "display_name" | "avatar_url" | "creator_category" | "is_verified"> | null;
+        creator: Pick<Profile, "display_name" | "avatar_url" | "creator_category" | "is_verified" | "seller_account_status" | "seller_account_note"> | null;
       }
     | null;
 };
@@ -239,6 +258,8 @@ export type AdminCreatorRecord = {
   latest_asset_at: string | null;
   follower_count: number;
   wallet_balance_kobo: number;
+  seller_account_status: SellerAccountStatus;
+  seller_account_note: string | null;
   payout_account:
     | {
         status: "active" | "inactive";

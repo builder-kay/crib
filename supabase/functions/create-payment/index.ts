@@ -127,6 +127,26 @@ Deno.serve(async (request) => {
     );
   }
 
+  const { data: creatorProfile, error: creatorProfileError } = await supabase
+    .from("profiles")
+    .select("seller_account_status")
+    .eq("id", asset.creator_id)
+    .maybeSingle();
+
+  if (creatorProfileError) {
+    return jsonResponse({ error: "Unable to check seller account status", details: creatorProfileError.message }, 500);
+  }
+
+  if (creatorProfile?.seller_account_status === "suspended") {
+    return jsonResponse(
+      {
+        error: "This seller account is currently unavailable while a marketplace review is in progress.",
+        code: "seller_suspended"
+      },
+      403
+    );
+  }
+
   if (buyerId && asset.creator_id === buyerId) {
     return jsonResponse({ error: "You cannot purchase your own asset", code: "own_asset" }, 403);
   }
