@@ -12,6 +12,38 @@ export type NormalizedPhone = {
   digits: string;
 };
 
+export type ArkeselSupportedCountry = {
+  code: string;
+  country: string;
+  dialCode: string;
+};
+
+export const ARKESEL_SUPPORTED_COUNTRIES: ArkeselSupportedCountry[] = [
+  { code: "GH", country: "Ghana", dialCode: "233" },
+  { code: "NG", country: "Nigeria", dialCode: "234" },
+  { code: "KE", country: "Kenya", dialCode: "254" },
+  { code: "TZ", country: "Tanzania", dialCode: "255" },
+  { code: "ZA", country: "South Africa", dialCode: "27" }
+];
+
+const GHANA_MOBILE_PREFIXES = new Set([
+  "20",
+  "23",
+  "24",
+  "25",
+  "26",
+  "27",
+  "28",
+  "29",
+  "50",
+  "53",
+  "54",
+  "55",
+  "56",
+  "57",
+  "59"
+]);
+
 export function createServiceRoleClient() {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -43,6 +75,29 @@ export function looksLikeEmail(input: string): boolean {
   return input.includes("@");
 }
 
+function normalizeGhanaPhoneDigits(input: string): string | null {
+  const digits = input.replace(/\D/g, "");
+  if (!digits) {
+    return null;
+  }
+
+  const nationalNumber = digits.startsWith("233")
+    ? digits.slice(3)
+    : digits.startsWith("0")
+      ? digits.slice(1)
+      : digits;
+
+  if (!/^\d{9}$/.test(nationalNumber)) {
+    return null;
+  }
+
+  if (!GHANA_MOBILE_PREFIXES.has(nationalNumber.slice(0, 2))) {
+    return null;
+  }
+
+  return `233${nationalNumber}`;
+}
+
 export function normalizePhone(input: unknown): NormalizedPhone | null {
   if (typeof input !== "string") {
     return null;
@@ -53,15 +108,41 @@ export function normalizePhone(input: unknown): NormalizedPhone | null {
     return null;
   }
 
-  const digits = stripped.startsWith("+") ? stripped.slice(1) : stripped;
-  if (!/^[1-9]\d{9,14}$/.test(digits)) {
+  const normalizedDigits = stripped.startsWith("+")
+    ? stripped.slice(1)
+    : normalizeGhanaPhoneDigits(stripped) ?? stripped;
+
+  if (!/^[1-9]\d{9,14}$/.test(normalizedDigits)) {
     return null;
   }
 
   return {
-    e164: `+${digits}`,
-    digits
+    e164: `+${normalizedDigits}`,
+    digits: normalizedDigits
   };
+}
+
+export function getArkeselSupportedCountryForPhone(input: string | NormalizedPhone | null | undefined): ArkeselSupportedCountry | null {
+  const normalized =
+    typeof input === "string"
+      ? normalizePhone(input)
+      : input && typeof input === "object" && "digits" in input && typeof input.digits === "string"
+        ? input
+        : null;
+
+  if (!normalized) {
+    return null;
+  }
+
+  return ARKESEL_SUPPORTED_COUNTRIES.find((country) => normalized.digits.startsWith(country.dialCode)) ?? null;
+}
+
+export function isArkeselSupportedPhone(input: string | NormalizedPhone | null | undefined): boolean {
+  return Boolean(getArkeselSupportedCountryForPhone(input));
+}
+
+export function getArkeselSupportedCountryNames() {
+  return ARKESEL_SUPPORTED_COUNTRIES.map((country) => country.country);
 }
 
 export function maskPhone(input: string | null | undefined): string {

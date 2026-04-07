@@ -9,6 +9,7 @@ export type ProfileVerificationInput = {
   website?: string | null;
   instagram?: string | null;
   x?: string | null;
+  has_active_payout_account?: boolean;
 };
 
 export const PROFILE_VERIFICATION_REQUIREMENTS: Array<{
@@ -45,6 +46,11 @@ export const PROFILE_VERIFICATION_REQUIREMENTS: Array<{
     id: "social_link",
     label: "Public link",
     description: "Add at least one website or social handle for trust."
+  },
+  {
+    id: "payout_details",
+    label: "Payout details",
+    description: "Add an active payout account so buyer payments can settle to you."
   }
 ];
 
@@ -54,6 +60,10 @@ function hasValue(value: string | null | undefined, minimum = 1) {
 
 function hasSocialLink(input: ProfileVerificationInput) {
   return hasValue(input.website) || hasValue(input.instagram) || hasValue(input.x);
+}
+
+function hasActivePayoutAccount(input: ProfileVerificationInput) {
+  return input.has_active_payout_account === true;
 }
 
 export function getProfileVerificationChecklist(input: ProfileVerificationInput) {
@@ -70,7 +80,9 @@ export function getProfileVerificationChecklist(input: ProfileVerificationInput)
               ? hasValue(input.niche, 2)
               : requirement.id === "bio"
                 ? hasValue(input.bio, 20)
-                : hasSocialLink(input)
+                : requirement.id === "social_link"
+                  ? hasSocialLink(input)
+                  : hasActivePayoutAccount(input)
   }));
 }
 

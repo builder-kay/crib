@@ -1,5 +1,12 @@
 import { verifyArkeselOtp } from "../_shared/arkesel.ts";
-import { createServiceRoleClient, lookupAuthIdentity, normalizeEmail, normalizePhone } from "../_shared/auth.ts";
+import {
+  createServiceRoleClient,
+  getArkeselSupportedCountryNames,
+  isArkeselSupportedPhone,
+  lookupAuthIdentity,
+  normalizeEmail,
+  normalizePhone
+} from "../_shared/auth.ts";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 
 type VerifyOtpPayload = {
@@ -23,6 +30,20 @@ function verifyOtpStatus(code: string, message: string) {
   }
 
   return 400;
+}
+
+function unsupportedOtpPhoneResponse() {
+  const supportedCountries = getArkeselSupportedCountryNames();
+
+  return jsonResponse(
+    {
+      error: `OTP verification currently supports ${supportedCountries.join(", ")} mobile numbers. Use Google or email instead.`,
+      code: "unsupported_phone_country",
+      supported_countries: supportedCountries,
+      auth_fallback: "google_or_email"
+    },
+    400
+  );
 }
 
 Deno.serve(async (request) => {
@@ -55,6 +76,10 @@ Deno.serve(async (request) => {
   const normalizedPhone = normalizePhone(body.phone);
   if (!normalizedPhone) {
     return jsonResponse({ error: "Enter a valid mobile number with country code." }, 400);
+  }
+
+  if (!isArkeselSupportedPhone(normalizedPhone)) {
+    return unsupportedOtpPhoneResponse();
   }
 
   const code = typeof body.code === "string" ? body.code.trim() : "";

@@ -290,7 +290,7 @@ export function ProfilePage() {
           ? "Profile updated. Verification is now pending admin review."
           : verificationStatus === "approved"
             ? "Profile updated."
-            : "Profile updated. Finish the verification checklist to submit for review.",
+            : "Profile updated. Finish the verification checklist, including payout details, to submit for review.",
         "success"
       );
       await Promise.all([
@@ -447,7 +447,14 @@ export function ProfilePage() {
       setPayoutBankCode(account.settlement_bank_code);
       setPayoutAccountNumber("");
       setIsEditingPayout(false);
-      await queryClient.invalidateQueries({ queryKey: ["payout-setup", userId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["payout-setup", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["profile", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
+        queryClient.invalidateQueries({ queryKey: ["hire-creator-profile", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-creators"] })
+      ]);
     },
     onError: (error) => {
       pushToast(error instanceof Error ? error.message : "Payout account update failed", "error");
@@ -469,6 +476,10 @@ export function ProfilePage() {
     return isOwnProfile ? assets : assets.filter((asset) => asset.status === "published");
   }, [assetsQuery.data, isOwnProfile]);
 
+  const payoutAccount = payoutSetupQuery.data?.account ?? null;
+  const hasPayoutAccount = Boolean(payoutAccount);
+  const hasActivePayoutAccount = payoutAccount?.status === "active";
+
   const verificationChecklist = useMemo(
     () =>
       getProfileVerificationChecklist({
@@ -479,9 +490,10 @@ export function ProfilePage() {
         bio,
         website,
         instagram,
-        x: xHandle
+        x: xHandle,
+        has_active_payout_account: hasActivePayoutAccount
       }),
-    [bio, creatorCategory, displayName, instagram, niche, profileQuery.data?.avatar_url, website, xHandle]
+    [bio, creatorCategory, displayName, hasActivePayoutAccount, instagram, niche, profileQuery.data?.avatar_url, website, xHandle]
   );
 
   if (!profileId) {
@@ -523,12 +535,10 @@ export function ProfilePage() {
   const verificationStatus = verificationRequest?.status ?? (isVerified ? "approved" : "incomplete");
   const verificationStatusLabel = getVerificationStatusLabel(verificationStatus);
   const verificationReadyCount = verificationChecklist.filter((item) => item.complete).length;
-  const payoutAccount = payoutSetupQuery.data?.account ?? null;
   const payoutBanks = payoutSetupQuery.data?.banks ?? [];
   const payoutMobileProviders = payoutSetupQuery.data?.mobile_money_providers ?? [];
   const payoutProviderOptions = payoutType === "mobile_money" ? payoutMobileProviders : payoutBanks;
   const payoutLastUpdated = payoutAccount?.updated_at ? new Date(payoutAccount.updated_at).toLocaleDateString("en-US") : null;
-  const hasPayoutAccount = Boolean(payoutAccount);
   const followerCount = followStatsQuery.data?.followerCount ?? 0;
   const isFollowing = followStatsQuery.data?.isFollowing ?? false;
   const canAcceptHireRequests = profileQuery.data?.hire_enabled ?? true;
@@ -859,11 +869,11 @@ export function ProfilePage() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-sunset-700">Critical setup</p>
                     <h3 className="mt-1 font-display text-2xl font-bold text-ink">Payout account</h3>
                     <p className="mt-1 text-sm text-sand-700">
-                      This controls where creator earnings go after every sale.
+                      This controls where creator earnings go after every sale and must be active before verification can be approved.
                     </p>
                   </div>
                   <span className="rounded-full bg-sunset-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sunset-700">
-                    Required to get paid
+                    Required for verification
                   </span>
                 </div>
 
@@ -876,7 +886,9 @@ export function ProfilePage() {
                 {payoutAccount && !isEditingPayout ? (
                   <div className="mt-4 space-y-3 rounded-xl border border-forest-300 bg-forest-100 p-3 text-xs text-forest-700">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold uppercase tracking-[0.08em]">Payout connected</p>
+                      <p className="font-semibold uppercase tracking-[0.08em]">
+                        {hasActivePayoutAccount ? "Payout connected" : "Payout needs attention"}
+                      </p>
                       <button
                         type="button"
                         onClick={() => {
@@ -905,6 +917,7 @@ export function ProfilePage() {
                       Verified name: {payoutAccount.account_name || payoutAccount.business_name} | Destination: ****
                       {payoutAccount.account_number_last4}
                     </p>
+                    <p>Status: {hasActivePayoutAccount ? "Active and eligible for verification" : "Inactive"}</p>
                     {payoutLastUpdated ? <p>Last updated: {payoutLastUpdated}</p> : null}
                   </div>
                 ) : (
@@ -1066,7 +1079,7 @@ export function ProfilePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Verification</p>
                   <h3 className="mt-1 text-lg font-semibold text-ink">{verificationStatusLabel}</h3>
                   <p className="mt-1 text-sm text-sand-600">
-                    Saving a complete profile automatically sends it to the admin review queue for verification.
+                    Saving a complete profile and active payout setup automatically sends it to the admin review queue for verification.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 rounded-full border border-sand-200 bg-sand-50 px-3 py-2">

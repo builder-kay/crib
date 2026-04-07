@@ -28,6 +28,7 @@ import {
   NotFoundPage,
   NotificationsPage,
   OrdersPage,
+  ReceiptPage,
   PrivacyChoicesPage,
   PrivacyPage,
   ProfilePage,
@@ -72,6 +73,7 @@ export function AppRoutes() {
                 <Route path="wishlist" element={<WishlistPage />} />
                 <Route path="notifications" element={<NotificationsPage />} />
               </Route>
+              <Route path="/receipts/:orderId" element={<ReceiptPage />} />
               <Route path="/wishlist" element={<Navigate to="/dashboard/wishlist" replace />} />
               <Route path="/notifications" element={<Navigate to="/dashboard/notifications" replace />} />
               <Route path="/upload" element={<Navigate to="/dashboard/upload" replace />} />

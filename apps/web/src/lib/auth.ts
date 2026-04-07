@@ -15,6 +15,26 @@ export const ARKESEL_SUPPORTED_COUNTRIES: ArkeselSupportedCountry[] = [
   { code: "ZA", country: "South Africa", dialCode: "+27", exampleLocalNumber: "0821234567" }
 ];
 
+export const ARKESEL_SUPPORTED_COUNTRY_NAMES = ARKESEL_SUPPORTED_COUNTRIES.map((country) => country.country);
+
+const GHANA_MOBILE_PREFIXES = new Set([
+  "20",
+  "23",
+  "24",
+  "25",
+  "26",
+  "27",
+  "28",
+  "29",
+  "50",
+  "53",
+  "54",
+  "55",
+  "56",
+  "57",
+  "59"
+]);
+
 function normalizeEmail(input: unknown): string | null {
   if (typeof input !== "string") {
     return null;
@@ -29,18 +49,59 @@ function normalizeEmail(input: unknown): string | null {
   return emailPattern.test(value) ? value : null;
 }
 
+function normalizeGhanaPhoneDigits(input: string): string | null {
+  const digits = input.replace(/\D/g, "");
+  if (!digits) {
+    return null;
+  }
+
+  const nationalNumber = digits.startsWith("233")
+    ? digits.slice(3)
+    : digits.startsWith("0")
+      ? digits.slice(1)
+      : digits;
+
+  if (!/^\d{9}$/.test(nationalNumber)) {
+    return null;
+  }
+
+  if (!GHANA_MOBILE_PREFIXES.has(nationalNumber.slice(0, 2))) {
+    return null;
+  }
+
+  return `233${nationalNumber}`;
+}
+
 export function normalizeAuthPhoneInput(input: string): string | null {
   const stripped = input.trim().replace(/[^\d+]/g, "");
   if (!stripped) {
     return null;
   }
 
-  const digits = stripped.startsWith("+") ? stripped.slice(1) : stripped;
+  const digits = stripped.startsWith("+")
+    ? stripped.slice(1)
+    : normalizeGhanaPhoneDigits(stripped) ?? stripped;
+
   if (!/^[1-9]\d{9,14}$/.test(digits)) {
     return null;
   }
 
   return `+${digits}`;
+}
+
+export function getArkeselSupportedCountryForPhone(input: string): ArkeselSupportedCountry | null {
+  const normalized = normalizeAuthPhoneInput(input);
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    ARKESEL_SUPPORTED_COUNTRIES.find((country) => normalized.startsWith(country.dialCode)) ?? null
+  );
+}
+
+export function isArkeselSupportedPhoneInput(input: string): boolean {
+  return Boolean(getArkeselSupportedCountryForPhone(input));
 }
 
 export function composeArkeselPhoneInput(countryDialCode: string, localInput: string): string | null {
@@ -50,7 +111,8 @@ export function composeArkeselPhoneInput(countryDialCode: string, localInput: st
   }
 
   if (trimmedLocalInput.startsWith("+")) {
-    return normalizeAuthPhoneInput(trimmedLocalInput);
+    const normalized = normalizeAuthPhoneInput(trimmedLocalInput);
+    return normalized && isArkeselSupportedPhoneInput(normalized) ? normalized : null;
   }
 
   const countryDigits = countryDialCode.replace(/\D/g, "");
@@ -65,6 +127,12 @@ export function composeArkeselPhoneInput(countryDialCode: string, localInput: st
   });
   if (pastedInternationalDigits) {
     return normalizeAuthPhoneInput(`+${localDigits}`);
+  }
+
+  // Reject long pasted international numbers that do not map to an Arkesel-supported country.
+  if (localDigits.length >= 11 && !localDigits.startsWith("0") && !localDigits.startsWith(countryDigits)) {
+    const normalizedPasted = normalizeAuthPhoneInput(`+${localDigits}`);
+    return normalizedPasted && isArkeselSupportedPhoneInput(normalizedPasted) ? normalizedPasted : null;
   }
 
   const nationalNumber = localDigits.startsWith(countryDigits) ? localDigits.slice(countryDigits.length) : localDigits.replace(/^0+/, "");

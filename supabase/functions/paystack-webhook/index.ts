@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ensureOrderDeliverySnapshot } from "../_shared/asset-delivery.ts";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { verifyPaystackSignature, verifyPaystackTransaction } from "../_shared/paystack.ts";
+import { ensureOrderReceipt } from "../_shared/receipts.ts";
 
 type PaystackWebhookPayload = {
   event?: string;
@@ -128,6 +129,12 @@ Deno.serve(async (request) => {
 
   if (payload.event === "charge.success") {
     if (payment.status === "paid" && order.status === "paid") {
+      try {
+        await ensureOrderReceipt(supabase, order.id);
+      } catch (error) {
+        return jsonResponse({ error: "Unable to issue order receipt", details: error instanceof Error ? error.message : "Unknown error" }, 500);
+      }
+
       await trackPurchaseEvent({
         supabase,
         orderId: order.id,
@@ -217,6 +224,12 @@ Deno.serve(async (request) => {
 
     if (orderUpdateError) {
       return jsonResponse({ error: "Failed to update order", details: orderUpdateError.message }, 500);
+    }
+
+    try {
+      await ensureOrderReceipt(supabase, order.id);
+    } catch (error) {
+      return jsonResponse({ error: "Unable to issue order receipt", details: error instanceof Error ? error.message : "Unknown error" }, 500);
     }
 
     await trackPurchaseEvent({

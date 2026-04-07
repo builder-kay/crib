@@ -1,5 +1,14 @@
 import { readArkeselOtpConfig, sendArkeselOtp } from "../_shared/arkesel.ts";
-import { createServiceRoleClient, looksLikeEmail, lookupAuthIdentity, maskPhone, normalizeEmail, normalizePhone } from "../_shared/auth.ts";
+import {
+  createServiceRoleClient,
+  getArkeselSupportedCountryNames,
+  isArkeselSupportedPhone,
+  looksLikeEmail,
+  lookupAuthIdentity,
+  maskPhone,
+  normalizeEmail,
+  normalizePhone
+} from "../_shared/auth.ts";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 
 type SendOtpPayload = {
@@ -23,6 +32,23 @@ function otpSendStatus(code: string, message: string) {
   }
 
   return 502;
+}
+
+function unsupportedOtpPhoneResponse(context: "register" | "reset") {
+  const supportedCountries = getArkeselSupportedCountryNames();
+
+  return jsonResponse(
+    {
+      error:
+        context === "register"
+          ? `OTP sign-up currently supports ${supportedCountries.join(", ")} mobile numbers. Use Google or email instead.`
+          : `OTP reset currently supports ${supportedCountries.join(", ")} mobile numbers. Use Google or email instead.`,
+      code: "unsupported_phone_country",
+      supported_countries: supportedCountries,
+      auth_fallback: "google_or_email"
+    },
+    400
+  );
 }
 
 async function enforceOtpResendCooldown(
@@ -114,6 +140,10 @@ Deno.serve(async (request) => {
 
       if (!normalizedPhone) {
         return jsonResponse({ error: "Enter a valid mobile number with country code." }, 400);
+      }
+
+      if (!isArkeselSupportedPhone(normalizedPhone)) {
+        return unsupportedOtpPhoneResponse("register");
       }
 
       const existingIdentity = await lookupAuthIdentity(supabase, {
@@ -233,6 +263,10 @@ Deno.serve(async (request) => {
         },
         409
       );
+    }
+
+    if (!isArkeselSupportedPhone(identityPhone)) {
+      return unsupportedOtpPhoneResponse("reset");
     }
 
     const cooldownResponse = await enforceOtpResendCooldown(supabase, {

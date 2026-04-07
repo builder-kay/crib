@@ -15,7 +15,14 @@ export type Profile = {
   verification: CreatorVerificationRequest | null;
 };
 
-export type ProfileVerificationField = "avatar" | "display_name" | "creator_category" | "niche" | "bio" | "social_link";
+export type ProfileVerificationField =
+  | "avatar"
+  | "display_name"
+  | "creator_category"
+  | "niche"
+  | "bio"
+  | "social_link"
+  | "payout_details";
 export type CreatorVerificationStatus = "incomplete" | "pending" | "approved" | "rejected";
 
 export type CreatorVerificationRequest = {
@@ -118,6 +125,50 @@ export type Order = {
   asset?: Pick<Asset, "id" | "title" | "category" | "files"> & {
     previews?: AssetPreview[];
   };
+};
+
+export type OrderReceipt = {
+  id: string;
+  order_id: string;
+  receipt_number: string;
+  buyer_id: string | null;
+  seller_id: string;
+  asset_id: string;
+  buyer_email: string;
+  seller_email: string | null;
+  buyer_display_name: string | null;
+  seller_display_name: string;
+  asset_title: string;
+  asset_category: string | null;
+  payment_provider: string;
+  payment_reference: string;
+  amount_kobo: number;
+  commission_kobo: number;
+  seller_net_amount_kobo: number;
+  currency: string;
+  paid_at: string;
+  created_at: string;
+  updated_at: string;
+  order_status: Order["status"];
+  order_created_at: string;
+  escrow_status: OrderEscrowStatus | null;
+  escrow_due_at: string | null;
+  buyer_confirmed_at: string | null;
+  buyer_reported_at: string | null;
+  escrow_released_at: string | null;
+  escrow_release_reason: string | null;
+  refund_reference: string | null;
+  refund_provider_status: string | null;
+  scam_report_reason: string | null;
+  scam_resolution_status: OrderScamResolutionStatus | null;
+  asset_preview_url: string | null;
+  seller:
+    | {
+        avatar_url: string | null;
+        creator_category: string;
+        is_verified: boolean;
+      }
+    | null;
 };
 
 export type CreatorDashboard = {

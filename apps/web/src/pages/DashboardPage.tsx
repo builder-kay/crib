@@ -256,6 +256,14 @@ export function DashboardPage() {
                       <PriceTag amountKobo={order.amount_kobo} currency={order.currency} />
                       <span className={statusChip(order.status)}>{order.status}</span>
                       {order.status === "paid" ? <span className={escrowStatusChip(order)}>{escrowStatusLabel(order)}</span> : null}
+                      {(order.status === "paid" || order.status === "refunded") ? (
+                        <Link
+                          to={`/receipts/${order.id}`}
+                          className="rounded-full border border-cobalt-200 bg-cobalt-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cobalt-700 transition hover:border-cobalt-300 hover:bg-cobalt-100"
+                        >
+                          Receipt
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
                   <p className="text-xs text-sand-600">{orderEscrowNote(order)}</p>

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/components/Toast";
-import { ARKESEL_SUPPORTED_COUNTRIES, composeArkeselPhoneInput, getUserContactEmail, maskPhoneNumber, normalizeAuthPhoneInput } from "@/lib/auth";
+import {
+  ARKESEL_SUPPORTED_COUNTRIES,
+  ARKESEL_SUPPORTED_COUNTRY_NAMES,
+  composeArkeselPhoneInput,
+  getUserContactEmail,
+  isArkeselSupportedPhoneInput,
+  maskPhoneNumber,
+  normalizeAuthPhoneInput
+} from "@/lib/auth";
 import { sendAuthOtp, signInWithGoogle, signInWithIdentifier, verifyAuthOtp } from "@/lib/api";
 import { sanitizeAppRedirectPath } from "@/lib/navigation";
 import {
@@ -171,6 +179,7 @@ export function AuthPage() {
   );
   const modeAnimationClass = modeDirection === "to-register" ? "auth-mode-enter-forward" : "auth-mode-enter-back";
   const canUseGoogleAuth = !isEditorialLogin && (mode === "login" || (mode === "register" && registerStep === "details"));
+  const supportedCountryCopy = useMemo(() => ARKESEL_SUPPORTED_COUNTRY_NAMES.join(", "), []);
 
   useEffect(() => {
     if (!oauthErrorMessage || oauthErrorRef.current === oauthErrorMessage) {
@@ -225,6 +234,12 @@ export function AuthPage() {
     }
   }
 
+  function unsupportedOtpPhoneMessage(context: "register" | "reset") {
+    return context === "register"
+      ? `OTP sign-up currently supports ${supportedCountryCopy} mobile numbers. Use Google or email instead.`
+      : `OTP reset currently supports ${supportedCountryCopy} mobile numbers. Use Google or email instead.`;
+  }
+
   async function handleLoginSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -273,6 +288,12 @@ export function AuthPage() {
 
     const normalizedPhone = composeArkeselPhoneInput(registerCountryCode, parsed.data.phone);
     if (!normalizedPhone) {
+      const directPhoneCandidate = normalizeAuthPhoneInput(parsed.data.phone);
+      if (directPhoneCandidate && !isArkeselSupportedPhoneInput(directPhoneCandidate)) {
+        pushToast(unsupportedOtpPhoneMessage("register"), "info");
+        return;
+      }
+
       pushToast("Choose a supported country code and enter a valid mobile number.", "error");
       return;
     }
@@ -309,6 +330,11 @@ export function AuthPage() {
         return;
       }
 
+      if (authError.code === "unsupported_phone_country") {
+        pushToast(authError.message || unsupportedOtpPhoneMessage("register"), "info");
+        return;
+      }
+
       pushToast(authError.message || "Could not send OTP", "error");
     } finally {
       setSubmitting(false);
@@ -341,6 +367,12 @@ export function AuthPage() {
 
     const normalizedPhone = registerResolvedPhone || composeArkeselPhoneInput(registerCountryCode, registerPhone);
     if (!normalizedPhone) {
+      const directPhoneCandidate = normalizeAuthPhoneInput(registerPhone);
+      if (directPhoneCandidate && !isArkeselSupportedPhoneInput(directPhoneCandidate)) {
+        pushToast(unsupportedOtpPhoneMessage("register"), "info");
+        return;
+      }
+
       pushToast("Choose a supported country code and enter a valid mobile number.", "error");
       return;
     }
@@ -363,7 +395,12 @@ export function AuthPage() {
       pushToast("Account created", "success");
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      pushToast(error instanceof Error ? error.message : "Could not verify OTP", "error");
+      const authError = error as Error & { code?: string };
+      if (authError.code === "unsupported_phone_country") {
+        pushToast(authError.message || unsupportedOtpPhoneMessage("register"), "info");
+      } else {
+        pushToast(error instanceof Error ? error.message : "Could not verify OTP", "error");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -385,6 +422,14 @@ export function AuthPage() {
       setMode("reset");
     }
 
+    if (!looksLikePotentialEmail(parsed.data.identifier)) {
+      const normalizedPhoneCandidate = normalizeAuthPhoneInput(parsed.data.identifier);
+      if (normalizedPhoneCandidate && !isArkeselSupportedPhoneInput(normalizedPhoneCandidate)) {
+        pushToast(unsupportedOtpPhoneMessage("reset"), "info");
+        return;
+      }
+    }
+
     setResetIdentifier(parsed.data.identifier);
     setSubmitting(true);
     try {
@@ -399,7 +444,12 @@ export function AuthPage() {
       setResetOtpCode("");
       pushToast(`Reset OTP sent to ${payload.destination}`, "success");
     } catch (error) {
-      pushToast(error instanceof Error ? error.message : "Could not send reset OTP", "error");
+      const authError = error as Error & { code?: string };
+      if (authError.code === "unsupported_phone_country") {
+        pushToast(authError.message || unsupportedOtpPhoneMessage("reset"), "info");
+      } else {
+        pushToast(error instanceof Error ? error.message : "Could not send reset OTP", "error");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -701,6 +751,9 @@ export function AuthPage() {
                       className={`${inputClass} mt-0 min-w-0 flex-1`}
                     />
                   </div>
+                  <p className="mt-1 text-xs text-sand-500">
+                    OTP sign-up supports {supportedCountryCopy} mobile numbers. If yours is outside those countries, use Google or email instead.
+                  </p>
                 </div>
 
                 <div>
@@ -896,7 +949,9 @@ export function AuthPage() {
                     placeholder="name@example.com or +233..."
                     className={inputClass}
                   />
-                  <p className="mt-1 text-xs text-sand-500">We will send the reset OTP to the mobile number linked to that account.</p>
+                  <p className="mt-1 text-xs text-sand-500">
+                    We will send the reset OTP to the mobile number linked to that account. OTP reset currently supports {supportedCountryCopy} mobile numbers.
+                  </p>
                 </div>
 
                 <button
@@ -1080,6 +1135,10 @@ function ValueCard({ label, value, detail }: { label: string; value: string; det
       <p className="mt-2 text-sm text-white/72">{detail}</p>
     </article>
   );
+}
+
+function looksLikePotentialEmail(input: string) {
+  return input.includes("@");
 }
 
 function PasswordStrengthIndicator({ level }: { level: number }) {

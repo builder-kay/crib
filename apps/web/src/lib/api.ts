@@ -34,6 +34,7 @@ import type {
   NotificationDeliveryStatus,
   CreatorReview,
   Order,
+  OrderReceipt,
   PayoutAccount,
   PayoutBank,
   PlatformSocialSettings,
@@ -137,6 +138,51 @@ type OrderRow = {
         previews?: Array<{ id: string; preview_url: string }>;
         files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
       }>;
+};
+
+type OrderReceiptRow = {
+  id: string;
+  order_id: string;
+  receipt_number: string;
+  buyer_id: string | null;
+  seller_id: string;
+  asset_id: string;
+  buyer_email: string;
+  seller_email: string | null;
+  buyer_display_name: string | null;
+  seller_display_name: string;
+  asset_title: string;
+  asset_category: string | null;
+  payment_provider: string;
+  payment_reference: string;
+  amount_kobo: number;
+  commission_kobo: number;
+  seller_net_amount_kobo: number;
+  currency: string;
+  paid_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type OrderReceiptStatusRow = {
+  status: Order["status"];
+  created_at: string;
+  escrow_status: Order["escrow_status"];
+  escrow_due_at: string | null;
+  buyer_confirmed_at: string | null;
+  buyer_reported_at: string | null;
+  escrow_released_at: string | null;
+  escrow_release_reason: string | null;
+  refund_reference: string | null;
+  refund_provider_status: string | null;
+  scam_report_reason: string | null;
+  scam_resolution_status: Order["scam_resolution_status"];
+};
+
+type ReceiptSellerProfileRow = {
+  avatar_url: string | null;
+  creator_category: string | null;
+  is_verified: boolean | null;
 };
 type CreatorProfileRow = {
   id: string;
@@ -386,6 +432,57 @@ function mapOrder(row: OrderRow): Order {
           files: asset.files ?? []
         }
       : undefined
+  };
+}
+
+function mapOrderReceipt(
+  receipt: OrderReceiptRow,
+  order: OrderReceiptStatusRow | null,
+  seller: ReceiptSellerProfileRow | null,
+  previewUrl: string | null
+): OrderReceipt {
+  return {
+    id: receipt.id,
+    order_id: receipt.order_id,
+    receipt_number: receipt.receipt_number,
+    buyer_id: receipt.buyer_id,
+    seller_id: receipt.seller_id,
+    asset_id: receipt.asset_id,
+    buyer_email: receipt.buyer_email,
+    seller_email: receipt.seller_email ?? null,
+    buyer_display_name: receipt.buyer_display_name ?? null,
+    seller_display_name: receipt.seller_display_name,
+    asset_title: receipt.asset_title,
+    asset_category: receipt.asset_category ?? null,
+    payment_provider: receipt.payment_provider,
+    payment_reference: receipt.payment_reference,
+    amount_kobo: receipt.amount_kobo,
+    commission_kobo: receipt.commission_kobo,
+    seller_net_amount_kobo: receipt.seller_net_amount_kobo,
+    currency: receipt.currency,
+    paid_at: receipt.paid_at,
+    created_at: receipt.created_at,
+    updated_at: receipt.updated_at,
+    order_status: order?.status ?? "paid",
+    order_created_at: order?.created_at ?? receipt.created_at,
+    escrow_status: order?.escrow_status ?? null,
+    escrow_due_at: order?.escrow_due_at ?? null,
+    buyer_confirmed_at: order?.buyer_confirmed_at ?? null,
+    buyer_reported_at: order?.buyer_reported_at ?? null,
+    escrow_released_at: order?.escrow_released_at ?? null,
+    escrow_release_reason: order?.escrow_release_reason ?? null,
+    refund_reference: order?.refund_reference ?? null,
+    refund_provider_status: order?.refund_provider_status ?? null,
+    scam_report_reason: order?.scam_report_reason ?? null,
+    scam_resolution_status: order?.scam_resolution_status ?? null,
+    asset_preview_url: previewUrl,
+    seller: seller
+      ? {
+          avatar_url: seller.avatar_url,
+          creator_category: seller.creator_category ?? "General",
+          is_verified: Boolean(seller.is_verified)
+        }
+      : null
   };
 }
 
@@ -1050,7 +1147,7 @@ export async function signInWithIdentifier(identifier: string, password: string)
 
   const normalizedPhone = normalizeAuthPhoneInput(trimmedIdentifier);
   if (!normalizedPhone) {
-    throw new Error("Enter your mobile number with country code, for example +233...");
+    throw new Error("Enter a valid mobile number, for example 024... or +233...");
   }
 
   const phoneAttempt = await supabase.auth.signInWithPassword({
@@ -2378,6 +2475,86 @@ export async function getBuyerOrders(options: {
 
   return ((data ?? []) as OrderRow[]).map(mapOrder);
 }
+
+export async function getOrderReceipt(orderId: string): Promise<OrderReceipt> {
+  if (!orderId.trim()) {
+    throw new Error("Order ID is required.");
+  }
+
+  const { data: receiptData, error: receiptError } = await supabase
+    .from("order_receipts")
+    .select(
+      `id,
+      order_id,
+      receipt_number,
+      buyer_id,
+      seller_id,
+      asset_id,
+      buyer_email,
+      seller_email,
+      buyer_display_name,
+      seller_display_name,
+      asset_title,
+      asset_category,
+      payment_provider,
+      payment_reference,
+      amount_kobo,
+      commission_kobo,
+      seller_net_amount_kobo,
+      currency,
+      paid_at,
+      created_at,
+      updated_at`
+    )
+    .eq("order_id", orderId)
+    .single();
+
+  if (receiptError || !receiptData) {
+    throw new Error(receiptError?.message ?? "Receipt not found.");
+  }
+
+  const receipt = receiptData as OrderReceiptRow;
+
+  const [{ data: orderData, error: orderError }, { data: sellerData, error: sellerError }, { data: previewData, error: previewError }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select(
+        "status, created_at, escrow_status, escrow_due_at, buyer_confirmed_at, buyer_reported_at, escrow_released_at, escrow_release_reason, refund_reference, refund_provider_status, scam_report_reason, scam_resolution_status"
+      )
+      .eq("id", receipt.order_id)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("avatar_url, creator_category, is_verified")
+      .eq("id", receipt.seller_id)
+      .maybeSingle(),
+    supabase
+      .from("asset_previews")
+      .select("preview_url")
+      .eq("asset_id", receipt.asset_id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+  ]);
+
+  if (orderError) {
+    throw new Error(orderError.message);
+  }
+  if (sellerError) {
+    throw new Error(sellerError.message);
+  }
+  if (previewError) {
+    throw new Error(previewError.message);
+  }
+
+  return mapOrderReceipt(
+    receipt,
+    (orderData ?? null) as OrderReceiptStatusRow | null,
+    (sellerData ?? null) as ReceiptSellerProfileRow | null,
+    previewData?.preview_url ?? null
+  );
+}
+
 export async function hasPaidOrderForAsset(assetId: string, userId: string, userEmail?: string | null): Promise<boolean> {
   let query = supabase
     .from("orders")

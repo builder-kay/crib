@@ -601,10 +601,12 @@ export function CreatorCard({
         </div>
 
         {verification?.is_profile_complete ? (
-          <p className="mt-2 text-sm text-sand-700">This creator has completed the required profile details and is ready for admin review.</p>
+          <p className="mt-2 text-sm text-sand-700">
+            This creator has completed the required profile and payout details and is ready for admin review.
+          </p>
         ) : (
           <p className="mt-2 text-sm text-sand-700">
-            Missing details: {missingFields.length > 0 ? missingFields.join(", ") : "Profile details still need more work."}
+            Missing details: {missingFields.length > 0 ? missingFields.join(", ") : "Profile or payout details still need more work."}
           </p>
         )}
 

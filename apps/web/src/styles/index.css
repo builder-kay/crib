@@ -647,6 +647,10 @@
     box-shadow: 0 10px 24px -20px rgba(16, 19, 36, 0.45);
   }
 
+  .receipt-page {
+    isolation: isolate;
+  }
+
   .app-footer {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(244, 248, 255, 0.94) 100%);
     backdrop-filter: blur(14px);
@@ -4661,6 +4665,27 @@
   }
 }
 
+@media print {
+  .receipt-app-surface nav,
+  .receipt-app-surface .receipt-print-hide {
+    display: none !important;
+  }
+
+  .receipt-app-surface main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .receipt-page .surface-card,
+  .receipt-page .surface-card-vivid {
+    box-shadow: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-canvas::before,
   .landing-canvas::after,
@@ -4701,5 +4726,4 @@
     transform: none;
   }
 }
-
 

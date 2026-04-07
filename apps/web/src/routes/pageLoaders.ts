@@ -32,6 +32,7 @@ const editorialPostPage = createLazyPage(() => import("@/pages/EditorialPostPage
 const assetDetailPage = createLazyPage(() => import("@/pages/AssetDetailPage"), "AssetDetailPage");
 const authPage = createLazyPage(() => import("@/pages/AuthPage"), "AuthPage");
 const ordersPage = createLazyPage(() => import("@/pages/OrdersPage"), "OrdersPage");
+const receiptPage = createLazyPage(() => import("@/pages/ReceiptPage"), "ReceiptPage");
 const dashboardPage = createLazyPage(() => import("@/pages/DashboardPage"), "DashboardPage");
 const dashboardLayoutPage = createLazyPage(() => import("@/pages/DashboardLayoutPage"), "DashboardLayoutPage");
 const uploadPage = createLazyPage(() => import("@/pages/UploadPage"), "UploadPage");
@@ -62,6 +63,7 @@ export const EditorialPostPage = editorialPostPage.Component;
 export const AssetDetailPage = assetDetailPage.Component;
 export const AuthPage = authPage.Component;
 export const OrdersPage = ordersPage.Component;
+export const ReceiptPage = receiptPage.Component;
 export const DashboardPage = dashboardPage.Component;
 export const DashboardLayoutPage = dashboardLayoutPage.Component;
 export const UploadPage = uploadPage.Component;
@@ -92,6 +94,7 @@ export const routePreloaders = {
   blogPost: () => editorialPostPage.preload(),
   assetDetail: () => assetDetailPage.preload(),
   auth: () => authPage.preload(),
+  receipt: () => receiptPage.preload(),
   dashboard: async () => {
     await Promise.all([dashboardLayoutPage.preload(), dashboardPage.preload()]);
   },

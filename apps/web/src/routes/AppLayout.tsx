@@ -18,6 +18,7 @@ export function AppLayout() {
   const location = useLocation();
   const [theme, setTheme] = useState<AppTheme>(() => readInitialTheme());
   const isAdminWorkspace = location.pathname === "/admin" || location.pathname.startsWith("/admin/");
+  const isReceiptPage = location.pathname.startsWith("/receipts/");
   const hasPreloadedRoutes = useRef(false);
 
   useEffect(() => {
@@ -48,12 +49,20 @@ export function AppLayout() {
   }, [isAdminWorkspace]);
 
   return (
-    <div className={`min-h-screen text-ink transition-colors duration-300 ${isAdminWorkspace ? "admin-app-surface" : "bg-sand-50"}`}>
+    <div className={`min-h-screen text-ink transition-colors duration-300 ${isAdminWorkspace ? "admin-app-surface" : isReceiptPage ? "receipt-app-surface bg-sand-50" : "bg-sand-50"}`}>
       {!isAdminWorkspace ? <Navbar theme={theme} onToggleTheme={() => setTheme((current) => (current === "light" ? "dark" : "light"))} /> : null}
-      <main className={isAdminWorkspace ? "w-full px-0 py-0" : "mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8"}>
+      <main
+        className={
+          isAdminWorkspace
+            ? "w-full px-0 py-0"
+            : isReceiptPage
+              ? "mx-auto w-full max-w-[1240px] px-4 py-6 md:px-6 md:py-8"
+              : "mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8"
+        }
+      >
         <Outlet />
       </main>
-      {!isAdminWorkspace ? <AppFooter /> : null}
+      {!isAdminWorkspace && !isReceiptPage ? <AppFooter /> : null}
     </div>
   );
 }

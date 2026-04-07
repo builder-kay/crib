@@ -424,6 +424,7 @@ export function OrdersPage() {
         {orders.map((order) => {
           const previewUrl = order.asset?.previews?.[0]?.preview_url;
           const canDownload = order.status === "paid";
+          const canViewReceipt = order.status === "paid" || order.status === "refunded";
           const appLabel = order.asset ? getAssetAppLabel(order.asset) : "Creative App";
           const formatLabel = order.asset ? getAssetFormatLabel(order.asset) : "Source files";
           const awaitingReview = order.status === "paid" && order.escrow_status === "awaiting_review";
@@ -499,6 +500,15 @@ export function OrdersPage() {
                     >
                       {canDownload ? "Download" : "Locked"}
                     </button>
+
+                    {canViewReceipt ? (
+                      <Link
+                        to={`/receipts/${order.id}`}
+                        className="rounded-lg border border-cobalt-200 bg-cobalt-50 px-3 py-2 text-sm font-semibold text-cobalt-700 transition hover:border-cobalt-300 hover:bg-cobalt-100"
+                      >
+                        Receipt
+                      </Link>
+                    ) : null}
 
                     {!canDownload ? <p className="text-xs text-sand-600">Download unlocks after payment confirmation.</p> : null}
                   </div>

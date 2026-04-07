@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
@@ -286,6 +287,11 @@ export function AdminOrdersPage() {
                     </p>
                     {hasScamCase ? (
                       <div className="mt-3 flex w-full flex-col gap-2">
+                        {(order.status === "paid" || order.status === "refunded") ? (
+                          <Link to={`/receipts/${order.id}`} className="admin-action-button admin-action-button-secondary">
+                            View receipt
+                          </Link>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => inspectMutation.mutate(order.id)}
@@ -301,6 +307,12 @@ export function AdminOrdersPage() {
                         >
                           {caseResolved ? "View resolution" : "Resolve report"}
                         </button>
+                      </div>
+                    ) : order.status === "paid" || order.status === "refunded" ? (
+                      <div className="mt-3 flex w-full flex-col gap-2">
+                        <Link to={`/receipts/${order.id}`} className="admin-action-button admin-action-button-secondary">
+                          View receipt
+                        </Link>
                       </div>
                     ) : null}
                   </div>
