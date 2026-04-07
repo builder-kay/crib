@@ -166,7 +166,7 @@ export function CreatorsPage() {
             Looking to hire a creator?
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.24)] md:text-base">
-            Review published work, followership, category fit, and ratings before you reach out. Every card here is built from real CRIB profiles and live creator activity.
+            Review published work, followership, category fit, and ratings before you reach out. Every card here is built from real Crib profiles and live creator activity.
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -320,7 +320,7 @@ function CreatorCard({ creator, canViewProfiles }: { creator: CreatorDirectoryEn
         </div>
 
         <p className="mt-3 line-clamp-2 text-center text-sm leading-6 text-sand-700">
-          {creator.bio?.trim() || "Creative professional building polished digital work and product-ready assets on CRIB."}
+          {creator.bio?.trim() || "Creative professional building polished digital work and product-ready assets on Crib."}
         </p>
 
         <div className="mt-4 flex items-center justify-center gap-2 text-xs text-sand-700">
@@ -328,7 +328,7 @@ function CreatorCard({ creator, canViewProfiles }: { creator: CreatorDirectoryEn
           <span>
             {creator.review_count > 0
               ? `${creator.average_rating.toFixed(1)} rating from ${creator.review_count} review${creator.review_count === 1 ? "" : "s"}`
-              : "Fresh on CRIB"}
+              : "Fresh on Crib"}
           </span>
         </div>
 

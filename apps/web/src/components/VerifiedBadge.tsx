@@ -15,7 +15,7 @@ const ICON_CLASS: Record<NonNullable<VerifiedBadgeProps["size"]>, string> = {
   lg: "h-[0.85rem] w-[0.85rem]"
 };
 
-export function VerifiedBadge({ size = "md", label = "CRIB verified creator" }: VerifiedBadgeProps) {
+export function VerifiedBadge({ size = "md", label = "Crib verified creator" }: VerifiedBadgeProps) {
   return (
     <span
       role="img"

@@ -31,7 +31,7 @@ export function EditorialAdminPage() {
   const [readTimeMinutes, setReadTimeMinutes] = useState("5");
   const [tags, setTags] = useState("");
   const [authorName, setAuthorName] = useState("");
-  const [authorRole, setAuthorRole] = useState("Editorial Writer");
+  const [authorRole, setAuthorRole] = useState("Blog Writer");
   const [sectionHeading, setSectionHeading] = useState("Overview");
   const [content, setContent] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
@@ -82,7 +82,7 @@ export function EditorialAdminPage() {
     setReadTimeMinutes("5");
     setTags("");
     setAuthorName(profileQuery.data?.display_name ?? "");
-    setAuthorRole("Editorial Writer");
+    setAuthorRole("Blog Writer");
     setSectionHeading("Overview");
     setContent("");
     setKeyPoints("");
@@ -222,7 +222,7 @@ export function EditorialAdminPage() {
   const signOutMutation = useMutation({
     mutationFn: signOut,
     onSuccess: () => {
-      pushToast("Signed out of editorial workspace", "success");
+      pushToast("Signed out of blog workspace", "success");
       navigate("/editorial-login", { replace: true });
     },
     onError: (error) => {
@@ -255,11 +255,11 @@ export function EditorialAdminPage() {
   const activeDeletePostId = deleteMutation.variables?.id ?? null;
 
   if (adminQuery.isLoading) {
-    return <div className="surface-card p-5 text-sm text-sand-600">Checking editorial admin permissions...</div>;
+    return <div className="surface-card p-5 text-sm text-sand-600">Checking blog admin permissions...</div>;
   }
 
   if (adminQuery.data !== true) {
-    return <EmptyState title="Editors only" body="Your account is not currently assigned to the editorial workspace." />;
+    return <EmptyState title="Editors only" body="Your account is not currently assigned to the blog workspace." />;
   }
 
   return (
@@ -267,16 +267,16 @@ export function EditorialAdminPage() {
       <header className="surface-card-vivid p-5 md:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Editorial Desk</p>
-            <h1 className="mt-1 font-display text-3xl font-bold text-ink md:text-4xl">Write, track, and manage editorial stories</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Blog Desk</p>
+            <h1 className="mt-1 font-display text-3xl font-bold text-ink md:text-4xl">Write, track, and manage blog stories</h1>
             <p className="mt-2 text-sm text-sand-700">
-              This workspace is reserved for editorial accounts and has its own access path through <code>/editorial-login</code>.
+              This workspace is reserved for blog accounts and has its own access path through <code>/editorial-login</code>.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Link to="/editorial" className="admin-action-button admin-action-button-secondary">
-              View live desk
+              View live blog
             </Link>
             <button type="button" onClick={() => setConfirmSignOutOpen(true)} className="admin-action-button admin-action-button-rose">
               Sign out
@@ -291,7 +291,7 @@ export function EditorialAdminPage() {
           <p className="mt-1 text-sm text-sand-600">
             {isEditing
               ? `Editing "${editingPostSlug}". Update content, then save changes.`
-              : "Fill the fields below and publish directly to the editorial feed."}
+              : "Fill the fields below and publish directly to the blog feed."}
           </p>
 
           <form
@@ -469,11 +469,11 @@ export function EditorialAdminPage() {
         open={confirmSaveOpen}
         tone="cobalt"
         eyebrow={isEditing ? "Save Changes" : "Publish Story"}
-        title={isEditing ? "Save updates to this editorial post?" : "Publish this editorial post?"}
+        title={isEditing ? "Save updates to this blog post?" : "Publish this blog post?"}
         description={
           isEditing
-            ? "Your edits will replace the current live version of this story and update it across the editorial desk."
-            : "This story will be added to the editorial desk as soon as the save completes."
+            ? "Your edits will replace the current live version of this story and update it across the blog desk."
+            : "This story will be added to the blog desk as soon as the save completes."
         }
         confirmLabel={isEditing ? "Save changes" : "Publish article"}
         isPending={isSaving}
@@ -511,9 +511,9 @@ export function EditorialAdminPage() {
       <ActionConfirmationModal
         open={confirmSignOutOpen}
         tone="rose"
-        eyebrow="End Editorial Session"
-        title="Sign out of editorial admin?"
-        description="You are about to leave the editorial workspace. Your drafts stay intact, and you can sign back in through the editorial login page."
+        eyebrow="End Blog Session"
+        title="Sign out of blog admin?"
+        description="You are about to leave the blog workspace. Your drafts stay intact, and you can sign back in through the editorial login page."
         confirmLabel="Sign out"
         isPending={signOutMutation.isPending}
         onClose={() => {
@@ -529,7 +529,7 @@ export function EditorialAdminPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="action-confirm-stat">
               <p className="action-confirm-stat-label">Workspace</p>
-              <p className="action-confirm-stat-value">Editorial Desk</p>
+              <p className="action-confirm-stat-value">Blog Desk</p>
             </div>
             <div className="action-confirm-stat">
               <p className="action-confirm-stat-label">Mode</p>
@@ -543,8 +543,8 @@ export function EditorialAdminPage() {
         open={Boolean(pendingDeletePost)}
         tone="rose"
         eyebrow="Delete Story"
-        title="Delete this editorial post?"
-        description="This action cannot be undone. The story will be removed from the editorial desk and from the editing workspace."
+        title="Delete this blog post?"
+        description="This action cannot be undone. The story will be removed from the blog desk and from the editing workspace."
         confirmLabel="Delete post"
         isPending={deleteMutation.isPending}
         onClose={() => {

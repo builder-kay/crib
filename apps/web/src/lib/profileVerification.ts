@@ -90,7 +90,7 @@ export function describeProfileVerificationField(field: ProfileVerificationField
 
 export function getVerificationStatusLabel(status: CreatorVerificationStatus) {
   if (status === "approved") {
-    return "Verified on CRIB";
+    return "Verified on Crib";
   }
   if (status === "pending") {
     return "Pending admin review";

@@ -1,5 +1,5 @@
 export type PlatformSocialKind = "instagram" | "x" | "tiktok" | "linkedin" | "facebook" | "whatsapp";
-export const DEFAULT_ADMIN_WHATSAPP_MESSAGE = "Hi CRIB admin, I need help with the marketplace.";
+export const DEFAULT_ADMIN_WHATSAPP_MESSAGE = "Hi Crib admin, I need help with the marketplace.";
 
 export function normalizePlatformSocialHandle(kind: PlatformSocialKind, rawValue: string) {
   const trimmed = rawValue.trim();

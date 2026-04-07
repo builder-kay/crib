@@ -66,10 +66,10 @@ export function AdminEditorsPage() {
       <header className="surface-card-vivid admin-hero-panel p-5 md:p-6">
         <div className="admin-page-hero-grid">
           <div className="max-w-4xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Editorial Access</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Blog Access</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Editors</h2>
             <p className="mt-2 text-sm text-sand-700 md:text-base">
-              Create or refresh dedicated editorial logins here. Editors sign in through <span className="font-semibold text-cobalt-700">/editorial-login</span> and stay separate from marketplace-admin permissions.
+              Create or refresh dedicated blog logins here. Editors sign in through <span className="font-semibold text-cobalt-700">/editorial-login</span> and stay separate from marketplace-admin permissions.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -82,7 +82,7 @@ export function AdminEditorsPage() {
           <aside className="admin-page-hero-rail">
             <div className="admin-hero-rail-summary-grid">
               <SummaryPill label="Platform admins" value={overview ? `${overview.total_admins}` : "..."} tone="cobalt" />
-              <SummaryPill label="Editorial posts" value={overview ? `${overview.editorial_posts}` : "..."} tone="sunset" />
+              <SummaryPill label="Blog posts" value={overview ? `${overview.editorial_posts}` : "..."} tone="sunset" />
               <SummaryPill label="Active creators" value={overview ? `${overview.active_creators}` : "..."} tone="forest" />
             </div>
           </aside>
@@ -91,7 +91,7 @@ export function AdminEditorsPage() {
 
       <div className="space-y-5">
         <section className="surface-card admin-panel p-5">
-          <SectionHeader eyebrow="Workspace boundary" title="Keep editorial access separate" body="Use a dedicated email or phone login for editorial staff. Marketplace admins should not share the same credentials." />
+          <SectionHeader eyebrow="Workspace boundary" title="Keep blog access separate" body="Use a dedicated email or phone login for blog staff. Marketplace admins should not share the same credentials." />
           <div className="mt-4 space-y-3">
             <div className="admin-step-card admin-step-card-cobalt">
               <span className="admin-step-index">1</span>
@@ -104,7 +104,7 @@ export function AdminEditorsPage() {
               <span className="admin-step-index">2</span>
               <div>
                 <p className="text-sm font-semibold text-ink">Safe account reuse</p>
-                <p className="mt-1 text-xs text-sand-600">If the account already exists, saving here refreshes the password and ensures editorial access is present.</p>
+                <p className="mt-1 text-xs text-sand-600">If the account already exists, saving here refreshes the password and ensures blog access is present.</p>
               </div>
             </div>
             <div className="admin-step-card admin-step-card-rose">
@@ -148,7 +148,7 @@ export function AdminEditorsPage() {
               <input
                 value={editorDisplayName}
                 onChange={(event) => setEditorDisplayName(event.target.value)}
-                placeholder="Editorial Writer"
+                placeholder="Blog Writer"
                 className="admin-input"
               />
             </label>
@@ -220,7 +220,7 @@ export function AdminEditorsPage() {
         tone="cobalt"
         eyebrow="Save Editor Login"
         title="Create or refresh this editor account?"
-        description="This will save the credentials you entered and make sure the account has editorial access without marketplace-admin rights."
+        description="This will save the credentials you entered and make sure the account has blog access without marketplace-admin rights."
         confirmLabel="Save editor login"
         isPending={editorialProvisionMutation.isPending}
         onClose={() => {
@@ -244,7 +244,7 @@ export function AdminEditorsPage() {
             </div>
             <div className="action-confirm-stat">
               <p className="action-confirm-stat-label">Display name</p>
-              <p className="action-confirm-stat-value">{editorDisplayName.trim() || "Editorial Editor"}</p>
+              <p className="action-confirm-stat-value">{editorDisplayName.trim() || "Blog Editor"}</p>
             </div>
           </div>
         }

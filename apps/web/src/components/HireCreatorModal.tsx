@@ -93,7 +93,7 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
             </div>
 
             <p className="text-sm text-sand-600">
-              Sending this request notifies {creatorName} inside their CRIB account so they can review your profile and follow up.
+              Sending this request notifies {creatorName} inside their Crib account so they can review your profile and follow up.
             </p>
 
             {isOwnProfile ? (

@@ -3,6 +3,7 @@ import { getAssetAppLabel, getAssetFilterFileType, getAssetPrimaryFilename } fro
 import { env } from "@/lib/env";
 import { slugify } from "@/lib/format";
 import { DEFAULT_HIRE_TERMS } from "@/lib/hire";
+import { sanitizeAppRedirectPath } from "@/lib/navigation";
 import {
   normalizeAdminWhatsAppMessage,
   normalizeAdminWhatsAppNumber,
@@ -1062,6 +1063,33 @@ export async function signInWithIdentifier(identifier: string, password: string)
   }
 
   return phoneAttempt.data;
+}
+
+export async function signInWithGoogle(redirectPath: string) {
+  const safeRedirectPath = sanitizeAppRedirectPath(redirectPath, "/market");
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : env.VITE_SITE_URL;
+  const redirectUrl = new URL(baseUrl);
+  redirectUrl.pathname = "/auth";
+  redirectUrl.search = "";
+  redirectUrl.hash = "";
+  redirectUrl.searchParams.set("redirect", safeRedirectPath);
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: redirectUrl.toString(),
+      queryParams: {
+        access_type: "offline",
+        prompt: "select_account"
+      }
+    }
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 function mapStorageUploadError(

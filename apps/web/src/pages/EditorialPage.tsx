@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { getEditorialPostsFromDb } from "@/lib/api";
 import { getEditorialPosts as getFallbackEditorialPosts, type EditorialPost } from "@/lib/editorial";
+import { routePreloaders } from "@/routes/pageLoaders";
 
 type CategoryFilter = "All" | EditorialPost["category"];
 
@@ -30,13 +31,17 @@ export function EditorialPage() {
     return scoped.filter((post) => post.slug !== featuredPost?.slug);
   }, [category, featuredPost?.slug, posts]);
 
+  useEffect(() => {
+    void routePreloaders.blogPost();
+  }, []);
+
   return (
     <div className="space-y-5 md:space-y-6">
       <header className="surface-card-vivid relative overflow-hidden p-5 md:p-7">
         <div className="pointer-events-none absolute -right-14 -top-16 h-44 w-44 rounded-full bg-cobalt-100/70 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 left-20 h-44 w-44 rounded-full bg-lagoon-100/70 blur-3xl" />
         <div className="relative z-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Editorial Spotlight</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Blog Spotlight</p>
           <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-5xl">The Crib blog for creative industry signals</h1>
           <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
             We publish trend breakdowns, creator economy analysis, and practical insights across design, music, and film.
@@ -53,7 +58,7 @@ export function EditorialPage() {
 
       {postsQuery.isError ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Live editorial feed is unavailable right now. Showing fallback stories.
+          Live blog feed is unavailable right now. Showing fallback stories.
         </div>
       ) : null}
 
@@ -61,7 +66,7 @@ export function EditorialPage() {
         <section className="surface-card overflow-hidden p-0">
           <div className="grid gap-0 lg:grid-cols-[1fr,1fr]">
             <div className="relative h-56 overflow-hidden bg-sand-100 md:h-64 lg:h-[300px] xl:h-[320px]">
-              <img src={featuredPost.cover_image} alt={featuredPost.title} className="h-full w-full object-cover" />
+              <img src={featuredPost.cover_image} alt={featuredPost.title} className="h-full w-full object-cover" decoding="async" fetchPriority="high" />
               <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/15 to-transparent" />
             </div>
 
@@ -116,10 +121,10 @@ export function EditorialPage() {
       </section>
 
       <section className="surface-card-vivid p-5 md:p-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-700">Editorial mission</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-700">Blog mission</p>
         <h2 className="mt-1 font-display text-2xl font-bold text-ink md:text-3xl">We track the creative industry so creators can move earlier.</h2>
         <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
-          Editorial Spotlight exists to connect market shifts with actionable context for creators, buyers, and teams building in the African creative economy.
+          Blog Spotlight exists to connect market shifts with actionable context for creators, buyers, and teams building in the African creative economy.
         </p>
       </section>
     </div>
@@ -130,7 +135,7 @@ function EditorialCard({ post }: { post: EditorialPost }) {
   return (
     <article className="surface-card overflow-hidden p-0 landing-hover-lift">
       <div className="aspect-[16/10] overflow-hidden bg-sand-100">
-        <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover transition duration-500 hover:scale-[1.02]" />
+        <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover transition duration-500 hover:scale-[1.02]" loading="lazy" decoding="async" />
       </div>
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap gap-2">
@@ -144,7 +149,7 @@ function EditorialCard({ post }: { post: EditorialPost }) {
         <p className="text-xs uppercase tracking-[0.12em] text-sand-500">{formatEditorialDate(post.published_at)}</p>
         <Link
           to={`/editorial/${post.slug}`}
-          className="inline-flex rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:border-cobalt-300 hover:bg-cobalt-50 hover:text-cobalt-700"
+          className="inline-flex rounded-full border border-cobalt-600 bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:border-cobalt-700 hover:bg-cobalt-700"
         >
           Read article
         </Link>

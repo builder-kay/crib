@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/components/Toast";
 import { ARKESEL_SUPPORTED_COUNTRIES, composeArkeselPhoneInput, getUserContactEmail, maskPhoneNumber, normalizeAuthPhoneInput } from "@/lib/auth";
-import { sendAuthOtp, signInWithIdentifier, verifyAuthOtp } from "@/lib/api";
+import { sendAuthOtp, signInWithGoogle, signInWithIdentifier, verifyAuthOtp } from "@/lib/api";
 import { sanitizeAppRedirectPath } from "@/lib/navigation";
 import {
   authLoginSchema,
@@ -21,8 +21,8 @@ const heroStats = [
 ];
 
 const editorialHeroStats = [
-  { label: "Editorial desk", value: "Story workflow", detail: "Write, edit, and manage stories from one focused workspace." },
-  { label: "Access model", value: "Editor-only logins", detail: "Editorial accounts are provisioned separately from platform admins." },
+  { label: "Blog desk", value: "Story workflow", detail: "Write, edit, and manage stories from one focused workspace." },
+  { label: "Access model", value: "Editor-only logins", detail: "Blog accounts are provisioned separately from platform admins." },
   { label: "Publishing pace", value: "Draft to spotlight", detail: "Track updates and feature the strongest stories quickly." },
   { label: "Account recovery", value: "OTP reset ready", detail: "Editors can still recover access with the same secure auth system." }
 ];
@@ -75,12 +75,22 @@ export function AuthPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const oauthErrorRef = useRef<string | null>(null);
+  const oauthCallbackHandledRef = useRef(false);
 
   const currentUserEmail = getUserContactEmail(user);
+  const isOAuthCallback = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return ["code", "access_token", "refresh_token", "provider_token", "provider_refresh_token"].some((key) => params.has(key));
+  }, [location.search]);
+  const oauthErrorMessage = useMemo(() => {
+    const value = searchParams.get("error_description") ?? searchParams.get("error");
+    return value ? decodeURIComponent(value.replace(/\+/g, " ")) : null;
+  }, [searchParams]);
 
   const formHeadline = useMemo(() => {
     if (isEditorialLogin) {
-      return mode === "reset" ? (resetStep === "verify" ? "Enter your reset code" : "Reset editor access") : "Editorial sign in";
+      return mode === "reset" ? (resetStep === "verify" ? "Enter your reset code" : "Reset editor access") : "Blog sign in";
     }
 
     if (mode === "register") {
@@ -100,7 +110,7 @@ export function AuthPage() {
         ? resetStep === "verify"
           ? `We sent a reset code to ${resetDestination || "your phone"}. Enter it and choose a new password.`
           : "Enter the mobile number or email tied to your editor account. We will send the reset OTP to the linked mobile number."
-        : "Sign in with the editor account assigned to you for the editorial workspace.";
+        : "Sign in with the editor account assigned to you for the blog workspace.";
     }
 
     if (mode === "register") {
@@ -120,7 +130,7 @@ export function AuthPage() {
 
   const heroTitle = useMemo(() => {
     if (isEditorialLogin) {
-      return "Step into the editorial workspace.";
+      return "Step into the blog workspace.";
     }
 
     if (mode === "register") {
@@ -160,6 +170,25 @@ export function AuthPage() {
     [registerCountryCode]
   );
   const modeAnimationClass = modeDirection === "to-register" ? "auth-mode-enter-forward" : "auth-mode-enter-back";
+  const canUseGoogleAuth = !isEditorialLogin && (mode === "login" || (mode === "register" && registerStep === "details"));
+
+  useEffect(() => {
+    if (!oauthErrorMessage || oauthErrorRef.current === oauthErrorMessage) {
+      return;
+    }
+
+    oauthErrorRef.current = oauthErrorMessage;
+    pushToast(oauthErrorMessage, "error");
+  }, [oauthErrorMessage, pushToast]);
+
+  useEffect(() => {
+    if (!user || !isOAuthCallback || oauthCallbackHandledRef.current) {
+      return;
+    }
+
+    oauthCallbackHandledRef.current = true;
+    navigate(redirectTo, { replace: true });
+  }, [isOAuthCallback, navigate, redirectTo, user]);
 
   function resetRegisterVerificationState() {
     setRegisterStep("details");
@@ -415,6 +444,17 @@ export function AuthPage() {
     }
   }
 
+  async function handleGoogleAuth() {
+    setSubmitting(true);
+
+    try {
+      await signInWithGoogle(redirectTo);
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Could not continue with Google.", "error");
+      setSubmitting(false);
+    }
+  }
+
   const inputClass =
     "auth-input mt-1 w-full rounded-xl border border-sand-300 bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100";
 
@@ -429,8 +469,8 @@ export function AuthPage() {
             <h2 className="mt-2 font-display text-3xl font-bold text-ink">You are already signed in.</h2>
             <p className="mt-2 max-w-xl text-sm text-sand-700">
               {isEditorialLogin
-                ? "Continue to the editorial workspace with your current editor session."
-                : "Continue to Discover to browse assets, creators, and fresh editorial picks."}
+                ? "Continue to the blog workspace with your current editor session."
+                : "Continue to Discover to browse assets, creators, and fresh blog picks."}
             </p>
             {currentUserEmail ? <p className="mt-2 text-xs text-sand-500">Signed in as {currentUserEmail}</p> : null}
             <div className="mt-5 flex flex-wrap gap-3">
@@ -439,7 +479,7 @@ export function AuthPage() {
                 onClick={() => navigate(redirectTo, { replace: true })}
                 className="rounded-full bg-cobalt-600 px-5 py-2.5 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700"
               >
-                {isEditorialLogin ? "Continue to editorial desk" : "Continue to Discover"}
+                {isEditorialLogin ? "Continue to blog desk" : "Continue to Discover"}
               </button>
               <Link
                 to="/market"
@@ -462,7 +502,7 @@ export function AuthPage() {
         <div className="relative z-10 space-y-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/72">
-              {isEditorialLogin ? "Editorial workspace access" : "Creative commerce for African creators"}
+              {isEditorialLogin ? "Blog workspace access" : "Creative commerce for African creators"}
             </p>
             <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-white md:text-5xl">{heroTitle}</h1>
             <p className="mt-3 max-w-xl text-sm text-white/78 md:text-base">{heroCopy}</p>
@@ -509,7 +549,7 @@ export function AuthPage() {
         <div className="relative z-10">
           {isEditorialLogin ? (
             <div className="rounded-full border border-sand-200 bg-sand-100 px-4 py-3 text-center text-sm font-semibold text-sand-700">
-              {mode === "reset" ? "Editorial access recovery" : "Editorial staff login"}
+              {mode === "reset" ? "Blog access recovery" : "Blog staff login"}
             </div>
           ) : (
             <div className="rounded-full border border-sand-200 bg-sand-100 p-1">
@@ -524,8 +564,25 @@ export function AuthPage() {
             <h2 className="mt-5 font-display text-3xl font-bold text-ink">{formHeadline}</h2>
             <p className="mt-1 text-sm text-sand-700">{formHint}</p>
 
+            {canUseGoogleAuth ? (
+              <div className="mt-5 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleGoogleAuth();
+                  }}
+                  disabled={submitting}
+                  className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-sand-300 bg-white px-4 py-3 text-sm font-semibold text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <GoogleIcon />
+                  <span>{submitting ? "Connecting..." : "Continue with Google"}</span>
+                </button>
+                <AuthDivider label={mode === "register" ? "or sign up with mobile OTP" : "or use email or mobile"} />
+              </div>
+            ) : null}
+
             {mode === "login" ? (
-              <form className="mt-5 space-y-4" onSubmit={handleLoginSubmit}>
+              <form className={`${canUseGoogleAuth ? "mt-4" : "mt-5"} space-y-4`} onSubmit={handleLoginSubmit}>
                 <div>
                   <label htmlFor="loginIdentifier" className="block text-sm font-medium text-sand-800">
                     Email or mobile number
@@ -591,7 +648,7 @@ export function AuthPage() {
 
             {mode === "register" && registerStep === "details" ? (
               <form
-                className="mt-5 space-y-4"
+                className={`${canUseGoogleAuth ? "mt-4" : "mt-5"} space-y-4`}
                 onSubmit={(event) => {
                   event.preventDefault();
                   void requestRegisterOtp();
@@ -952,11 +1009,11 @@ export function AuthPage() {
 
             {isEditorialLogin ? (
               <p className="mt-4 text-center text-sm text-sand-700">
-                Need an editor account? <span className="font-semibold text-cobalt-700">Ask a platform admin to provision editorial access for you.</span>
+                Need an editor account? <span className="font-semibold text-cobalt-700">Ask a platform admin to provision blog access for you.</span>
               </p>
             ) : (
               <p className="mt-4 text-center text-sm text-sand-700">
-                {mode === "register" ? "Already have an account?" : "New to CRIB?"}{" "}
+                {mode === "register" ? "Already have an account?" : "New to Crib?"}{" "}
                 <button
                   type="button"
                   onClick={() => handleModeChange(mode === "register" ? "login" : "register")}
@@ -977,6 +1034,27 @@ export function AuthPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function AuthDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.12em] text-sand-500">
+      <span className="h-px flex-1 bg-sand-200" />
+      <span>{label}</span>
+      <span className="h-px flex-1 bg-sand-200" />
+    </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.2.8 4 1.5l2.7-2.6C17 3.2 14.8 2.2 12 2.2 6.6 2.2 2.2 6.6 2.2 12S6.6 21.8 12 21.8c6.9 0 9.1-4.8 9.1-7.3 0-.5 0-.8-.1-1.2H12Z" />
+      <path fill="#34A853" d="M3.4 7.3 6.6 9.7C7.5 7.6 9.6 6 12 6c1.9 0 3.2.8 4 1.5l2.7-2.6C17 3.2 14.8 2.2 12 2.2c-3.8 0-7.1 2.2-8.6 5.1Z" />
+      <path fill="#FBBC05" d="M12 21.8c2.7 0 5-.9 6.6-2.5l-3-2.5c-.8.6-1.9 1.2-3.6 1.2-3.9 0-5.1-2.6-5.4-3.9l-3.2 2.5c1.5 3 4.7 5.2 8.6 5.2Z" />
+      <path fill="#4285F4" d="M21.1 13.3c.1-.4.1-.8.1-1.3s0-.9-.1-1.3H12v3.9h5.5c-.2 1.2-1 2.3-2 3l3 2.5c1.8-1.7 2.6-4.1 2.6-6.8Z" />
+    </svg>
   );
 }
 

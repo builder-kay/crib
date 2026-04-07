@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppFooter } from "@/components/AppFooter";
 import { Navbar } from "@/components/Navbar";
+import { routePreloaders } from "@/routes/pageLoaders";
 
 type AppTheme = "light" | "dark";
 
@@ -17,6 +18,7 @@ export function AppLayout() {
   const location = useLocation();
   const [theme, setTheme] = useState<AppTheme>(() => readInitialTheme());
   const isAdminWorkspace = location.pathname === "/admin" || location.pathname.startsWith("/admin/");
+  const hasPreloadedRoutes = useRef(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -24,6 +26,26 @@ export function AppLayout() {
     root.style.colorScheme = theme;
     window.localStorage.setItem("crib-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (hasPreloadedRoutes.current || isAdminWorkspace) {
+      return;
+    }
+
+    hasPreloadedRoutes.current = true;
+
+    const preloadCommonRoutes = () => {
+      void Promise.all([routePreloaders.market(), routePreloaders.creators(), routePreloaders.blog(), routePreloaders.auth()]);
+    };
+
+    if (typeof window.requestIdleCallback === "function") {
+      const idleCallbackId = window.requestIdleCallback(preloadCommonRoutes, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleCallbackId);
+    }
+
+    const timeoutId = window.setTimeout(preloadCommonRoutes, 800);
+    return () => window.clearTimeout(timeoutId);
+  }, [isAdminWorkspace]);
 
   return (
     <div className={`min-h-screen text-ink transition-colors duration-300 ${isAdminWorkspace ? "admin-app-surface" : "bg-sand-50"}`}>

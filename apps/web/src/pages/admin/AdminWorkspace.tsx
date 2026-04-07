@@ -72,7 +72,7 @@ const adminNavItems: AdminNavItem[] = [
     id: "editors",
     to: "/admin/editors",
     label: "Editors",
-    caption: "Provision separate editorial logins.",
+    caption: "Provision separate blog logins.",
     tone: "rose",
     marker: "ED"
   },
@@ -258,9 +258,9 @@ export function AdminPage() {
           <aside className="admin-sidebar-shell">
             <div className="admin-sidebar-top">
               <Link to="/" className="admin-sidebar-brand">
-                <img src="/crib-logo.png" alt="CRIB logo" className="h-11 w-11 rounded-2xl object-cover shadow-[0_14px_28px_-18px_rgba(20,63,207,0.65)]" />
+                <img src="/crib-logo.png" alt="Crib logo" className="h-11 w-11 rounded-2xl object-cover shadow-[0_14px_28px_-18px_rgba(20,63,207,0.65)]" />
                 <div>
-                  <p className="admin-sidebar-brand-label">CRIB Control</p>
+                  <p className="admin-sidebar-brand-label">Crib Control</p>
                   <h1 className="admin-sidebar-brand-title">Marketplace Admin</h1>
                 </div>
               </Link>

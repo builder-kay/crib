@@ -4,21 +4,37 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Modal } from "@/components/Modal";
 import { getUserIdentityLabel } from "@/lib/auth";
 import { getProfile, getUnreadNotificationsCount, getWishlistCount, isCurrentUserAdmin, isCurrentUserEditorialAdmin } from "@/lib/api";
+import { routePreloaders } from "@/routes/pageLoaders";
 import { useAuthStore } from "@/store/authStore";
 
 const baseNavItems = [
   { to: "/market", label: "Discover" },
   { to: "/creators", label: "Creators" },
-  { to: "/editorial", label: "Editorial" }
+  { to: "/editorial", label: "Blog" }
 ];
 
 type MobilePrimaryNavId = "discover" | "creators" | "editorial" | "dashboard";
+
+type NavItem = {
+  to: string;
+  label: string;
+  preload?: () => Promise<void>;
+};
 
 type MobilePrimaryNavItem = {
   id: MobilePrimaryNavId;
   to: string;
   label: string;
+  preload?: () => Promise<void>;
 };
+
+function prefetchRoute(preload?: () => Promise<void>) {
+  if (!preload) {
+    return;
+  }
+
+  void preload();
+}
 
 function isMobilePrimaryNavActive(pathname: string, itemId: MobilePrimaryNavId) {
   switch (itemId) {
@@ -126,14 +142,18 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   });
 
   const navItems = useMemo(() => {
-    const items = [...baseNavItems];
+    const items: NavItem[] = [
+      { ...baseNavItems[0], preload: routePreloaders.market },
+      { ...baseNavItems[1], preload: routePreloaders.creators },
+      { ...baseNavItems[2], preload: routePreloaders.blog }
+    ];
     if (user) {
-      items.push({ to: "/dashboard", label: "Dashboard" });
+      items.push({ to: "/dashboard", label: "Dashboard", preload: routePreloaders.dashboard });
       if (adminQuery.data === true) {
         items.push({ to: "/admin/overview", label: "Admin" });
       }
       if (editorialAdminQuery.data === true) {
-        items.push({ to: "/editorial-admin", label: "Editorial Desk" });
+        items.push({ to: "/editorial-admin", label: "Blog Desk", preload: routePreloaders.blogAdmin });
       }
     }
     return items;
@@ -141,10 +161,10 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
 
   const mobilePrimaryNavItems = useMemo<MobilePrimaryNavItem[]>(
     () => [
-      { id: "discover", to: "/market", label: "Discover" },
-      { id: "creators", to: "/creators", label: "Creators" },
-      { id: "editorial", to: "/editorial", label: "Editorial" },
-      ...(user ? [{ id: "dashboard", to: "/dashboard", label: "Dashboard" } satisfies MobilePrimaryNavItem] : [])
+      { id: "discover", to: "/market", label: "Discover", preload: routePreloaders.market },
+      { id: "creators", to: "/creators", label: "Creators", preload: routePreloaders.creators },
+      { id: "editorial", to: "/editorial", label: "Blog", preload: routePreloaders.blog },
+      ...(user ? [{ id: "dashboard", to: "/dashboard", label: "Dashboard", preload: routePreloaders.dashboard } satisfies MobilePrimaryNavItem] : [])
     ],
     [user]
   );
@@ -205,8 +225,8 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
         <nav className="mx-auto flex w-full max-w-[1400px] items-center gap-3 px-4 py-3 md:px-6">
           <div className="flex items-center gap-5">
             <Link to="/" className="flex items-center gap-2">
-              <img src="/crib-logo.png" alt="CRIB logo" className="h-10 w-10 rounded-full object-cover" />
-              <p className="font-display text-xl font-bold leading-none text-ink">CRIB</p>
+              <img src="/crib-logo.png" alt="Crib logo" className="h-10 w-10 rounded-full object-cover" decoding="async" fetchPriority="high" />
+              <p className="font-display text-xl font-bold leading-none text-ink">Crib</p>
             </Link>
 
             <div className="hidden items-center gap-1 lg:flex">
@@ -214,6 +234,8 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  onMouseEnter={() => prefetchRoute(item.preload)}
+                  onFocus={() => prefetchRoute(item.preload)}
                   className={({ isActive }) =>
                     `rounded-lg px-3 py-2 text-sm font-semibold transition ${
                       isActive ? "bg-sand-100 text-ink" : "text-sand-700 hover:bg-sand-100 hover:text-ink"
@@ -255,7 +277,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
             <button
               type="button"
               onClick={onToggleTheme}
-              className="theme-toggle-btn inline-flex h-10 items-center justify-center gap-2 rounded-full border border-sand-300 bg-white px-3 text-sm font-semibold text-sand-700 transition hover:bg-sand-100"
+              className="theme-toggle-btn inline-flex h-10 w-10 items-center justify-center rounded-full border border-sand-300 bg-white text-sand-700 transition hover:bg-sand-100"
               aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
             >
               {theme === "light" ? (
@@ -275,7 +297,6 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                   <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
                 </svg>
               )}
-              <span className="hidden sm:inline">{theme === "light" ? "Dark mode" : "Light mode"}</span>
             </button>
 
             {user ? (
@@ -360,7 +381,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                           onClick={() => setMenuOpen(false)}
                           className="block px-4 py-2.5 text-sm font-medium text-ink transition hover:bg-sand-100"
                         >
-                          Editorial desk
+                          Blog desk
                         </Link>
                       ) : null}
                       <button
@@ -403,6 +424,8 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                 key={item.id}
                 to={item.to}
                 aria-current={isActive ? "page" : undefined}
+                onMouseEnter={() => prefetchRoute(item.preload)}
+                onFocus={() => prefetchRoute(item.preload)}
                 className={`flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition ${
                   isActive ? "bg-cobalt-50 text-cobalt-700" : "text-sand-600 hover:bg-sand-100 hover:text-ink"
                 }`}

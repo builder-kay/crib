@@ -283,7 +283,7 @@ export function AdminSettingsPage() {
                 <textarea
                   value={adminWhatsAppMessage}
                   onChange={(event) => setAdminWhatsAppMessage(event.target.value)}
-                  placeholder="Hi CRIB admin, I need help with the marketplace."
+                  placeholder="Hi Crib admin, I need help with the marketplace."
                   className="admin-input min-h-[120px] resize-y"
                 />
               </label>

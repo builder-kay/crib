@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { routePreloaders } from "@/routes/pageLoaders";
 
 const metrics = [
   { label: "Active sellers", value: "620+" },
@@ -34,6 +35,22 @@ const spotlightTiles = [
 ];
 
 export function LandingPage() {
+  const prefetchMarket = () => {
+    void routePreloaders.market();
+  };
+
+  const prefetchCreators = () => {
+    void routePreloaders.creators();
+  };
+
+  const prefetchBlog = () => {
+    void routePreloaders.blog();
+  };
+
+  const prefetchUpload = () => {
+    void routePreloaders.upload();
+  };
+
   return (
     <div className="space-y-6 pb-8 md:space-y-8 lg:space-y-10">
       <section className="landing-canvas landing-hero relative overflow-hidden rounded-[2rem] border border-sand-200 p-5 md:p-8 lg:p-10">
@@ -53,17 +70,21 @@ export function LandingPage() {
             </p>
 
             <div className="flex flex-wrap gap-3 pt-1">
-              <Link to="/market" className="btn-gradient rounded-full px-6 py-3">
+              <Link to="/market" onMouseEnter={prefetchMarket} onFocus={prefetchMarket} className="btn-gradient rounded-full px-6 py-3">
                 Explore Marketplace
               </Link>
               <Link
                 to="/creators"
+                onMouseEnter={prefetchCreators}
+                onFocus={prefetchCreators}
                 className="rounded-full border border-sand-300 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
               >
                 Browse Creators
               </Link>
               <Link
                 to="/dashboard/upload"
+                onMouseEnter={prefetchUpload}
+                onFocus={prefetchUpload}
                 className="rounded-full border border-sand-300 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
               >
                 Start Selling
@@ -92,15 +113,19 @@ export function LandingPage() {
                   src="https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1400&q=80"
                   alt="Creative studio collage"
                   className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+                  decoding="async"
+                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/10 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3 rounded-xl border border-white/35 bg-white/12 px-3 py-2 backdrop-blur-sm">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">Editorial spotlight</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">Blog spotlight</p>
                     <p className="mt-0.5 text-sm font-semibold text-white">Creative workflows, seller playbooks, and market shifts</p>
                   </div>
                   <Link
                     to="/editorial"
+                    onMouseEnter={prefetchBlog}
+                    onFocus={prefetchBlog}
                     className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition hover:bg-white/30"
                   >
                     Read blog
@@ -149,12 +174,16 @@ export function LandingPage() {
           <div className="flex flex-wrap gap-3 lg:justify-end">
             <Link
               to="/dashboard/upload"
+              onMouseEnter={prefetchUpload}
+              onFocus={prefetchUpload}
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-cobalt-700 transition hover:bg-sand-100"
             >
               Publish first listing
             </Link>
             <Link
               to="/creators"
+              onMouseEnter={prefetchCreators}
+              onFocus={prefetchCreators}
               className="rounded-full border border-white/40 bg-white/10 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white backdrop-blur-sm transition hover:bg-white/20"
             >
               Meet creators
@@ -193,7 +222,7 @@ function PreviewTile({ image, title, discipline }: { image: string; title: strin
   return (
     <article className="group overflow-hidden rounded-xl border border-sand-200 bg-white landing-hover-lift">
       <div className="aspect-[4/3] overflow-hidden bg-sand-100">
-        <img src={image} alt={title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+        <img src={image} alt={title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" loading="lazy" decoding="async" />
       </div>
       <div className="px-2.5 py-2">
         <p className="text-xs font-semibold text-ink">{title}</p>

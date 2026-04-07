@@ -131,9 +131,9 @@ export function AppFooter() {
         <div className="grid gap-6 lg:grid-cols-[1.25fr,0.95fr] lg:gap-10">
           <section className="space-y-3">
             <div className="flex items-center gap-3">
-              <img src="/crib-logo.png" alt="CRIB logo" className="h-11 w-11 rounded-2xl object-cover" />
+              <img src="/crib-logo.png" alt="Crib logo" className="h-11 w-11 rounded-2xl object-cover" />
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-700">CRIB</p>
+                <p className="text-xs font-semibold tracking-[0.18em] text-cobalt-700">Crib</p>
                 <h2 className="font-display text-2xl font-bold text-ink">Creative storefronts for templates that travel.</h2>
               </div>
             </div>
@@ -199,7 +199,7 @@ export function AppFooter() {
       <div className="border-t border-sand-200/90">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2 px-4 py-4 text-xs text-sand-600 md:flex-row md:items-center md:justify-between md:px-6">
           <p>Built for creative commerce across Africa.</p>
-          <p className="font-medium text-sand-700">Copyright 2026 CRIB</p>
+          <p className="font-medium text-sand-700">Copyright 2026 Crib</p>
         </div>
       </div>
     </footer>

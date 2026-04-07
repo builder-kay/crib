@@ -167,7 +167,7 @@ export function AdminOverviewPage() {
               </Link>
               <Link to="/admin/editors" className="admin-compact-row admin-compact-row-stack">
                 <span className="text-sm font-semibold text-ink">Editor access</span>
-                <span className="text-xs text-sand-600">Create separate editorial logins with email or phone credentials.</span>
+                <span className="text-xs text-sand-600">Create separate blog logins with email or phone credentials.</span>
               </Link>
             </div>
           </section>

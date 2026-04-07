@@ -1,49 +1,40 @@
-import { Suspense, lazy, type ComponentType } from "react";
+import { Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { PageLoader } from "@/components/PageLoader";
 import { AppLayout } from "@/routes/AppLayout";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { AdminProtectedRoute } from "@/routes/AdminProtectedRoute";
-
-function lazyPage<TModule extends Record<string, unknown>, TExport extends keyof TModule>(
-  importer: () => Promise<TModule>,
-  exportName: TExport
-) {
-  return lazy(async () => {
-    const module = await importer();
-    return { default: module[exportName] as ComponentType<any> };
-  });
-}
-
-const LandingPage = lazyPage(() => import("@/pages/LandingPage"), "LandingPage");
-const MarketPage = lazyPage(() => import("@/pages/MarketPage"), "MarketPage");
-const CreatorsPage = lazyPage(() => import("@/pages/CreatorsPage"), "CreatorsPage");
-const EditorialPage = lazyPage(() => import("@/pages/EditorialPage"), "EditorialPage");
-const EditorialPostPage = lazyPage(() => import("@/pages/EditorialPostPage"), "EditorialPostPage");
-const AssetDetailPage = lazyPage(() => import("@/pages/AssetDetailPage"), "AssetDetailPage");
-const AuthPage = lazyPage(() => import("@/pages/AuthPage"), "AuthPage");
-const OrdersPage = lazyPage(() => import("@/pages/OrdersPage"), "OrdersPage");
-const DashboardPage = lazyPage(() => import("@/pages/DashboardPage"), "DashboardPage");
-const DashboardLayoutPage = lazyPage(() => import("@/pages/DashboardLayoutPage"), "DashboardLayoutPage");
-const UploadPage = lazyPage(() => import("@/pages/UploadPage"), "UploadPage");
-const WishlistPage = lazyPage(() => import("@/pages/WishlistPage"), "WishlistPage");
-const NotificationsPage = lazyPage(() => import("@/pages/NotificationsPage"), "NotificationsPage");
-const ProfilePage = lazyPage(() => import("@/pages/ProfilePage"), "ProfilePage");
-const TermsOfUsePage = lazyPage(() => import("@/pages/FooterInfoPages"), "TermsOfUsePage");
-const PrivacyPage = lazyPage(() => import("@/pages/FooterInfoPages"), "PrivacyPage");
-const CommunityPage = lazyPage(() => import("@/pages/FooterInfoPages"), "CommunityPage");
-const HelpPage = lazyPage(() => import("@/pages/FooterInfoPages"), "HelpPage");
-const CookiePreferencesPage = lazyPage(() => import("@/pages/FooterInfoPages"), "CookiePreferencesPage");
-const PrivacyChoicesPage = lazyPage(() => import("@/pages/FooterInfoPages"), "PrivacyChoicesPage");
-const AdminPage = lazyPage(() => import("@/pages/AdminPage"), "AdminPage");
-const AdminOverviewPage = lazyPage(() => import("@/pages/AdminPage"), "AdminOverviewPage");
-const AdminListingsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminListingsPage");
-const AdminOrdersPage = lazyPage(() => import("@/pages/AdminPage"), "AdminOrdersPage");
-const AdminCreatorsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminCreatorsPage");
-const AdminEditorsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminEditorsPage");
-const AdminSettingsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminSettingsPage");
-const EditorialAdminPage = lazyPage(() => import("@/pages/EditorialAdminPage"), "EditorialAdminPage");
-const NotFoundPage = lazyPage(() => import("@/pages/NotFoundPage"), "NotFoundPage");
+import {
+  AdminCreatorsPage,
+  AdminEditorsPage,
+  AdminListingsPage,
+  AdminOrdersPage,
+  AdminOverviewPage,
+  AdminPage,
+  AdminSettingsPage,
+  AssetDetailPage,
+  AuthPage,
+  CommunityPage,
+  CookiePreferencesPage,
+  CreatorsPage,
+  DashboardLayoutPage,
+  DashboardPage,
+  EditorialAdminPage,
+  EditorialPage,
+  EditorialPostPage,
+  HelpPage,
+  LandingPage,
+  MarketPage,
+  NotFoundPage,
+  NotificationsPage,
+  OrdersPage,
+  PrivacyChoicesPage,
+  PrivacyPage,
+  ProfilePage,
+  TermsOfUsePage,
+  UploadPage,
+  WishlistPage
+} from "@/routes/pageLoaders";
 
 function RouteLoader() {
   return <PageLoader label="Loading page" fullHeight />;

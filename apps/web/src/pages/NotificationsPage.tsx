@@ -83,7 +83,7 @@ export function NotificationsPage() {
                   {notification.kind === "hire_request" ? (
                     <>
                       <p className="text-sm font-semibold text-ink">{notification.requester_name} wants to hire you</p>
-                      <p className="mt-1 text-sm text-sand-700">They reviewed your terms and sent a hire request through CRIB.</p>
+                      <p className="mt-1 text-sm text-sand-700">They reviewed your terms and sent a hire request through Crib.</p>
                       {notification.requester_email ? (
                         <p className="mt-1 text-xs text-sand-500">Contact: {notification.requester_email}</p>
                       ) : null}

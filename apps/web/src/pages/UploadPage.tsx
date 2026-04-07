@@ -320,7 +320,7 @@ export function UploadPage() {
                 <div className="upload-profit-panel">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sunset-700">Earnings estimate</p>
                   <p className="mt-2 text-sm text-sand-700">
-                    CRIB takes a 10% platform commission on every successful sale. Here is the estimated split at your current price.
+                    Crib takes a 10% platform commission on every successful sale. Here is the estimated split at your current price.
                   </p>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
