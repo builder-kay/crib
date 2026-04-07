@@ -2481,7 +2481,7 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt> {
     throw new Error("Order ID is required.");
   }
 
-  const { data: receiptData, error: receiptError } = await supabase
+  const { data: receiptRows, error: receiptError } = await supabase
     .from("order_receipts")
     .select(
       `id,
@@ -2507,34 +2507,37 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt> {
       updated_at`
     )
     .eq("order_id", orderId)
-    .single();
+    .limit(1);
 
-  if (receiptError || !receiptData) {
-    throw new Error(receiptError?.message ?? "Receipt not found.");
+  if (receiptError) {
+    throw new Error(receiptError.message);
   }
 
-  const receipt = receiptData as OrderReceiptRow;
+  const receipt = ((receiptRows ?? []) as OrderReceiptRow[])[0];
 
-  const [{ data: orderData, error: orderError }, { data: sellerData, error: sellerError }, { data: previewData, error: previewError }] = await Promise.all([
+  if (!receipt) {
+    throw new Error("Receipt not found.");
+  }
+
+  const [{ data: orderRows, error: orderError }, { data: sellerRows, error: sellerError }, { data: previewRows, error: previewError }] = await Promise.all([
     supabase
       .from("orders")
       .select(
         "status, created_at, escrow_status, escrow_due_at, buyer_confirmed_at, buyer_reported_at, escrow_released_at, escrow_release_reason, refund_reference, refund_provider_status, scam_report_reason, scam_resolution_status"
       )
       .eq("id", receipt.order_id)
-      .maybeSingle(),
+      .limit(1),
     supabase
       .from("profiles")
       .select("avatar_url, creator_category, is_verified")
       .eq("id", receipt.seller_id)
-      .maybeSingle(),
+      .limit(1),
     supabase
       .from("asset_previews")
       .select("preview_url")
       .eq("asset_id", receipt.asset_id)
       .order("created_at", { ascending: true })
       .limit(1)
-      .maybeSingle()
   ]);
 
   if (orderError) {
@@ -2549,9 +2552,9 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt> {
 
   return mapOrderReceipt(
     receipt,
-    (orderData ?? null) as OrderReceiptStatusRow | null,
-    (sellerData ?? null) as ReceiptSellerProfileRow | null,
-    previewData?.preview_url ?? null
+    (((orderRows ?? []) as OrderReceiptStatusRow[])[0] ?? null) as OrderReceiptStatusRow | null,
+    (((sellerRows ?? []) as ReceiptSellerProfileRow[])[0] ?? null) as ReceiptSellerProfileRow | null,
+    ((previewRows ?? []) as Array<{ preview_url: string | null }>)[0]?.preview_url ?? null
   );
 }
 

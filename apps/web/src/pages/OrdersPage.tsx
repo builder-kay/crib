@@ -104,7 +104,7 @@ export function OrdersPage() {
 
   const headline = useMemo(() => {
     if (reference) {
-      return "Payment is back with us now. Download the file below, inspect it, then confirm it is genuine or report a scam within 24 hours.";
+      return "Download the file you just bought, inspect it, then confirm if it is genuine or report a scam within 24 hours.";
     }
     return "Your purchases, secure downloads, and escrow confirmations live here.";
   }, [reference]);
@@ -525,18 +525,6 @@ export function OrdersPage() {
                           </p>
                         </div>
                         <span className={escrowChipClass(order.escrow_status)}>{escrowChipLabel(order.escrow_status)}</span>
-                      </div>
-
-                      <div className="mt-3 grid gap-2 text-xs text-cobalt-900/80 sm:grid-cols-3">
-                        <span className="rounded-xl bg-white/80 px-3 py-2">
-                          First download: {formatDateTime(order.buyer_opened_at) ?? "Not opened yet"}
-                        </span>
-                        <span className="rounded-xl bg-white/80 px-3 py-2">
-                          Confirmed: {formatDateTime(order.buyer_confirmed_at) ?? "Waiting"}
-                        </span>
-                        <span className="rounded-xl bg-white/80 px-3 py-2">
-                          Released: {formatDateTime(order.escrow_released_at) ?? "Still on hold"}
-                        </span>
                       </div>
 
                       {awaitingReview ? (
