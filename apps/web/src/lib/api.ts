@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
 import { getUserContactEmail, looksLikeEmailIdentifier, normalizeAuthPhoneInput } from "@/lib/auth";
 import { getAssetAppLabel, getAssetFilterFileType, getAssetPrimaryFilename } from "@/lib/assetCatalog";
 import { env } from "@/lib/env";
 import { slugify } from "@/lib/format";
+import { DEFAULT_HIRE_TERMS } from "@/lib/hire";
 import {
   normalizeAdminWhatsAppMessage,
   normalizeAdminWhatsAppNumber,
@@ -18,6 +18,7 @@ import {
 } from "@/lib/uploadLimits";
 import { supabase } from "@/lib/supabaseClient";
 import type {
+  AccountNotification,
   AdminCreatorRecord,
   AdminOrderRecord,
   AdminOverview,
@@ -26,11 +27,16 @@ import type {
   CreatorDashboard,
   CreatorDirectoryEntry,
   CreatorFunnelSummary,
+  CreatorVerificationRequest,
+  CreatorVerificationStatus,
+  HireRequestNotification,
+  NotificationDeliveryStatus,
   CreatorReview,
   Order,
   PayoutAccount,
   PayoutBank,
   PlatformSocialSettings,
+  ProfileVerificationField,
   Profile,
   RatingSummary,
   ReleaseNotification
@@ -65,6 +71,10 @@ type AssetProfileRow = {
 };
 
 const PROFILE_FIELDS_SELECT = "display_name, avatar_url, niche, creator_category, sales_count, is_verified, seller_account_status, seller_account_note";
+const PROFILE_SELECT =
+  "id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note, hire_enabled, hire_terms";
+const CREATOR_VERIFICATION_SELECT =
+  "creator_id, status, is_profile_complete, missing_fields, submitted_at, reviewed_at, reviewed_by, review_note";
 
 type AssetRow = {
   id: string;
@@ -90,7 +100,6 @@ type AssetRatingRow = {
 type OrderRow = {
   id: string;
   email: string;
-  email_token: string;
   status: "pending" | "paid" | "failed" | "refunded";
   amount_kobo: number;
   currency: string;
@@ -140,12 +149,31 @@ type CreatorProfileRow = {
   created_at: string;
   seller_account_status?: string | null;
   seller_account_note?: string | null;
+  hire_enabled?: boolean | null;
+  hire_terms?: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  creator_category: string | null;
+  niche: string | null;
+  sales_count: number | null;
+  is_verified: boolean | null;
+  socials: Record<string, string> | null;
+  seller_account_status?: string | null;
+  seller_account_note?: string | null;
+  hire_enabled?: boolean | null;
+  hire_terms?: string | null;
 };
 
 type CreatorAssetStatRow = {
   creator_id: string;
   status: Asset["status"];
   created_at: string;
+  previews?: Array<{ preview_url: string }>;
 };
 
 type CreatorReviewRatingRow = {
@@ -200,12 +228,39 @@ type CreatorReleaseNotificationRow = {
   id: string;
   created_at: string;
   read_at: string | null;
-  delivery_status: "pending" | "sent" | "dismissed" | "failed";
+  delivery_status: NotificationDeliveryStatus;
   creator_id: string;
   follower_id: string;
   asset_id: string;
   creator?: { display_name: string } | { display_name: string }[] | null;
   asset?: { title: string } | { title: string }[] | null;
+};
+
+type CreatorHireRequestRow = {
+  id: string;
+  created_at: string;
+  read_at: string | null;
+  delivery_status: NotificationDeliveryStatus;
+  creator_id: string;
+  requester_id: string;
+  requester_display_name: string | null;
+  requester_email: string | null;
+  terms_snapshot: string | null;
+  requester?:
+    | { id: string; display_name: string; avatar_url: string | null }
+    | Array<{ id: string; display_name: string; avatar_url: string | null }>
+    | null;
+};
+
+type CreatorVerificationRequestRow = {
+  creator_id: string;
+  status: CreatorVerificationStatus;
+  is_profile_complete: boolean | null;
+  missing_fields: string[] | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
 };
 
 type PayoutSetupResponse = {
@@ -300,7 +355,6 @@ function mapOrder(row: OrderRow): Order {
   return {
     id: row.id,
     email: row.email,
-    email_token: row.email_token,
     status: row.status,
     amount_kobo: row.amount_kobo,
     currency: row.currency,
@@ -334,39 +388,21 @@ function mapOrder(row: OrderRow): Order {
   };
 }
 
-function createOrderAccessClient(emailToken?: string) {
-  if (!emailToken) {
-    return supabase;
-  }
-
-  return createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, {
-    global: {
-      headers: {
-        "x-order-token": emailToken
-      }
-    }
-  });
-}
-
-async function getOrderRpcClient(emailToken?: string) {
-  if (!emailToken) {
-    return supabase;
-  }
-
-  const { data } = await supabase.auth.getSession();
-  if (data.session?.access_token) {
-    return supabase;
-  }
-
-  return createOrderAccessClient(emailToken);
-}
-
-async function syncDueOrderEscrows(client = supabase) {
-  const { error } = await client.rpc("release_due_order_escrows");
+async function syncDueOrderEscrows() {
+  const { error } = await supabase.rpc("release_due_order_escrows");
 
   if (error) {
     throw new Error(error.message);
   }
+}
+
+async function requireAccessToken(message: string) {
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) {
+    throw new Error(message);
+  }
+  return accessToken;
 }
 function mapAssetReview(row: AssetReviewRow): AssetReview {
   const reviewer = Array.isArray(row.reviewer) ? row.reviewer[0] : row.reviewer;
@@ -415,6 +451,7 @@ function mapReleaseNotification(row: CreatorReleaseNotificationRow): ReleaseNoti
   const asset = Array.isArray(row.asset) ? row.asset[0] : row.asset;
 
   return {
+    kind: "release",
     id: row.id,
     created_at: row.created_at,
     read_at: row.read_at,
@@ -422,8 +459,62 @@ function mapReleaseNotification(row: CreatorReleaseNotificationRow): ReleaseNoti
     creator_id: row.creator_id,
     follower_id: row.follower_id,
     asset_id: row.asset_id,
-  creator_name: creator?.display_name ?? "Creator",
+    creator_name: creator?.display_name ?? "Creator",
     asset_title: asset?.title ?? "New release"
+  };
+}
+
+function mapHireRequestNotification(row: CreatorHireRequestRow): HireRequestNotification {
+  const requester = normalizeJoinedRecord(row.requester);
+
+  return {
+    kind: "hire_request",
+    id: row.id,
+    created_at: row.created_at,
+    read_at: row.read_at,
+    delivery_status: row.delivery_status,
+    creator_id: row.creator_id,
+    requester_id: row.requester_id,
+    requester_name: (requester?.display_name ?? row.requester_display_name?.trim()) || "Client",
+    requester_email: row.requester_email ?? null,
+    requester_avatar_url: requester?.avatar_url ?? null,
+    terms_snapshot: row.terms_snapshot?.trim() || DEFAULT_HIRE_TERMS
+  };
+}
+
+function mapCreatorVerificationRequest(row: CreatorVerificationRequestRow | null | undefined): CreatorVerificationRequest | null {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    creator_id: row.creator_id,
+    status: row.status,
+    is_profile_complete: row.is_profile_complete === true,
+    missing_fields: ((row.missing_fields ?? []) as string[]).filter(Boolean) as ProfileVerificationField[],
+    submitted_at: row.submitted_at ?? null,
+    reviewed_at: row.reviewed_at ?? null,
+    reviewed_by: row.reviewed_by ?? null,
+    review_note: row.review_note?.trim() || null
+  };
+}
+
+function mapProfile(row: ProfileRow, verificationRow?: CreatorVerificationRequestRow | null): Profile {
+  return {
+    id: row.id,
+    display_name: row.display_name,
+    bio: row.bio,
+    avatar_url: row.avatar_url,
+    creator_category: row.creator_category ?? "General",
+    niche: row.niche ?? null,
+    sales_count: row.sales_count ?? 0,
+    is_verified: Boolean(row.is_verified),
+    socials: (row.socials ?? {}) as Record<string, string>,
+    seller_account_status: (row.seller_account_status as Profile["seller_account_status"] | null) ?? "active",
+    seller_account_note: row.seller_account_note ?? null,
+    hire_enabled: row.hire_enabled ?? true,
+    hire_terms: row.hire_terms?.trim() || DEFAULT_HIRE_TERMS,
+    verification: mapCreatorVerificationRequest(verificationRow)
   };
 }
 
@@ -998,17 +1089,38 @@ function mapStorageUploadError(
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note")
-    .eq("id", userId)
-    .maybeSingle();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const viewerId = sessionData.session?.user?.id ?? null;
+  const shouldLoadVerification = viewerId === userId;
 
-  if (error) {
-    throw new Error(error.message);
+  const [profileResult, verificationResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(PROFILE_SELECT)
+      .eq("id", userId)
+      .maybeSingle(),
+    shouldLoadVerification
+      ? supabase
+          .from("creator_verification_requests")
+          .select(CREATOR_VERIFICATION_SELECT)
+          .eq("creator_id", userId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null })
+  ]);
+
+  if (profileResult.error) {
+    throw new Error(profileResult.error.message);
   }
 
-  return data as Profile | null;
+  if (verificationResult.error) {
+    throw new Error(verificationResult.error.message);
+  }
+
+  if (!profileResult.data) {
+    return null;
+  }
+
+  return mapProfile(profileResult.data as ProfileRow, (verificationResult.data ?? null) as CreatorVerificationRequestRow | null);
 }
 
 export async function updateProfile(userId: string, input: ProfileInput) {
@@ -1027,18 +1139,30 @@ export async function updateProfile(userId: string, input: ProfileInput) {
         bio: input.bio,
         creator_category: input.creator_category,
         niche: input.niche ?? "",
-        socials
+        socials,
+        hire_enabled: input.hire_enabled,
+        hire_terms: input.hire_terms.trim()
       },
       { onConflict: "id" }
     )
-    .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note")
+    .select(PROFILE_SELECT)
     .single();
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data as Profile;
+  const { data: verificationData, error: verificationError } = await supabase
+    .from("creator_verification_requests")
+    .select(CREATOR_VERIFICATION_SELECT)
+    .eq("creator_id", userId)
+    .maybeSingle();
+
+  if (verificationError) {
+    throw new Error(verificationError.message);
+  }
+
+  return mapProfile(data as ProfileRow, (verificationData ?? null) as CreatorVerificationRequestRow | null);
 }
 
 export async function uploadProfileAvatar(userId: string, file: File): Promise<string> {
@@ -1204,8 +1328,8 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at"),
-    supabase.from("assets").select("creator_id, created_at").eq("status", "published"),
+      .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at, hire_enabled"),
+    supabase.from("assets").select("creator_id, created_at, previews:asset_previews(preview_url)").eq("status", "published").order("created_at", { ascending: false }),
     supabase.from("creator_reviews").select("creator_id, rating"),
     supabase.from("creator_follows").select("creator_id")
   ]);
@@ -1230,18 +1354,23 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
   const assetRows = (assetsData ?? []) as CreatorAssetStatRow[];
   const creatorReviewRows = (reviewData ?? []) as CreatorReviewRatingRow[];
   const creatorFollowRows = (followData ?? []) as CreatorFollowRow[];
-  const creatorStats = new Map<string, { published_assets: number; latest_asset_at: string | null }>();
+  const creatorStats = new Map<string, { published_assets: number; latest_asset_at: string | null; featured_preview_urls: string[] }>();
   const creatorRatingMap = new Map<string, { total: number; count: number }>();
   const creatorFollowerMap = new Map<string, number>();
 
   for (const row of assetRows) {
-    const current = creatorStats.get(row.creator_id) ?? { published_assets: 0, latest_asset_at: null };
+    const current = creatorStats.get(row.creator_id) ?? { published_assets: 0, latest_asset_at: null, featured_preview_urls: [] };
     const currentLatest = toTimestamp(current.latest_asset_at);
     const rowCreatedAt = toTimestamp(row.created_at);
+    const nextPreviewUrl = row.previews?.find((preview) => typeof preview.preview_url === "string" && preview.preview_url.trim().length > 0)?.preview_url?.trim();
+    const featuredPreviewUrls = nextPreviewUrl
+      ? [...current.featured_preview_urls, nextPreviewUrl].filter((value, index, values) => values.indexOf(value) === index).slice(0, 4)
+      : current.featured_preview_urls;
 
     creatorStats.set(row.creator_id, {
       published_assets: current.published_assets + 1,
-      latest_asset_at: rowCreatedAt > currentLatest ? row.created_at : current.latest_asset_at
+      latest_asset_at: rowCreatedAt > currentLatest ? row.created_at : current.latest_asset_at,
+      featured_preview_urls: featuredPreviewUrls
     });
   }
 
@@ -1260,7 +1389,7 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
 
   const baseCreators = profileRows
     .map((profile) => {
-      const stats = creatorStats.get(profile.id) ?? { published_assets: 0, latest_asset_at: null };
+      const stats = creatorStats.get(profile.id) ?? { published_assets: 0, latest_asset_at: null, featured_preview_urls: [] };
       const rating = creatorRatingMap.get(profile.id) ?? { total: 0, count: 0 };
       const averageRating = rating.count > 0 ? Number((rating.total / rating.count).toFixed(2)) : 0;
       const followerCount = creatorFollowerMap.get(profile.id) ?? 0;
@@ -1281,7 +1410,9 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
         editor_pick: false,
         follower_count: followerCount,
         average_rating: averageRating,
-        review_count: rating.count
+        review_count: rating.count,
+        hire_enabled: profile.hire_enabled ?? true,
+        featured_preview_urls: stats.featured_preview_urls
       } as CreatorDirectoryEntry;
     })
     .filter((creator) => creator.published_assets > 0);
@@ -1728,18 +1859,57 @@ export async function getReleaseNotifications(userId: string): Promise<ReleaseNo
   return ((data ?? []) as CreatorReleaseNotificationRow[]).map(mapReleaseNotification);
 }
 
-export async function getUnreadReleaseNotificationsCount(userId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from("creator_release_notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("follower_id", userId)
-    .is("read_at", null);
+export async function getHireRequestNotifications(userId: string): Promise<HireRequestNotification[]> {
+  const { data, error } = await supabase
+    .from("creator_hire_requests")
+    .select(
+      "id, created_at, read_at, delivery_status, creator_id, requester_id, requester_display_name, requester_email, terms_snapshot, requester:profiles!creator_hire_requests_requester_id_fkey(id, display_name, avatar_url)"
+    )
+    .eq("creator_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(40);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return count ?? 0;
+  return ((data ?? []) as CreatorHireRequestRow[]).map(mapHireRequestNotification);
+}
+
+export async function getAccountNotifications(userId: string): Promise<AccountNotification[]> {
+  const [releaseNotifications, hireRequestNotifications] = await Promise.all([
+    getReleaseNotifications(userId),
+    getHireRequestNotifications(userId)
+  ]);
+
+  return [...hireRequestNotifications, ...releaseNotifications].sort(
+    (left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)
+  );
+}
+
+export async function getUnreadNotificationsCount(userId: string): Promise<number> {
+  const [releaseCountResult, hireCountResult] = await Promise.all([
+    supabase
+      .from("creator_release_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("follower_id", userId)
+      .is("read_at", null),
+    supabase
+      .from("creator_hire_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("creator_id", userId)
+      .is("read_at", null)
+  ]);
+
+  if (releaseCountResult.error) {
+    throw new Error(releaseCountResult.error.message);
+  }
+
+  if (hireCountResult.error) {
+    throw new Error(hireCountResult.error.message);
+  }
+
+  return (releaseCountResult.count ?? 0) + (hireCountResult.count ?? 0);
 }
 
 export async function markReleaseNotificationAsRead(notificationId: string, userId: string): Promise<void> {
@@ -1748,6 +1918,38 @@ export async function markReleaseNotificationAsRead(notificationId: string, user
     .update({ read_at: new Date().toISOString(), delivery_status: "sent" })
     .eq("id", notificationId)
     .eq("follower_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function markHireRequestAsRead(notificationId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("creator_hire_requests")
+    .update({ read_at: new Date().toISOString(), delivery_status: "sent" })
+    .eq("id", notificationId)
+    .eq("creator_id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function markAccountNotificationAsRead(notification: AccountNotification, userId: string): Promise<void> {
+  if (notification.kind === "hire_request") {
+    await markHireRequestAsRead(notification.id, userId);
+    return;
+  }
+
+  await markReleaseNotificationAsRead(notification.id, userId);
+}
+
+export async function submitCreatorHireRequest(creatorId: string): Promise<void> {
+  await requireAccessToken("Sign in to hire this creator.");
+  const { error } = await supabase.rpc("submit_creator_hire_request", {
+    p_creator_id: creatorId
+  });
 
   if (error) {
     throw new Error(error.message);
@@ -1985,7 +2187,6 @@ export async function createPayment(assetId: string, buyerEmailOverride?: string
 
   const payload = (await response.json()) as {
     order_id: string;
-    order_token?: string;
     reference: string;
     email?: string;
     amount_kobo?: number;
@@ -1998,21 +2199,18 @@ export async function createPayment(assetId: string, buyerEmailOverride?: string
   return payload;
 }
 
-export async function generateDownload(orderId: string, emailToken?: string) {
-  const { data } = await supabase.auth.getSession();
+export async function generateDownload(orderId: string) {
+  const accessToken = await requireAccessToken("Sign in to access your secure download.");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    apikey: env.VITE_SUPABASE_ANON_KEY
+    apikey: env.VITE_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${accessToken}`
   };
-
-  if (data.session?.access_token) {
-    headers.Authorization = `Bearer ${data.session.access_token}`;
-  }
 
   const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/generate-download`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ order_id: orderId, email_token: emailToken })
+    body: JSON.stringify({ order_id: orderId })
   });
 
   if (!response.ok) {
@@ -2027,21 +2225,18 @@ export async function generateDownload(orderId: string, emailToken?: string) {
   };
 }
 
-export async function verifyPayment(reference: string, emailToken?: string) {
-  const { data } = await supabase.auth.getSession();
+export async function verifyPayment(reference: string) {
+  const accessToken = await requireAccessToken("Sign in to verify this payment.");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    apikey: env.VITE_SUPABASE_ANON_KEY
+    apikey: env.VITE_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${accessToken}`
   };
-
-  if (data.session?.access_token) {
-    headers.Authorization = `Bearer ${data.session.access_token}`;
-  }
 
   const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/verify-payment`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ reference, email_token: emailToken })
+    body: JSON.stringify({ reference })
   });
 
   if (!response.ok) {
@@ -2062,9 +2257,9 @@ export async function verifyPayment(reference: string, emailToken?: string) {
   };
 }
 
-export async function confirmOrderEscrow(orderId: string, emailToken?: string) {
-  const client = await getOrderRpcClient(emailToken);
-  const { data, error } = await client.rpc("confirm_order_escrow", {
+export async function confirmOrderEscrow(orderId: string) {
+  await requireAccessToken("Sign in to confirm this purchase.");
+  const { data, error } = await supabase.rpc("confirm_order_escrow", {
     p_order_id: orderId
   });
 
@@ -2085,9 +2280,9 @@ export async function confirmOrderEscrow(orderId: string, emailToken?: string) {
   };
 }
 
-export async function reportOrderFileScam(orderId: string, reason: string, emailToken?: string) {
-  const client = await getOrderRpcClient(emailToken);
-  const { data, error } = await client.rpc("report_order_file_scam", {
+export async function reportOrderFileScam(orderId: string, reason: string) {
+  await requireAccessToken("Sign in to report a delivery issue.");
+  const { data, error } = await supabase.rpc("report_order_file_scam", {
     p_order_id: orderId,
     p_reason: reason.trim()
   });
@@ -2106,21 +2301,18 @@ export async function reportOrderFileScam(orderId: string, reason: string, email
 }
 export async function getBuyerOrders(options: {
   userId?: string;
-  emailToken?: string;
 }): Promise<Order[]> {
-  if (!options.userId && !options.emailToken) {
+  if (!options.userId) {
     return [];
   }
 
-  const client = options.userId ? supabase : createOrderAccessClient(options.emailToken);
-  await syncDueOrderEscrows(client);
+  await syncDueOrderEscrows();
 
-  let query = client
+  let query = supabase
     .from("orders")
     .select(
       `id,
       email,
-      email_token,
       status,
       amount_kobo,
       currency,
@@ -2214,7 +2406,6 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
         .select(
           `id,
           email,
-          email_token,
           status,
           amount_kobo,
           currency,
@@ -2810,12 +3001,43 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
     };
   });
 }
-export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]> {
-  const { data: profiles, error: profilesError } = await supabase
+
+export async function reviewCreatorVerificationRequest(creatorId: string, decision: "approve" | "reject", reviewNote = "") {
+  const { data, error } = await supabase.rpc("review_creator_verification_request", {
+    p_creator_id: creatorId,
+    p_decision: decision,
+    p_review_note: reviewNote.trim()
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("Verification review did not return an updated record.");
+  }
+
+  return {
+    creator_id: String(row.creator_id ?? creatorId),
+    status: row.status as CreatorVerificationStatus,
+    is_verified: Boolean(row.is_verified),
+    review_note: typeof row.review_note === "string" ? row.review_note : null,
+    reviewed_at: typeof row.reviewed_at === "string" ? row.reviewed_at : null
+  };
+}
+
+export async function getAdminCreators(limit?: number): Promise<AdminCreatorRecord[]> {
+  let profilesQuery = supabase
     .from("profiles")
     .select("id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, created_at, seller_account_status, seller_account_note")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("created_at", { ascending: false });
+
+  if (typeof limit === "number") {
+    profilesQuery = profilesQuery.limit(limit);
+  }
+
+  const { data: profiles, error: profilesError } = await profilesQuery;
 
   if (profilesError) {
     throw new Error(profilesError.message);
@@ -2828,14 +3050,15 @@ export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]
 
   const creatorIds = creatorList.map((profile) => profile.id);
 
-  const [assetsResult, walletsResult, payoutAccountsResult, followsResult] = await Promise.all([
+  const [assetsResult, walletsResult, payoutAccountsResult, followsResult, verificationResult] = await Promise.all([
     supabase.from("assets").select("creator_id, status, created_at").in("creator_id", creatorIds),
     supabase.from("wallet").select("creator_id, balance_kobo").in("creator_id", creatorIds),
     supabase
       .from("creator_payout_accounts")
       .select("creator_id, status, country, payout_type, settlement_bank_name, updated_at")
       .in("creator_id", creatorIds),
-    supabase.from("creator_follows").select("creator_id").in("creator_id", creatorIds)
+    supabase.from("creator_follows").select("creator_id").in("creator_id", creatorIds),
+    supabase.from("creator_verification_requests").select(CREATOR_VERIFICATION_SELECT).in("creator_id", creatorIds)
   ]);
 
   if (assetsResult.error) {
@@ -2849,6 +3072,9 @@ export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]
   }
   if (followsResult.error) {
     throw new Error(followsResult.error.message);
+  }
+  if (verificationResult.error) {
+    throw new Error(verificationResult.error.message);
   }
 
   const assetStats = new Map<
@@ -2900,6 +3126,10 @@ export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]
     followerCounts.set(row.creator_id, (followerCounts.get(row.creator_id) ?? 0) + 1);
   }
 
+  const verificationByCreator = new Map(
+    ((verificationResult.data ?? []) as CreatorVerificationRequestRow[]).map((row) => [row.creator_id, mapCreatorVerificationRequest(row)])
+  );
+
   return creatorList.map((profile) => {
     const stats = assetStats.get(profile.id) ?? {
       asset_count: 0,
@@ -2929,6 +3159,7 @@ export async function getAdminCreators(limit = 18): Promise<AdminCreatorRecord[]
       wallet_balance_kobo: walletByCreator.get(profile.id) ?? 0,
       seller_account_status: (profile.seller_account_status as AdminCreatorRecord["seller_account_status"] | null) ?? "active",
       seller_account_note: profile.seller_account_note ?? null,
+      verification_request: verificationByCreator.get(profile.id) ?? null,
       payout_account: payout
         ? {
             status: payout.status,

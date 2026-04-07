@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
+import { PageLoader } from "@/components/PageLoader";
 import { isCurrentUserAdmin } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
@@ -17,7 +18,7 @@ export function AdminProtectedRoute() {
   });
 
   if (!initialized) {
-    return <AdminAccessState title="Loading session" body="Checking your current sign-in before opening the admin workspace." />;
+    return <PageLoader label="Loading session" fullHeight />;
   }
 
   if (!user) {
@@ -26,7 +27,7 @@ export function AdminProtectedRoute() {
   }
 
   if (adminQuery.isLoading) {
-    return <AdminAccessState title="Checking admin access" body="Verifying that this account can open the marketplace admin workspace." />;
+    return <PageLoader label="Checking admin access" fullHeight />;
   }
 
   if (adminQuery.error) {

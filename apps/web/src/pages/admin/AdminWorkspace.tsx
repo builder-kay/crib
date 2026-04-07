@@ -3,9 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ActionConfirmationModal } from "@/components/ActionConfirmationModal";
 import { useToast } from "@/components/Toast";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { getUserContactEmail, getUserIdentityLabel, getUserMobileNumber, maskPhoneNumber } from "@/lib/auth";
 import { getAdminAssets, getAdminCreators, getAdminOrders, getAdminOverview, updateAssetStatus } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
+import { describeProfileVerificationField, getVerificationStatusLabel } from "@/lib/profileVerification";
 import type { AdminCreatorRecord, AdminOrderRecord, AdminOverview, Asset, Order } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
 
@@ -126,7 +128,7 @@ export function AdminPage() {
 
   const creatorsQuery = useQuery({
     queryKey: ["admin-creators"],
-    queryFn: () => getAdminCreators(18),
+    queryFn: () => getAdminCreators(),
     enabled: Boolean(user?.id)
   });
 
@@ -167,21 +169,26 @@ export function AdminPage() {
     return phone ? maskPhoneNumber(phone) : "Back-office access";
   }, [user]);
   const accountInitial = useMemo(() => accountLabel.charAt(0).toUpperCase() || "A", [accountLabel]);
+  const pendingVerificationCount = useMemo(
+    () => (creatorsQuery.data ?? []).filter((creator) => creator.verification_request?.status === "pending").length,
+    [creatorsQuery.data]
+  );
 
   const navBadges = useMemo<Record<AdminNavItem["id"], string | null>>(
     () => ({
       overview: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_profiles ?? 0}`,
       listings: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_assets ?? assetsQuery.data?.length ?? 0}`,
       orders: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_orders ?? ordersQuery.data?.length ?? 0}`,
-      creators: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.active_creators ?? creatorsQuery.data?.length ?? 0}`,
+      creators: creatorsQuery.isLoading ? "..." : pendingVerificationCount > 0 ? `${pendingVerificationCount} pending` : `${creatorsQuery.data?.length ?? 0}`,
       editors: "Access",
       settings: "Footer"
     }),
     [
       assetsQuery.data?.length,
       creatorsQuery.data?.length,
+      creatorsQuery.isLoading,
       ordersQuery.data?.length,
-      overviewQuery.data?.active_creators,
+      pendingVerificationCount,
       overviewQuery.data?.total_assets,
       overviewQuery.data?.total_orders,
       overviewQuery.data?.total_profiles,
@@ -202,12 +209,12 @@ export function AdminPage() {
         tone: "rose" as const
       },
       {
-        label: "Live listings",
-        value: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.published_assets ?? 0}`,
+        label: "Pending verification",
+        value: creatorsQuery.isLoading ? "..." : `${pendingVerificationCount}`,
         tone: "lagoon" as const
       }
     ],
-    [overviewQuery.data?.escrow_pending_orders, overviewQuery.data?.published_assets, overviewQuery.data?.scam_reported_orders, overviewQuery.isLoading]
+    [creatorsQuery.isLoading, overviewQuery.data?.escrow_pending_orders, overviewQuery.data?.scam_reported_orders, overviewQuery.isLoading, pendingVerificationCount]
   );
 
   const activeNavItem = useMemo(
@@ -517,8 +524,20 @@ export function SummaryPill({ label, value, tone }: { label: string; value: stri
   );
 }
 
-export function CreatorCard({ creator }: { creator: AdminCreatorRecord }) {
+export function CreatorCard({
+  creator,
+  onReviewVerification,
+  pendingVerificationAction
+}: {
+  creator: AdminCreatorRecord;
+  onReviewVerification?: (decision: "approve" | "reject") => void;
+  pendingVerificationAction?: "approve" | "reject" | null;
+}) {
   const initial = creator.display_name.charAt(0).toUpperCase() || "C";
+  const verification = creator.verification_request;
+  const verificationStatus = verification?.status ?? (creator.is_verified ? "approved" : "incomplete");
+  const missingFields = (verification?.missing_fields ?? []).map((field) => describeProfileVerificationField(field));
+  const canReviewVerification = verificationStatus === "pending" && Boolean(onReviewVerification);
 
   return (
     <article className="admin-record-card">
@@ -530,7 +549,7 @@ export function CreatorCard({ creator }: { creator: AdminCreatorRecord }) {
             <Link to={`/profile/${creator.id}`} className="truncate font-display text-xl font-semibold text-ink hover:text-cobalt-700">
               {creator.display_name}
             </Link>
-            {creator.is_verified ? <span className="admin-chip admin-chip-cobalt">Verified</span> : null}
+            {creator.is_verified ? <VerifiedBadge size="sm" /> : null}
             <span className="admin-chip admin-chip-sand">{creator.creator_category}</span>
             {creator.seller_account_status === "warned" ? <span className="admin-chip admin-chip-sunset">Warned</span> : null}
             {creator.seller_account_status === "suspended" ? <span className="admin-chip admin-chip-rose">Suspended</span> : null}
@@ -556,6 +575,63 @@ export function CreatorCard({ creator }: { creator: AdminCreatorRecord }) {
         <span className={`admin-chip ${creator.payout_account ? "admin-chip-cobalt" : "admin-chip-sand"}`}>
           {creator.payout_account ? `${creator.payout_account.payout_type === "mobile_money" ? "Mobile money" : "Bank"} payout - ${creator.payout_account.status}` : "No payout setup yet"}
         </span>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50/80 px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sand-500">Verification</p>
+            <p className="mt-1 text-sm font-semibold text-ink">{getVerificationStatusLabel(verificationStatus)}</p>
+          </div>
+          {creator.is_verified ? (
+            <VerifiedBadge size="sm" />
+          ) : (
+            <span
+              className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${
+                verificationStatus === "pending"
+                  ? "bg-cobalt-100 text-cobalt-700"
+                  : verificationStatus === "rejected"
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-sand-200 text-sand-700"
+              }`}
+            >
+              {verificationStatus}
+            </span>
+          )}
+        </div>
+
+        {verification?.is_profile_complete ? (
+          <p className="mt-2 text-sm text-sand-700">This creator has completed the required profile details and is ready for admin review.</p>
+        ) : (
+          <p className="mt-2 text-sm text-sand-700">
+            Missing details: {missingFields.length > 0 ? missingFields.join(", ") : "Profile details still need more work."}
+          </p>
+        )}
+
+        {verification?.review_note ? (
+          <p className="mt-3 rounded-2xl border border-sand-200 bg-white px-3 py-2 text-sm text-sand-700">{verification.review_note}</p>
+        ) : null}
+
+        {canReviewVerification ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onReviewVerification?.("approve")}
+              disabled={pendingVerificationAction !== null}
+              className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {pendingVerificationAction === "approve" ? "Approving..." : "Approve verification"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onReviewVerification?.("reject")}
+              disabled={pendingVerificationAction !== null}
+              className="rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {pendingVerificationAction === "reject" ? "Rejecting..." : "Reject"}
+            </button>
+          </div>
+        ) : null}
       </div>
     </article>
   );

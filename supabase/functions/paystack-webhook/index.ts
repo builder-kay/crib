@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { ensureOrderDeliverySnapshot } from "../_shared/asset-delivery.ts";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { verifyPaystackSignature, verifyPaystackTransaction } from "../_shared/paystack.ts";
 
@@ -169,6 +170,18 @@ Deno.serve(async (request) => {
       await supabase.from("payments").update({ status: "failed", raw: { webhook: payload, verify: verifyResponse, reason: "amount_mismatch" } }).eq("id", payment.id);
       await supabase.from("orders").update({ status: "failed" }).eq("id", order.id).neq("status", "paid");
       return jsonResponse({ ok: true, processed: "amount_mismatch" }, 200);
+    }
+
+    try {
+      await ensureOrderDeliverySnapshot(supabase, order.id);
+    } catch (error) {
+      return jsonResponse(
+        {
+          error: "Unable to lock the purchased delivery file",
+          details: error instanceof Error ? error.message : "Unknown error"
+        },
+        500
+      );
     }
 
     const { error: paymentUpdateError } = await supabase

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { getUserContactEmail } from "@/lib/auth";
 import { trackAnalyticsEvent } from "@/lib/api";
 import type { Asset } from "@/lib/types";
@@ -117,10 +118,12 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
             </Link>
             <p className="mt-0.5 text-xs text-sand-600">
               by{" "}
-              <Link to={creatorProfilePath} className="font-medium text-sand-700 hover:text-cobalt-700">
-                {creatorName}
-              </Link>
-              {isVerified ? <span className="ml-1 rounded-full bg-forest-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-forest-700">Verified</span> : null}
+              <span className="inline-flex items-center gap-1.5">
+                <Link to={creatorProfilePath} className="font-medium text-sand-700 hover:text-cobalt-700">
+                  {creatorName}
+                </Link>
+                {isVerified ? <VerifiedBadge size="sm" /> : null}
+              </span>
             </p>
           </div>
           <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} className="shrink-0 text-[11px]" />

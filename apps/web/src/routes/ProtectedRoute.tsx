@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { PageLoader } from "@/components/PageLoader";
 import { useAuthStore } from "@/store/authStore";
 
 type ProtectedRouteProps = {
@@ -13,7 +14,7 @@ export function ProtectedRoute({ children, signInPath = "/auth" }: ProtectedRout
   const location = useLocation();
 
   if (!initialized) {
-    return <div className="rounded-xl bg-white p-4 text-sm text-sand-600">Loading session...</div>;
+    return <PageLoader label="Loading session" fullHeight />;
   }
 
   if (!user) {

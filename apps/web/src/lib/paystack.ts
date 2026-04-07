@@ -19,7 +19,6 @@ declare global {
 type CheckoutPayload = {
   authorizationUrl: string;
   reference: string;
-  orderToken?: string;
   email?: string;
   amountKobo?: number;
   currency?: string;
@@ -84,9 +83,6 @@ export async function startPaystackCheckout(payload: CheckoutPayload) {
               : env.VITE_SITE_URL;
           const url = new URL("/orders", baseUrl);
           url.searchParams.set("reference", payload.reference);
-          if (payload.orderToken) {
-            url.searchParams.set("token", payload.orderToken);
-          }
           window.location.assign(url.toString());
         }
       });

@@ -1,5 +1,6 @@
 import { Suspense, lazy, type ComponentType } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { PageLoader } from "@/components/PageLoader";
 import { AppLayout } from "@/routes/AppLayout";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { AdminProtectedRoute } from "@/routes/AdminProtectedRoute";
@@ -28,6 +29,12 @@ const UploadPage = lazyPage(() => import("@/pages/UploadPage"), "UploadPage");
 const WishlistPage = lazyPage(() => import("@/pages/WishlistPage"), "WishlistPage");
 const NotificationsPage = lazyPage(() => import("@/pages/NotificationsPage"), "NotificationsPage");
 const ProfilePage = lazyPage(() => import("@/pages/ProfilePage"), "ProfilePage");
+const TermsOfUsePage = lazyPage(() => import("@/pages/FooterInfoPages"), "TermsOfUsePage");
+const PrivacyPage = lazyPage(() => import("@/pages/FooterInfoPages"), "PrivacyPage");
+const CommunityPage = lazyPage(() => import("@/pages/FooterInfoPages"), "CommunityPage");
+const HelpPage = lazyPage(() => import("@/pages/FooterInfoPages"), "HelpPage");
+const CookiePreferencesPage = lazyPage(() => import("@/pages/FooterInfoPages"), "CookiePreferencesPage");
+const PrivacyChoicesPage = lazyPage(() => import("@/pages/FooterInfoPages"), "PrivacyChoicesPage");
 const AdminPage = lazyPage(() => import("@/pages/AdminPage"), "AdminPage");
 const AdminOverviewPage = lazyPage(() => import("@/pages/AdminPage"), "AdminOverviewPage");
 const AdminListingsPage = lazyPage(() => import("@/pages/AdminPage"), "AdminListingsPage");
@@ -39,13 +46,7 @@ const EditorialAdminPage = lazyPage(() => import("@/pages/EditorialAdminPage"), 
 const NotFoundPage = lazyPage(() => import("@/pages/NotFoundPage"), "NotFoundPage");
 
 function RouteLoader() {
-  return (
-    <div className="mx-auto flex min-h-[42vh] w-full max-w-5xl items-center justify-center px-4 py-10">
-      <div className="rounded-2xl border border-sand-200 bg-white/90 px-5 py-3 text-sm font-medium text-sand-600 shadow-[0_18px_36px_-28px_rgba(16,19,36,0.35)]">
-        Loading page...
-      </div>
-    </div>
-  );
+  return <PageLoader label="Loading page" fullHeight />;
 }
 
 export function AppRoutes() {
@@ -63,6 +64,12 @@ export function AppRoutes() {
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/editorial-login" element={<AuthPage />} />
             <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/terms-of-use" element={<TermsOfUsePage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/community" element={<CommunityPage />} />
+            <Route path="/help" element={<HelpPage />} />
+            <Route path="/cookie-preferences" element={<CookiePreferencesPage />} />
+            <Route path="/do-not-sell-or-share" element={<PrivacyChoicesPage />} />
 
             <Route element={<ProtectedRoute />}>
               <Route path="/profile/:id" element={<ProfilePage />} />

@@ -10,6 +10,23 @@ export type Profile = {
   socials: Record<string, string>;
   seller_account_status: SellerAccountStatus;
   seller_account_note: string | null;
+  hire_enabled: boolean;
+  hire_terms: string;
+  verification: CreatorVerificationRequest | null;
+};
+
+export type ProfileVerificationField = "avatar" | "display_name" | "creator_category" | "niche" | "bio" | "social_link";
+export type CreatorVerificationStatus = "incomplete" | "pending" | "approved" | "rejected";
+
+export type CreatorVerificationRequest = {
+  creator_id: string;
+  status: CreatorVerificationStatus;
+  is_profile_complete: boolean;
+  missing_fields: ProfileVerificationField[];
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
 };
 
 export type RatingSummary = {
@@ -77,7 +94,6 @@ export type SellerAccountStatus = "active" | "warned" | "suspended";
 export type Order = {
   id: string;
   email: string;
-  email_token?: string;
   status: "pending" | "paid" | "failed" | "refunded";
   amount_kobo: number;
   currency: string;
@@ -133,19 +149,40 @@ export type CreatorDirectoryEntry = {
   follower_count: number;
   average_rating: number;
   review_count: number;
+  hire_enabled: boolean;
+  featured_preview_urls: string[];
 };
 
+export type NotificationDeliveryStatus = "pending" | "sent" | "dismissed" | "failed";
+
 export type ReleaseNotification = {
+  kind: "release";
   id: string;
   created_at: string;
   read_at: string | null;
-  delivery_status: "pending" | "sent" | "dismissed" | "failed";
+  delivery_status: NotificationDeliveryStatus;
   creator_id: string;
   follower_id: string;
   asset_id: string;
   creator_name: string;
   asset_title: string;
 };
+
+export type HireRequestNotification = {
+  kind: "hire_request";
+  id: string;
+  created_at: string;
+  read_at: string | null;
+  delivery_status: NotificationDeliveryStatus;
+  creator_id: string;
+  requester_id: string;
+  requester_name: string;
+  requester_email: string | null;
+  requester_avatar_url: string | null;
+  terms_snapshot: string;
+};
+
+export type AccountNotification = ReleaseNotification | HireRequestNotification;
 
 export type CreatorFunnelSummary = {
   asset_views: number;
@@ -260,6 +297,7 @@ export type AdminCreatorRecord = {
   wallet_balance_kobo: number;
   seller_account_status: SellerAccountStatus;
   seller_account_note: string | null;
+  verification_request: CreatorVerificationRequest | null;
   payout_account:
     | {
         status: "active" | "inactive";

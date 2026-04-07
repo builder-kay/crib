@@ -4,13 +4,11 @@ import { SearchInput } from "@/components/SearchInput";
 type FilterBarProps = {
   search: string;
   category: string;
-  creator: string;
   minPrice: string;
   maxPrice: string;
   fileType: string;
   onSearchChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
-  onCreatorChange: (value: string) => void;
   onMinPriceChange: (value: string) => void;
   onMaxPriceChange: (value: string) => void;
   onFileTypeChange: (value: string) => void;
@@ -21,13 +19,11 @@ type FilterBarProps = {
 export function FilterBar({
   search,
   category,
-  creator,
   minPrice,
   maxPrice,
   fileType,
   onSearchChange,
   onCategoryChange,
-  onCreatorChange,
   onMinPriceChange,
   onMaxPriceChange,
   onFileTypeChange,
@@ -35,8 +31,8 @@ export function FilterBar({
   canResetFilters = false
 }: FilterBarProps) {
   return (
-    <section className="surface-card discover-filter-panel space-y-3 p-3 md:p-4">
-      <div className="grid gap-3 md:grid-cols-[2fr,1fr,1fr,1.2fr,1fr]">
+    <section className="surface-card discover-filter-panel p-3 md:p-4">
+      <div className="grid gap-3 md:grid-cols-[2fr,1fr,1.2fr,1fr,auto]">
         <SearchInput value={search} onChange={onSearchChange} placeholder="Search templates, creators, apps, or styles..." />
 
         <select
@@ -51,13 +47,6 @@ export function FilterBar({
             </option>
           ))}
         </select>
-
-        <input
-          value={creator}
-          onChange={(event) => onCreatorChange(event.target.value)}
-          placeholder="Creator or brand"
-          className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
-        />
 
         <div className="flex items-center gap-2 rounded-full border border-sand-200 bg-white px-3 py-2">
           <input
@@ -90,20 +79,18 @@ export function FilterBar({
             </option>
           ))}
         </select>
-      </div>
 
-      {onResetFilters ? (
-        <div className="flex justify-end">
+        {onResetFilters ? (
           <button
             type="button"
             onClick={onResetFilters}
             disabled={!canResetFilters}
-            className="rounded-full border border-sand-300 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full border border-sand-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-50 md:self-center md:whitespace-nowrap"
           >
             Reset filters
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </section>
   );
 }

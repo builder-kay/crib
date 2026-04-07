@@ -1,10 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { ensureOrderDeliverySnapshot } from "../_shared/asset-delivery.ts";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 import { verifyPaystackTransaction } from "../_shared/paystack.ts";
 
 type VerifyPaymentPayload = {
   reference?: string;
-  email_token?: string;
 };
 
 function parseCommissionBps(value: string | undefined): number {
@@ -81,8 +81,6 @@ Deno.serve(async (request) => {
   }
 
   const reference = typeof body.reference === "string" ? body.reference.trim() : "";
-  const emailToken = typeof body.email_token === "string" ? body.email_token.trim() : "";
-
   if (!reference) {
     return jsonResponse({ error: "reference is required" }, 400);
   }
@@ -90,16 +88,17 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get("Authorization");
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
 
-  let requesterId: string | null = null;
-  let requesterEmail: string | null = null;
-
-  if (accessToken) {
-    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
-    if (!authError && authData.user) {
-      requesterId = authData.user.id;
-      requesterEmail = authData.user.email ?? null;
-    }
+  if (!accessToken) {
+    return jsonResponse({ error: "Authentication required" }, 401);
   }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+  if (authError || !authData.user) {
+    return jsonResponse({ error: "Invalid authentication token" }, 401);
+  }
+
+  const requesterId = authData.user.id;
+  const requesterEmail = authData.user.email ?? null;
 
   const { data: payment, error: paymentError } = await supabase
     .from("payments")
@@ -117,7 +116,7 @@ Deno.serve(async (request) => {
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id, asset_id, amount_kobo, currency, status, paid_at, buyer_id, email, email_token, commission_kobo, seller_net_amount_kobo, escrow_status, escrow_due_at, assets!inner(creator_id)")
+    .select("id, asset_id, amount_kobo, currency, status, paid_at, buyer_id, email, commission_kobo, seller_net_amount_kobo, escrow_status, escrow_due_at, assets!inner(creator_id)")
     .eq("id", payment.order_id)
     .single();
 
@@ -128,12 +127,9 @@ Deno.serve(async (request) => {
   const creatorId = (order.assets as { creator_id: string }).creator_id;
 
   const authorizedByAuth =
-    Boolean(requesterId) &&
-    (order.buyer_id === requesterId || creatorId === requesterId || (requesterEmail !== null && order.email === requesterEmail));
+    order.buyer_id === requesterId || creatorId === requesterId || (requesterEmail !== null && order.email === requesterEmail);
 
-  const authorizedByToken = emailToken !== "" && emailToken === order.email_token;
-
-  if (!authorizedByAuth && !authorizedByToken) {
+  if (!authorizedByAuth) {
     return jsonResponse({ error: "You are not authorized to verify this payment" }, 403);
   }
 
@@ -200,6 +196,18 @@ Deno.serve(async (request) => {
         payment_status: "failed",
         reason: "amount_or_currency_mismatch"
       });
+    }
+
+    try {
+      await ensureOrderDeliverySnapshot(supabase, order.id);
+    } catch (error) {
+      return jsonResponse(
+        {
+          error: "Unable to lock the purchased delivery file",
+          details: error instanceof Error ? error.message : "Unknown error"
+        },
+        500
+      );
     }
 
     const { error: paymentUpdateError } = await supabase

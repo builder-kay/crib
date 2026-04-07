@@ -85,13 +85,17 @@ Deno.serve(async (request) => {
   let buyerId: string | null = null;
   let buyerEmail = parseEmail(body.email) ?? null;
 
-  if (accessToken) {
-    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
-    if (!authError && authData.user) {
-      buyerId = authData.user.id;
-      buyerEmail = parseUserContactEmail(authData.user) ?? buyerEmail;
-    }
+  if (!accessToken) {
+    return jsonResponse({ error: "Authentication required" }, 401);
   }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+  if (authError || !authData.user) {
+    return jsonResponse({ error: "Invalid authentication token" }, 401);
+  }
+
+  buyerId = authData.user.id;
+  buyerEmail = parseUserContactEmail(authData.user) ?? buyerEmail;
 
   if (!buyerEmail) {
     return jsonResponse({ error: "A valid buyer email is required" }, 400);
@@ -204,7 +208,7 @@ Deno.serve(async (request) => {
       commission_kobo: commission,
       seller_net_amount_kobo: sellerNetAmount
     })
-    .select("id, email_token, amount_kobo, currency, commission_kobo, seller_net_amount_kobo")
+    .select("id, amount_kobo, currency, commission_kobo, seller_net_amount_kobo")
     .single();
 
   if (orderError || !order) {
@@ -219,13 +223,12 @@ Deno.serve(async (request) => {
       amount: order.amount_kobo,
       currency: order.currency,
       reference,
-      callback_url: `${siteUrl}/orders?reference=${encodeURIComponent(reference)}&token=${order.email_token}`,
+      callback_url: `${siteUrl}/orders?reference=${encodeURIComponent(reference)}`,
       metadata: {
         source: "crib",
         asset_id: asset.id,
         asset_title: asset.title,
         order_id: order.id,
-        order_token: order.email_token,
         buyer_id: buyerId,
         creator_id: asset.creator_id,
         commission_bps: commissionBps,
@@ -258,7 +261,6 @@ Deno.serve(async (request) => {
     return jsonResponse(
       {
         order_id: order.id,
-        order_token: order.email_token,
         reference,
         email: buyerEmail,
         amount_kobo: order.amount_kobo,

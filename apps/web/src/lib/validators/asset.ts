@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_HIRE_TERMS } from "@/lib/hire";
 
 export const ASSET_CATEGORIES = [
   "Figma Templates",
@@ -53,7 +54,9 @@ export const profileSchema = z.object({
   niche: z.string().max(80).optional().or(z.literal("")),
   website: z.string().url().optional().or(z.literal("")),
   instagram: z.string().max(120).optional().or(z.literal("")),
-  x: z.string().max(120).optional().or(z.literal(""))
+  x: z.string().max(120).optional().or(z.literal("")),
+  hire_enabled: z.boolean().default(true),
+  hire_terms: z.string().min(40).max(2400).default(DEFAULT_HIRE_TERMS)
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

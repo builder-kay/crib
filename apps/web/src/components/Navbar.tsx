@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Modal } from "@/components/Modal";
 import { getUserIdentityLabel } from "@/lib/auth";
-import { getProfile, getUnreadReleaseNotificationsCount, getWishlistCount, isCurrentUserAdmin, isCurrentUserEditorialAdmin } from "@/lib/api";
+import { getProfile, getUnreadNotificationsCount, getWishlistCount, isCurrentUserAdmin, isCurrentUserEditorialAdmin } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 
 const baseNavItems = [
@@ -12,6 +12,78 @@ const baseNavItems = [
   { to: "/editorial", label: "Editorial" }
 ];
 
+type MobilePrimaryNavId = "discover" | "creators" | "editorial" | "dashboard";
+
+type MobilePrimaryNavItem = {
+  id: MobilePrimaryNavId;
+  to: string;
+  label: string;
+};
+
+function isMobilePrimaryNavActive(pathname: string, itemId: MobilePrimaryNavId) {
+  switch (itemId) {
+    case "discover":
+      return pathname === "/market";
+    case "creators":
+      return pathname === "/creators";
+    case "editorial":
+      return pathname === "/editorial" || pathname.startsWith("/editorial/");
+    case "dashboard":
+      return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+    default:
+      return false;
+  }
+}
+
+function MobilePrimaryNavIcon({ id, active }: { id: MobilePrimaryNavId; active: boolean }) {
+  const sharedProps = {
+    className: `h-5 w-5 transition ${active ? "text-cobalt-700" : "text-sand-500"}`,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2"
+  } as const;
+
+  switch (id) {
+    case "discover":
+      return (
+        <svg {...sharedProps}>
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      );
+    case "creators":
+      return (
+        <svg {...sharedProps}>
+          <path d="M16 20v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1" />
+          <circle cx="10" cy="7" r="3" />
+          <path d="M20 20v-1a4 4 0 0 0-3-3.87" />
+          <path d="M16 4.13a3 3 0 0 1 0 5.74" />
+        </svg>
+      );
+    case "editorial":
+      return (
+        <svg {...sharedProps}>
+          <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21V5.5Z" />
+          <path d="M5 6h11" />
+          <path d="M8 8.5h7" />
+          <path d="M8 12h7" />
+        </svg>
+      );
+    case "dashboard":
+      return (
+        <svg {...sharedProps}>
+          <rect x="3" y="3" width="8" height="8" rx="2" />
+          <rect x="13" y="3" width="8" height="5" rx="2" />
+          <rect x="13" y="10" width="8" height="11" rx="2" />
+          <rect x="3" y="13" width="8" height="8" rx="2" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onToggleTheme: () => void }) {
   const user = useAuthStore((state) => state.user);
   const signOut = useAuthStore((state) => state.signOut);
@@ -19,7 +91,6 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   const navigate = useNavigate();
   const [globalSearch, setGlobalSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [confirmSignOutOpen, setConfirmSignOutOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const profileQuery = useQuery({
@@ -29,8 +100,8 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   });
 
   const unreadNotificationsQuery = useQuery({
-    queryKey: ["release-notifications-unread", user?.id],
-    queryFn: () => getUnreadReleaseNotificationsCount(user!.id),
+    queryKey: ["notifications-unread", user?.id],
+    queryFn: () => getUnreadNotificationsCount(user!.id),
     enabled: Boolean(user?.id)
   });
 
@@ -67,6 +138,16 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
     }
     return items;
   }, [adminQuery.data, editorialAdminQuery.data, user]);
+
+  const mobilePrimaryNavItems = useMemo<MobilePrimaryNavItem[]>(
+    () => [
+      { id: "discover", to: "/market", label: "Discover" },
+      { id: "creators", to: "/creators", label: "Creators" },
+      { id: "editorial", to: "/editorial", label: "Editorial" },
+      ...(user ? [{ id: "dashboard", to: "/dashboard", label: "Dashboard" } satisfies MobilePrimaryNavItem] : [])
+    ],
+    [user]
+  );
 
   const accountLabel = useMemo(() => {
     const profileName = profileQuery.data?.display_name?.trim();
@@ -107,10 +188,6 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [menuOpen]);
-
-  useEffect(() => {
-    setMobileNavOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     if (location.pathname !== "/market") {
@@ -308,51 +385,35 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                 Sign in
               </Link>
             )}
-
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen((prev) => !prev)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-sand-300 text-sand-700 transition hover:bg-sand-100 lg:hidden"
-              aria-label="Toggle navigation menu"
-              aria-expanded={mobileNavOpen}
-            >
-              {mobileNavOpen ? (
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 6h16" />
-                  <path d="M4 12h16" />
-                  <path d="M4 18h16" />
-                </svg>
-              )}
-            </button>
           </div>
         </nav>
-
-        {mobileNavOpen ? (
-          <div className="border-t border-sand-200 bg-white lg:hidden">
-            <div className="mx-auto w-full max-w-[1400px] space-y-1 px-4 py-3 md:px-6">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMobileNavOpen(false)}
-                  className={({ isActive }) =>
-                    `block rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                      isActive ? "bg-sand-100 text-ink" : "text-sand-700 hover:bg-sand-100 hover:text-ink"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </header>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-sand-200 bg-white/95 shadow-[0_-24px_44px_-34px_rgba(16,19,36,0.45)] backdrop-blur lg:hidden"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
+        aria-label="Primary navigation"
+      >
+        <div className={`mx-auto grid w-full max-w-[1400px] gap-1 px-2 pt-2 ${user ? "grid-cols-4" : "grid-cols-3"}`}>
+          {mobilePrimaryNavItems.map((item) => {
+            const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
+
+            return (
+              <Link
+                key={item.id}
+                to={item.to}
+                aria-current={isActive ? "page" : undefined}
+                className={`flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition ${
+                  isActive ? "bg-cobalt-50 text-cobalt-700" : "text-sand-600 hover:bg-sand-100 hover:text-ink"
+                }`}
+              >
+                <MobilePrimaryNavIcon id={item.id} active={isActive} />
+                <span className="text-xs font-semibold leading-none">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
 
       <Modal open={confirmSignOutOpen} title="Confirm Sign Out" onClose={() => setConfirmSignOutOpen(false)}>
         <div className="space-y-3">

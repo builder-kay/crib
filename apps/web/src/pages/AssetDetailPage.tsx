@@ -5,6 +5,7 @@ import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { getUserContactEmail } from "@/lib/auth";
 import {
   addAssetToWishlist,
@@ -148,7 +149,6 @@ export function AssetDetailPage() {
       void startPaystackCheckout({
         authorizationUrl: payload.authorization_url,
         reference: payload.reference,
-        orderToken: payload.order_token,
         email: payload.email,
         amountKobo: payload.amount_kobo,
         currency: payload.currency,
@@ -364,11 +364,7 @@ export function AssetDetailPage() {
                   <Link to={creatorProfilePath} className="inline-block text-sm font-semibold text-cobalt-700 hover:text-cobalt-800">
                     {creatorName}
                   </Link>
-                  {creatorVerified ? (
-                    <span className="rounded-full bg-forest-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-forest-700">
-                      Verified
-                    </span>
-                  ) : null}
+                  {creatorVerified ? <VerifiedBadge size="sm" /> : null}
                 </div>
                 <p className="mt-1 text-xs text-sand-600">
                   {creatorCategory} - {creatorSalesLabel}
@@ -481,11 +477,13 @@ export function AssetDetailPage() {
           </span>
           <h1 className="mt-3 font-display text-3xl font-bold leading-tight text-ink">{asset.title}</h1>
           <p className="mt-2 text-sm text-sand-700">
-            by{" "}
-            <Link to={creatorProfilePath} className="font-medium text-cobalt-700 hover:text-cobalt-800">
-              {creatorName}
-            </Link>
-            {creatorVerified ? <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-forest-700">Verified</span> : null}
+            <span className="inline-flex items-center gap-1.5">
+              <span>by</span>
+              <Link to={creatorProfilePath} className="font-medium text-cobalt-700 hover:text-cobalt-800">
+                {creatorName}
+              </Link>
+              {creatorVerified ? <VerifiedBadge size="sm" /> : null}
+            </span>
           </p>
           <p className="mt-1 text-xs text-sand-600">
             {creatorCategory} - {creatorSalesLabel}

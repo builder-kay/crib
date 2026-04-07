@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
@@ -26,6 +26,7 @@ export function OrdersPage() {
   const user = useAuthStore((state) => state.user);
   const userContactEmail = getUserContactEmail(user);
   const location = useLocation();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
@@ -38,21 +39,36 @@ export function OrdersPage() {
   const [reportOrderId, setReportOrderId] = useState<string | null>(null);
   const [scamReason, setScamReason] = useState("");
 
-  const token = params.get("token") ?? "";
   const reference = params.get("reference") ?? "";
+  const sanitizedSearch = useMemo(() => {
+    const next = new URLSearchParams(params);
+    next.delete("token");
+    const search = next.toString();
+    return search ? `?${search}` : "";
+  }, [params]);
+
+  useEffect(() => {
+    if (!params.get("token")) {
+      return;
+    }
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: sanitizedSearch
+      },
+      { replace: true }
+    );
+  }, [location.pathname, navigate, params, sanitizedSearch]);
 
   const ordersQuery = useQuery({
-    queryKey: ["orders", user?.id, userContactEmail, token],
-    queryFn: () =>
-      getBuyerOrders({
-        userId: user?.id,
-        emailToken: token || undefined
-      }),
-    enabled: initialized && Boolean(user?.id || token)
+    queryKey: ["orders", user?.id, userContactEmail],
+    queryFn: () => getBuyerOrders({ userId: user?.id }),
+    enabled: initialized && Boolean(user?.id)
   });
 
   const verifyMutation = useMutation({
-    mutationFn: () => verifyPayment(reference, token || undefined),
+    mutationFn: () => verifyPayment(reference),
     onSuccess: async (payload) => {
       if (payload.order_status === "paid") {
         if (payload.escrow_status === "awaiting_review") {
@@ -74,7 +90,7 @@ export function OrdersPage() {
   });
 
   useEffect(() => {
-    if (!reference || !initialized || (!user && !token)) {
+    if (!reference || !initialized || !user) {
       return;
     }
 
@@ -84,7 +100,7 @@ export function OrdersPage() {
 
     verifiedReferenceRef.current = reference;
     verifyMutation.mutate();
-  }, [reference, initialized, token, user, verifyMutation]);
+  }, [reference, initialized, user, verifyMutation]);
 
   const headline = useMemo(() => {
     if (reference) {
@@ -93,7 +109,7 @@ export function OrdersPage() {
     return "Your purchases, secure downloads, and escrow confirmations live here.";
   }, [reference]);
 
-  const signInRedirect = `/auth?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
+  const signInRedirect = `/auth?redirect=${encodeURIComponent(`${location.pathname}${sanitizedSearch}`)}`;
   const orders = ordersQuery.data ?? [];
 
   const releasedOrdersWithAssets = useMemo(
@@ -226,7 +242,7 @@ export function OrdersPage() {
   });
 
   const confirmEscrowMutation = useMutation({
-    mutationFn: (orderId: string) => confirmOrderEscrow(orderId, token || undefined),
+    mutationFn: (orderId: string) => confirmOrderEscrow(orderId),
     onSuccess: async () => {
       pushToast("Thanks for confirming the file. The seller payout has been released.", "success");
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -237,8 +253,7 @@ export function OrdersPage() {
   });
 
   const reportScamMutation = useMutation({
-    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
-      reportOrderFileScam(orderId, reason, token || undefined),
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) => reportOrderFileScam(orderId, reason),
     onSuccess: async () => {
       pushToast("File scam reported. The seller payout will stay on hold while this is reviewed.", "success");
       setReportOrderId(null);
@@ -344,7 +359,7 @@ export function OrdersPage() {
     return <div className="surface-card p-5 text-sm text-sand-600">Loading orders...</div>;
   }
 
-  if (!user && !token) {
+  if (!user) {
     return (
       <EmptyState
         title="No order access yet"
@@ -461,7 +476,7 @@ export function OrdersPage() {
                       disabled={!canDownload}
                       onClick={async () => {
                         try {
-                          const payload = await generateDownload(order.id, token || undefined);
+                          const payload = await generateDownload(order.id);
                           const link = document.createElement("a");
                           link.href = payload.url;
                           link.download = payload.filename || "creative-cloud-download";

@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
+import { HireCreatorModal } from "@/components/HireCreatorModal";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { getUserContactEmail, getUserIdentityLabel } from "@/lib/auth";
 import {
   deleteCreatorReview,
@@ -22,6 +24,11 @@ import {
   upsertCreatorReview,
   upsertPayoutAccount
 } from "@/lib/api";
+import { DEFAULT_HIRE_TERMS } from "@/lib/hire";
+import {
+  getProfileVerificationChecklist,
+  getVerificationStatusLabel
+} from "@/lib/profileVerification";
 import { formatFileSize, MAX_PROFILE_AVATAR_SIZE_BYTES } from "@/lib/uploadLimits";
 import { payoutAccountSchema, profileSchema } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
@@ -156,9 +163,12 @@ export function ProfilePage() {
   const [website, setWebsite] = useState("");
   const [instagram, setInstagram] = useState("");
   const [xHandle, setXHandle] = useState("");
+  const [hireEnabled, setHireEnabled] = useState(true);
+  const [hireTerms, setHireTerms] = useState(DEFAULT_HIRE_TERMS);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTabId>("overview");
+  const [hireModalOpen, setHireModalOpen] = useState(false);
 
   useEffect(() => {
     if (!profileQuery.data) {
@@ -172,6 +182,8 @@ export function ProfilePage() {
     setWebsite((profileQuery.data.socials?.website as string) ?? "");
     setInstagram((profileQuery.data.socials?.instagram as string) ?? "");
     setXHandle((profileQuery.data.socials?.x as string) ?? "");
+    setHireEnabled(profileQuery.data.hire_enabled ?? true);
+    setHireTerms(profileQuery.data.hire_terms?.trim() || DEFAULT_HIRE_TERMS);
   }, [profileQuery.data]);
 
   useEffect(() => {
@@ -200,6 +212,7 @@ export function ProfilePage() {
 
   useEffect(() => {
     setActiveTab("overview");
+    setHireModalOpen(false);
   }, [isOwnProfile, profileId]);
 
   useEffect(() => {
@@ -259,7 +272,9 @@ export function ProfilePage() {
         niche: niche.trim(),
         website: website.trim(),
         instagram: instagram.trim(),
-        x: xHandle.trim()
+        x: xHandle.trim(),
+        hire_enabled: hireEnabled,
+        hire_terms: hireTerms.trim()
       });
 
       if (!parsed.success) {
@@ -268,9 +283,23 @@ export function ProfilePage() {
 
       return updateProfile(user.id, parsed.data);
     },
-    onSuccess: async () => {
-      pushToast("Profile updated", "success");
-      await queryClient.invalidateQueries({ queryKey: ["profile", profileId] });
+    onSuccess: async (profile) => {
+      const verificationStatus = profile.verification?.status;
+      pushToast(
+        verificationStatus === "pending"
+          ? "Profile updated. Verification is now pending admin review."
+          : verificationStatus === "approved"
+            ? "Profile updated."
+            : "Profile updated. Finish the verification checklist to submit for review.",
+        "success"
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profile", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
+        queryClient.invalidateQueries({ queryKey: ["hire-creator-profile", profileId] }),
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-creators"] })
+      ]);
     },
     onError: (error) => {
       pushToast(error instanceof Error ? error.message : "Profile update failed", "error");
@@ -295,7 +324,8 @@ export function ProfilePage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["profile", profileId] }),
         queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
-        queryClient.invalidateQueries({ queryKey: ["market-assets"] })
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-creators"] })
       ]);
     },
     onError: (error) => {
@@ -439,6 +469,21 @@ export function ProfilePage() {
     return isOwnProfile ? assets : assets.filter((asset) => asset.status === "published");
   }, [assetsQuery.data, isOwnProfile]);
 
+  const verificationChecklist = useMemo(
+    () =>
+      getProfileVerificationChecklist({
+        avatar_url: profileQuery.data?.avatar_url || "",
+        display_name: displayName,
+        creator_category: creatorCategory,
+        niche,
+        bio,
+        website,
+        instagram,
+        x: xHandle
+      }),
+    [bio, creatorCategory, displayName, instagram, niche, profileQuery.data?.avatar_url, website, xHandle]
+  );
+
   if (!profileId) {
     return (
       <EmptyState
@@ -474,6 +519,10 @@ export function ProfilePage() {
   const listedWorksCount = portfolioAssets.length;
   const listedWorksLabel = `${listedWorksCount} listed work${listedWorksCount === 1 ? "" : "s"}`;
   const activeAvatarUrl = avatarPreviewUrl || profileQuery.data?.avatar_url || "";
+  const verificationRequest = profileQuery.data?.verification ?? null;
+  const verificationStatus = verificationRequest?.status ?? (isVerified ? "approved" : "incomplete");
+  const verificationStatusLabel = getVerificationStatusLabel(verificationStatus);
+  const verificationReadyCount = verificationChecklist.filter((item) => item.complete).length;
   const payoutAccount = payoutSetupQuery.data?.account ?? null;
   const payoutBanks = payoutSetupQuery.data?.banks ?? [];
   const payoutMobileProviders = payoutSetupQuery.data?.mobile_money_providers ?? [];
@@ -482,6 +531,7 @@ export function ProfilePage() {
   const hasPayoutAccount = Boolean(payoutAccount);
   const followerCount = followStatsQuery.data?.followerCount ?? 0;
   const isFollowing = followStatsQuery.data?.isFollowing ?? false;
+  const canAcceptHireRequests = profileQuery.data?.hire_enabled ?? true;
   const creatorRatingSummary = creatorRatingSummaryQuery.data ?? { average_rating: 0, review_count: 0 };
   const creatorReviews = creatorReviewsQuery.data ?? [];
   const canLeaveCreatorReview = Boolean(user?.id) && !isOwnProfile && purchaseEligibilityQuery.data === true;
@@ -571,13 +621,21 @@ export function ProfilePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-2xl font-bold text-ink">{profileName}</h2>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                    isVerified ? "bg-forest-100 text-forest-700" : "bg-sand-100 text-sand-600"
-                  }`}
-                >
-                  {isVerified ? "Verified" : "Verification soon"}
-                </span>
+                {isVerified ? (
+                  <VerifiedBadge size="sm" />
+                ) : isOwnProfile ? (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                      verificationStatus === "pending"
+                        ? "bg-cobalt-100 text-cobalt-700"
+                        : verificationStatus === "rejected"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-sand-100 text-sand-600"
+                    }`}
+                  >
+                    {verificationStatusLabel}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-1 text-sm text-sand-600">{profileQuery.data?.niche || "Creative entrepreneur"}</p>
               {isOwnProfile && userContactEmail ? <p className="mt-1 text-xs text-sand-500">{userContactEmail}</p> : null}
@@ -668,6 +726,16 @@ export function ProfilePage() {
                 >
                   Explore Marketplace
                 </Link>
+
+                {canAcceptHireRequests ? (
+                  <button
+                    type="button"
+                    onClick={() => setHireModalOpen(true)}
+                    className="rounded-full border border-cobalt-300 bg-cobalt-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cobalt-700 transition hover:bg-cobalt-100"
+                  >
+                    Hire creator
+                  </button>
+                ) : null}
               </>
             )}
           </div>
@@ -990,8 +1058,56 @@ export function ProfilePage() {
               </p>
             </div>
             <p className="mt-3 text-sm text-sand-600">
-              Your public profile powers trust in marketplace listings. Bio and category are required.
+              Your public profile powers trust in marketplace listings, creator discovery, and verification review.
             </p>
+            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Verification</p>
+                  <h3 className="mt-1 text-lg font-semibold text-ink">{verificationStatusLabel}</h3>
+                  <p className="mt-1 text-sm text-sand-600">
+                    Saving a complete profile automatically sends it to the admin review queue for verification.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 rounded-full border border-sand-200 bg-sand-50 px-3 py-2">
+                  {isVerified ? <VerifiedBadge size="sm" /> : null}
+                  <span className="text-xs font-semibold uppercase tracking-[0.12em] text-sand-700">
+                    {verificationReadyCount}/{verificationChecklist.length} complete
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {verificationChecklist.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`rounded-xl border px-3 py-3 ${
+                      item.complete ? "border-forest-200 bg-forest-50/70" : "border-sand-200 bg-sand-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                          item.complete ? "bg-forest-600 text-white" : "bg-sand-200 text-sand-600"
+                        }`}
+                      >
+                        {item.complete ? "OK" : "."}
+                      </span>
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{item.label}</p>
+                        <p className="mt-1 text-xs text-sand-600">{item.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {verificationRequest?.review_note ? (
+                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {verificationRequest.review_note}
+                </div>
+              ) : null}
+            </div>
             <form
               className="mt-4 space-y-4"
               onSubmit={(event) => {
@@ -1066,7 +1182,7 @@ export function ProfilePage() {
                   <Field label="Category" value={creatorCategory} onChange={setCreatorCategory} required />
                 </div>
                 <div className="mt-3">
-                  <Field label="Niche (optional)" value={niche} onChange={setNiche} />
+                  <Field label="Niche" value={niche} onChange={setNiche} required />
                 </div>
               </div>
 
@@ -1084,6 +1200,34 @@ export function ProfilePage() {
                   <Field label="Instagram" value={instagram} onChange={setInstagram} />
                   <Field label="X / Twitter" value={xHandle} onChange={setXHandle} />
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-sand-200 bg-white p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-sand-800">Hire settings</p>
+                    <p className="mt-1 text-xs text-sand-500">
+                      Turn your hire button on or off and set the terms clients must review before sending a hire request.
+                    </p>
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 rounded-full border border-sand-300 bg-sand-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-sand-700">
+                    <input
+                      type="checkbox"
+                      checked={hireEnabled}
+                      onChange={(event) => setHireEnabled(event.target.checked)}
+                      className="h-4 w-4 rounded border-sand-300 text-cobalt-600 focus:ring-cobalt-400"
+                    />
+                    Hire button {hireEnabled ? "On" : "Off"}
+                  </label>
+                </div>
+
+                <div className="mt-4">
+                  <Field label="Terms of hire" value={hireTerms} onChange={setHireTerms} multiline required />
+                </div>
+                <p className="mt-2 text-xs text-sand-500">
+                  Clients will see these terms in a modal before they can send a hire request to your account.
+                </p>
               </div>
 
               <button
@@ -1122,6 +1266,15 @@ export function ProfilePage() {
         ) : null}
         {assetsQuery.data && portfolioAssets.length > 0 ? <AssetGrid assets={portfolioAssets} /> : null}
         </section>
+      ) : null}
+
+      {!isOwnProfile ? (
+        <HireCreatorModal
+          open={hireModalOpen}
+          creatorId={profileId}
+          creatorName={profileName}
+          onClose={() => setHireModalOpen(false)}
+        />
       ) : null}
     </div>
   );
