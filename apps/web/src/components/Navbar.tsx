@@ -433,7 +433,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
         aria-label="Primary navigation"
       >
-        <div className="mx-auto flex min-w-max gap-1 px-2 pt-2">
+        <div className="mx-auto flex min-w-full snap-x snap-mandatory gap-1 px-2 pt-2">
           {mobilePrimaryNavItems.map((item) => {
             const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
 
@@ -444,7 +444,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                 aria-current={isActive ? "page" : undefined}
                 onMouseEnter={() => prefetchRoute(item.preload)}
                 onFocus={() => prefetchRoute(item.preload)}
-                className={`flex min-h-[68px] min-w-[86px] flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-center transition ${
+                className={`flex min-h-[68px] w-[calc((100vw-1.5rem)/3)] min-w-[calc((100vw-1.5rem)/3)] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-center transition ${
                   isActive ? "bg-cobalt-50 text-cobalt-700" : "text-sand-600 hover:bg-sand-100 hover:text-ink"
                 }`}
               >
