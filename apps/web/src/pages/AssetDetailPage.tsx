@@ -20,7 +20,7 @@ import {
   upsertAssetReview
 } from "@/lib/api";
 import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFormatLabel, getAssetPrimaryFilename } from "@/lib/assetCatalog";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMajorCurrency } from "@/lib/format";
 import { startPaystackCheckout } from "@/lib/paystack";
 import { useAuthStore } from "@/store/authStore";
 
@@ -36,6 +36,7 @@ export function AssetDetailPage() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [checkoutEmail, setCheckoutEmail] = useState("");
+  const [customAmount, setCustomAmount] = useState("");
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -80,6 +81,21 @@ export function AssetDetailPage() {
     setReviewRating(5);
     setReviewText("");
   }, [existingUserReview, user?.id]);
+
+  useEffect(() => {
+    if (!assetQuery.data) {
+      setCustomAmount("");
+      return;
+    }
+
+    if (assetQuery.data.pricing_model === "free") {
+      setCustomAmount("0");
+      return;
+    }
+
+    const defaultAmount = Math.max(assetQuery.data.price_kobo, assetQuery.data.minimum_price_kobo) / 100;
+    setCustomAmount(String(defaultAmount));
+  }, [assetQuery.data]);
 
   useEffect(() => {
     if (!assetQuery.data || typeof window === "undefined") {
@@ -128,9 +144,28 @@ export function AssetDetailPage() {
         throw new Error("Listing is not loaded");
       }
 
-      return createPayment(assetQuery.data.id, checkoutEmail.trim() || undefined);
+      let amountKobo: number | undefined;
+      if (assetQuery.data.pricing_model === "pay_what_you_want") {
+        const parsedAmount = Number(customAmount);
+        const minimumAmountMajor = assetQuery.data.minimum_price_kobo / 100;
+
+        if (!Number.isFinite(parsedAmount)) {
+          throw new Error("Enter the amount you want to pay for this template.");
+        }
+
+        if (parsedAmount < minimumAmountMajor) {
+          throw new Error(`Amount must be at least ${formatMajorCurrency(minimumAmountMajor, assetQuery.data.currency)}.`);
+        }
+
+        amountKobo = Math.round(parsedAmount * 100);
+      }
+
+      return createPayment(assetQuery.data.id, {
+        buyerEmailOverride: checkoutEmail.trim() || undefined,
+        amountKobo
+      });
     },
-    onSuccess: (payload) => {
+    onSuccess: async (payload) => {
       if (assetQuery.data) {
         void trackAnalyticsEvent({
           eventName: "checkout_start",
@@ -145,10 +180,20 @@ export function AssetDetailPage() {
         });
       }
 
+      if (payload.checkout_mode === "instant" || !payload.authorization_url) {
+        pushToast("Template unlocked. Open Orders to access it and view your receipt.", "success");
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["orders"] }),
+          queryClient.invalidateQueries({ queryKey: ["asset-paid-order", id, user?.id, userContactEmail] })
+        ]);
+        navigate(ordersPath);
+        return;
+      }
+
       pushToast("Redirecting to secure payment...", "success");
-      void startPaystackCheckout({
+      await startPaystackCheckout({
         authorizationUrl: payload.authorization_url,
-        reference: payload.reference,
+        reference: payload.reference ?? "",
         email: payload.email,
         amountKobo: payload.amount_kobo,
         currency: payload.currency,
@@ -275,8 +320,19 @@ export function AssetDetailPage() {
   const asset = assetQuery.data;
   const isOwnAsset = Boolean(user?.id) && user?.id === asset.creator_id;
   const alreadyPurchased = existingPurchaseQuery.data === true;
+  const isFreeAsset = asset.pricing_model === "free";
+  const isPayWhatYouWant = asset.pricing_model === "pay_what_you_want";
+  const isExternalLinkDelivery = asset.delivery_mode === "external_link";
+  const deliveryReviewLabel = isExternalLinkDelivery ? "template link" : "file";
+  const deliveryPastAction = isExternalLinkDelivery ? "access it" : "download it";
   const purchaseAvailable = asset.status === "published" && !isOwnAsset && !alreadyPurchased;
   const canReview = Boolean(user?.id) && alreadyPurchased && !isOwnAsset;
+  const minimumCheckoutAmountMajor = asset.minimum_price_kobo / 100;
+  const suggestedCheckoutAmountMajor = Math.max(asset.price_kobo, asset.minimum_price_kobo) / 100;
+  const typedCheckoutAmount = Number(customAmount);
+  const normalizedCheckoutAmount = Number.isFinite(typedCheckoutAmount)
+    ? Math.max(typedCheckoutAmount, minimumCheckoutAmountMajor)
+    : suggestedCheckoutAmountMajor;
   const buyButtonLabel = paymentMutation.isPending
     ? "Processing..."
     : asset.status !== "published"
@@ -286,8 +342,14 @@ export function AssetDetailPage() {
         : alreadyPurchased
           ? "Purchased"
           : !user
-            ? "Sign in to buy"
-            : "Buy now";
+            ? isFreeAsset
+              ? "Sign in to claim"
+              : "Sign in to buy"
+            : isFreeAsset
+              ? "Get free access"
+              : isPayWhatYouWant
+                ? "Continue to checkout"
+                : "Buy now";
   const creatorName = asset.profile?.display_name ?? "Creator";
   const creatorSalesCount = Math.max(0, asset.profile?.sales_count ?? 0);
   const creatorSalesLabel = `${new Intl.NumberFormat("en-US").format(creatorSalesCount)} sales`;
@@ -309,7 +371,7 @@ export function AssetDetailPage() {
       ? "Only published listings can be purchased."
       : isOwnAsset
         ? "Creators cannot purchase their own listings."
-        : "You already purchased this listing. Open Orders to download it.";
+        : `You already purchased this listing. Open Orders to ${deliveryPastAction}.`;
   const reviewCount = asset.review_count ?? 0;
   const averageRating = asset.average_rating ?? 0;
   const reviews = assetReviewsQuery.data ?? [];
@@ -498,18 +560,51 @@ export function AssetDetailPage() {
           </div>
 
           <div className="mt-5 flex items-center justify-between gap-3">
-            <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} className="text-base" />
+            <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} pricingModel={asset.pricing_model} minimumPriceKobo={asset.minimum_price_kobo} className="text-base" />
             <span className="text-xs text-sand-500">Updated {formatDate(asset.created_at)}</span>
           </div>
 
+          {isPayWhatYouWant ? (
+            <div className="mt-3 rounded-2xl border border-sand-200 bg-sand-50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-600">Choose your amount</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr),auto] sm:items-end">
+                <label className="block">
+                  <span className="block text-sm font-medium text-sand-800">Your checkout amount</span>
+                  <input
+                    value={customAmount}
+                    onChange={(event) => setCustomAmount(event.target.value)}
+                    type="number"
+                    min={minimumCheckoutAmountMajor}
+                    step="0.01"
+                    className="mt-2 w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
+                  />
+                </label>
+                <div className="rounded-xl border border-cobalt-100 bg-cobalt-50 px-3 py-2 text-sm font-semibold text-cobalt-700">
+                  {formatMajorCurrency(normalizedCheckoutAmount, asset.currency)}
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-sand-600">
+                Minimum {formatMajorCurrency(minimumCheckoutAmountMajor, asset.currency)}. Suggested {formatMajorCurrency(suggestedCheckoutAmountMajor, asset.currency)}.
+              </p>
+            </div>
+          ) : isFreeAsset ? (
+            <div className="mt-3 rounded-2xl border border-forest-100 bg-forest-50 p-4 text-sm text-forest-900">
+              This template is free to claim. We still create an order record and receipt so you can reopen it later from Orders.
+            </div>
+          ) : null}
+
           <div className="mt-4 rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Escrow Checkout</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">{isFreeAsset ? "Instant Access" : "Escrow Checkout"}</p>
             <p className="mt-2 text-sm text-cobalt-900">
-              Payment unlocks your secure download, but the seller payout stays in escrow first. Open the file, make sure it is the correct delivery, then confirm it is genuine or report a file scam from Orders.
+              {isFreeAsset
+                ? `Claiming this template adds it to your orders instantly so you can open the ${deliveryReviewLabel} and keep the receipt for later.`
+                : `Payment unlocks your ${isExternalLinkDelivery ? "private template link" : "secure download"}, but the seller payout stays in escrow first. Open the ${deliveryReviewLabel}, make sure it matches the listing, then confirm it is genuine or report a scam from Orders.`}
             </p>
-            <p className="mt-2 text-xs text-cobalt-900/80">
-              If you do nothing for 24 hours after payment, we automatically treat the delivery as genuine and release the seller payout.
-            </p>
+            {!isFreeAsset ? (
+              <p className="mt-2 text-xs text-cobalt-900/80">
+                If you do nothing for 24 hours after payment, we automatically treat the delivery as genuine and release the seller payout.
+              </p>
+            ) : null}
           </div>
 
           <button
@@ -529,12 +624,12 @@ export function AssetDetailPage() {
                 return;
               }
               if (!user) {
-                pushToast("Sign in to buy templates and access your downloads.", "info");
+                pushToast(isFreeAsset ? "Sign in to claim templates and access your orders." : "Sign in to buy templates and access your downloads.", "info");
                 navigate(`/auth?redirect=${encodeURIComponent(`/asset/${asset.id}`)}`);
                 return;
               }
               if (!checkoutContactEmail) {
-                pushToast("Add an email for checkout so we can initialize payment.", "info");
+                pushToast("Add an email so we can issue your receipt and initialize checkout.", "info");
                 return;
               }
 
@@ -560,7 +655,7 @@ export function AssetDetailPage() {
                 placeholder="name@example.com"
                 className="mt-2 w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
               />
-              <p className="mt-2 text-xs text-sand-500">Paystack needs a real email for checkout. This does not change your sign-in method.</p>
+              <p className="mt-2 text-xs text-sand-500">Use a real email so we can issue receipts and complete any paid checkout. This does not change your sign-in method.</p>
             </div>
           ) : null}
 
@@ -584,7 +679,7 @@ export function AssetDetailPage() {
 
           {purchaseAvailable && !user ? (
             <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">
-              Sign in to buy this template, verify payment, and access creator profiles.
+              {isFreeAsset ? "Sign in to claim this template and keep it in your orders." : "Sign in to buy this template, verify payment, and access creator profiles."}
             </div>
           ) : null}
 
@@ -600,7 +695,7 @@ export function AssetDetailPage() {
           </Link>
 
           <p className="mt-3 text-center text-xs text-sand-500">
-            Secure checkout via Paystack. Download unlocks after payment, and seller payout is released when you confirm the file or when the 24-hour review window closes with no scam report.
+            {isFreeAsset ? `Free checkout still creates a receipt so you can reopen this ${deliveryReviewLabel} later.` : `Secure checkout via Paystack. ${isExternalLinkDelivery ? "Access link" : "Download"} unlocks after payment, and seller payout is released when you confirm the delivery or when the 24-hour review window closes with no scam report.`}
           </p>
         </aside>
       </div>
@@ -609,7 +704,7 @@ export function AssetDetailPage() {
         <div className="space-y-3">
           <p className="text-sm text-sand-700">
             You have already purchased <span className="font-semibold text-ink">{asset.title}</span>. Open your orders to
-            download it.
+            {deliveryPastAction}.
           </p>
           <Link
             to={ordersPath}
@@ -632,3 +727,8 @@ function MetaItem({ label, value, preserveCase = false }: { label: string; value
     </div>
   );
 }
+
+
+
+
+

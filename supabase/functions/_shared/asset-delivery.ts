@@ -1,16 +1,27 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 type ServiceClient = ReturnType<typeof createClient>;
+type DeliveryMode = "file" | "external_link";
+
+type AssetSummaryRow = {
+  title: string;
+  category: string | null;
+  delivery_mode: DeliveryMode | null;
+  external_delivery_url: string | null;
+};
 
 type OrderSnapshotRow = {
   id: string;
   asset_id: string;
+  delivery_mode: DeliveryMode | null;
+  delivery_external_url: string | null;
   delivery_storage_path: string | null;
   delivery_original_name: string | null;
   delivery_file_type: string | null;
   delivery_file_size: number | null;
   delivery_file_sha256: string | null;
   delivery_locked_at: string | null;
+  asset: AssetSummaryRow | AssetSummaryRow[] | null;
 };
 
 type AssetFileRow = {
@@ -24,6 +35,45 @@ type AssetFileRow = {
   file_sha256: string | null;
   immutable_locked_at: string | null;
 };
+
+type FileDeliverySnapshot = {
+  deliveryType: "file";
+  storagePath: string;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+  fileSha256: string;
+  lockedAt: string;
+  actionLabel: string;
+};
+
+type ExternalLinkDeliverySnapshot = {
+  deliveryType: "external_link";
+  url: string;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+  fileSha256: null;
+  lockedAt: string;
+  actionLabel: string;
+};
+
+function normalizeJoinedRecord<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) {
+    return null;
+  }
+
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function normalizeUrl(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
 
 function toHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
@@ -44,7 +94,19 @@ function buildImmutableStoragePath(file: Pick<AssetFileRow, "asset_id" | "id" | 
   return `immutable/${file.asset_id}/${file.id}/${sanitizeFilenameSegment(file.original_name)}`;
 }
 
-function isCompleteOrderSnapshot(order: OrderSnapshotRow) {
+function inferDeliveryMode(order: OrderSnapshotRow, asset: AssetSummaryRow | null): DeliveryMode {
+  if (order.delivery_mode === "external_link" || asset?.delivery_mode === "external_link") {
+    return "external_link";
+  }
+
+  if (normalizeUrl(order.delivery_external_url) || normalizeUrl(asset?.external_delivery_url)) {
+    return "external_link";
+  }
+
+  return "file";
+}
+
+function isCompleteFileSnapshot(order: OrderSnapshotRow) {
   return Boolean(
     order.delivery_storage_path &&
       order.delivery_original_name &&
@@ -54,6 +116,33 @@ function isCompleteOrderSnapshot(order: OrderSnapshotRow) {
       order.delivery_file_sha256 &&
       order.delivery_locked_at
   );
+}
+
+function inferExternalLinkLabel(url: string) {
+  const normalized = url.toLowerCase();
+  if (normalized.includes("canva.com")) {
+    return "Canva template";
+  }
+  if (normalized.includes("figma.com")) {
+    return "Figma file";
+  }
+  return "template link";
+}
+
+function buildExternalDeliveryName(title: string | null | undefined, url: string) {
+  const baseName = title?.trim() || inferExternalLinkLabel(url);
+  return `${sanitizeFilenameSegment(baseName)}-access-link.url`;
+}
+
+function buildExternalActionLabel(url: string) {
+  const normalized = url.toLowerCase();
+  if (normalized.includes("canva.com")) {
+    return "Open Canva template";
+  }
+  if (normalized.includes("figma.com")) {
+    return "Open Figma file";
+  }
+  return "Open template link";
 }
 
 function isAlreadyExistsError(message: string) {
@@ -67,11 +156,24 @@ async function computeBlobSha256(blob: Blob) {
   return toHex(digest);
 }
 
-export async function ensureOrderDeliverySnapshot(supabase: ServiceClient, orderId: string) {
+export async function ensureOrderDeliverySnapshot(
+  supabase: ServiceClient,
+  orderId: string
+): Promise<FileDeliverySnapshot | ExternalLinkDeliverySnapshot> {
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, asset_id, delivery_storage_path, delivery_original_name, delivery_file_type, delivery_file_size, delivery_file_sha256, delivery_locked_at"
+      `id,
+      asset_id,
+      delivery_mode,
+      delivery_external_url,
+      delivery_storage_path,
+      delivery_original_name,
+      delivery_file_type,
+      delivery_file_size,
+      delivery_file_sha256,
+      delivery_locked_at,
+      asset:assets!inner(title, category, delivery_mode, external_delivery_url)`
     )
     .eq("id", orderId)
     .single();
@@ -81,14 +183,75 @@ export async function ensureOrderDeliverySnapshot(supabase: ServiceClient, order
   }
 
   const order = orderData as OrderSnapshotRow;
-  if (isCompleteOrderSnapshot(order)) {
+  const asset = normalizeJoinedRecord(order.asset);
+  const deliveryMode = inferDeliveryMode(order, asset);
+
+  if (deliveryMode === "external_link") {
+    const deliveryUrl = normalizeUrl(order.delivery_external_url) ?? normalizeUrl(asset?.external_delivery_url);
+    if (!deliveryUrl) {
+      throw new Error("Template access link is missing for this order");
+    }
+
+    const lockedAt = order.delivery_locked_at ?? new Date().toISOString();
+    const originalName = order.delivery_original_name ?? buildExternalDeliveryName(asset?.title, deliveryUrl);
+    const fileType = order.delivery_file_type ?? "external_link";
+    const fileSize = order.delivery_file_size ?? 0;
+    const orderPatch: Record<string, string | number | null> = {};
+
+    if (order.delivery_mode !== "external_link") {
+      orderPatch.delivery_mode = "external_link";
+    }
+    if (order.delivery_external_url !== deliveryUrl) {
+      orderPatch.delivery_external_url = deliveryUrl;
+    }
+    if (order.delivery_original_name !== originalName) {
+      orderPatch.delivery_original_name = originalName;
+    }
+    if (order.delivery_file_type !== fileType) {
+      orderPatch.delivery_file_type = fileType;
+    }
+    if (order.delivery_file_size !== fileSize) {
+      orderPatch.delivery_file_size = fileSize;
+    }
+    if (order.delivery_storage_path !== null) {
+      orderPatch.delivery_storage_path = null;
+    }
+    if (order.delivery_file_sha256 !== null) {
+      orderPatch.delivery_file_sha256 = null;
+    }
+    if (!order.delivery_locked_at) {
+      orderPatch.delivery_locked_at = lockedAt;
+    }
+
+    if (Object.keys(orderPatch).length > 0) {
+      const { error: orderUpdateError } = await supabase.from("orders").update(orderPatch).eq("id", order.id);
+      if (orderUpdateError) {
+        throw new Error(orderUpdateError.message);
+      }
+    }
+
     return {
+      deliveryType: "external_link",
+      url: deliveryUrl,
+      originalName,
+      fileType,
+      fileSize,
+      fileSha256: null,
+      lockedAt,
+      actionLabel: buildExternalActionLabel(deliveryUrl)
+    };
+  }
+
+  if (isCompleteFileSnapshot(order)) {
+    return {
+      deliveryType: "file",
       storagePath: order.delivery_storage_path as string,
       originalName: order.delivery_original_name as string,
       fileType: order.delivery_file_type as string,
       fileSize: order.delivery_file_size as number,
       fileSha256: order.delivery_file_sha256 as string,
-      lockedAt: order.delivery_locked_at as string
+      lockedAt: order.delivery_locked_at as string,
+      actionLabel: "Download file"
     };
   }
 
@@ -145,7 +308,13 @@ export async function ensureOrderDeliverySnapshot(supabase: ServiceClient, order
     }
   }
 
-  const orderPatch: Record<string, string | number> = {};
+  const orderPatch: Record<string, string | number | null> = {};
+  if (order.delivery_mode !== "file") {
+    orderPatch.delivery_mode = "file";
+  }
+  if (order.delivery_external_url !== null) {
+    orderPatch.delivery_external_url = null;
+  }
   if (order.delivery_storage_path !== immutableStoragePath) {
     orderPatch.delivery_storage_path = immutableStoragePath;
   }
@@ -173,11 +342,13 @@ export async function ensureOrderDeliverySnapshot(supabase: ServiceClient, order
   }
 
   return {
+    deliveryType: "file",
     storagePath: immutableStoragePath,
     originalName: file.original_name,
     fileType: file.file_type,
     fileSize: file.file_size,
     fileSha256,
-    lockedAt
+    lockedAt,
+    actionLabel: "Download file"
   };
 }

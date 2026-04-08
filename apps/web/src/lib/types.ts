@@ -53,6 +53,9 @@ export type AssetFile = {
   original_name: string;
 };
 
+export type AssetDeliveryMode = "file" | "external_link";
+export type AssetPricingModel = "free" | "paid" | "pay_what_you_want";
+
 export type Asset = {
   id: string;
   creator_id: string;
@@ -61,7 +64,11 @@ export type Asset = {
   category: string;
   tags: string[];
   price_kobo: number;
+  minimum_price_kobo: number;
   currency: string;
+  delivery_mode: AssetDeliveryMode;
+  external_delivery_url: string | null;
+  pricing_model: AssetPricingModel;
   status: "draft" | "published" | "archived";
   created_at: string;
   average_rating?: number;
@@ -108,6 +115,8 @@ export type Order = {
   paid_at?: string | null;
   commission_kobo: number;
   seller_net_amount_kobo: number;
+  delivery_mode: AssetDeliveryMode;
+  delivery_external_url: string | null;
   escrow_status: OrderEscrowStatus | null;
   escrow_due_at: string | null;
   buyer_opened_at: string | null;
@@ -122,7 +131,7 @@ export type Order = {
   seller_moderation_action: SellerModerationAction | null;
   refund_reference: string | null;
   refund_provider_status: string | null;
-  asset?: Pick<Asset, "id" | "title" | "category" | "files"> & {
+  asset?: Pick<Asset, "id" | "title" | "category" | "files" | "delivery_mode" | "pricing_model"> & {
     previews?: AssetPreview[];
   };
 };
@@ -378,5 +387,7 @@ export type PayoutBank = {
   code: string;
   name: string;
 };
+
+
 
 

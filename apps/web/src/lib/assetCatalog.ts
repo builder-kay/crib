@@ -1,6 +1,6 @@
 import type { Asset } from "@/lib/types";
 
-type AssetCatalogInput = Pick<Asset, "category" | "files">;
+type AssetCatalogInput = Pick<Asset, "category" | "files" | "delivery_mode">;
 
 const EXTENSION_LABELS: Record<string, string> = {
   fig: "FIG",
@@ -84,6 +84,10 @@ export function getAssetFormatKey(asset: AssetCatalogInput) {
 }
 
 export function getAssetFilterFileType(asset: AssetCatalogInput) {
+  if (asset.delivery_mode === "external_link") {
+    return "link";
+  }
+
   const category = asset.category.toLowerCase();
   const extension = getAssetFileExtension(getAssetPrimaryFilename(asset));
   const fileType = asset.files?.[0]?.file_type?.toLowerCase() ?? "";
@@ -217,6 +221,20 @@ export function getAssetFormatLabel(asset: AssetCatalogInput) {
 }
 
 export function getAssetDeliveryLabel(asset: AssetCatalogInput) {
+  if (asset.delivery_mode === "external_link") {
+    const category = asset.category.toLowerCase();
+
+    if (category.includes("figma")) {
+      return "Figma file link";
+    }
+
+    if (category.includes("canva")) {
+      return "Canva template link";
+    }
+
+    return "Private access link";
+  }
+
   const extension = getAssetFileExtension(getAssetPrimaryFilename(asset));
 
   if (extension === "zip") {

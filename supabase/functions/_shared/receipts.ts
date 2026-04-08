@@ -173,8 +173,8 @@ export async function ensureOrderReceipt(supabase: ServiceClient, orderId: strin
       }),
       asset_title: asset.title,
       asset_category: asset.category,
-      payment_provider: payment?.provider ?? "paystack",
-      payment_reference: payment?.reference ?? `order-${order.id.replace(/-/g, "")}`,
+      payment_provider: payment?.provider ?? (order.amount_kobo === 0 ? "free" : "paystack"),
+      payment_reference: payment?.reference ?? (order.amount_kobo === 0 ? `free-${order.id.replace(/-/g, "")}` : `order-${order.id.replace(/-/g, "")}`),
       amount_kobo: order.amount_kobo,
       commission_kobo: order.commission_kobo ?? 0,
       seller_net_amount_kobo: order.seller_net_amount_kobo ?? Math.max(order.amount_kobo - (order.commission_kobo ?? 0), 0),
@@ -206,3 +206,4 @@ export async function ensureOrderReceipt(supabase: ServiceClient, orderId: strin
 
   return insertedReceipt as ExistingReceiptRow;
 }
+

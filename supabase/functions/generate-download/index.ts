@@ -15,6 +15,24 @@ function clampExpiry(input: unknown): number {
   return Math.min(900, Math.max(300, parsed));
 }
 
+async function markBuyerOpened(
+  supabase: ReturnType<typeof createClient>,
+  orderId: string,
+  isCreatorOrAdmin: boolean,
+  orderStatus: string,
+  buyerOpenedAt: string | null
+) {
+  if (isCreatorOrAdmin || orderStatus !== "paid" || buyerOpenedAt) {
+    return;
+  }
+
+  await supabase
+    .from("orders")
+    .update({ buyer_opened_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .is("buyer_opened_at", null);
+}
+
 Deno.serve(async (request) => {
   const corsResponse = handleCors(request);
   if (corsResponse) {
@@ -68,7 +86,7 @@ Deno.serve(async (request) => {
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .select(
-      "id, status, asset_id, buyer_id, email, buyer_opened_at, delivery_storage_path, delivery_original_name, assets!inner(creator_id)"
+      "id, status, asset_id, buyer_id, email, buyer_opened_at, delivery_mode, delivery_external_url, delivery_storage_path, delivery_original_name, assets!inner(creator_id)"
     )
     .eq("id", orderId)
     .single();
@@ -96,7 +114,7 @@ Deno.serve(async (request) => {
     isAdmin;
 
   if (!authorizedByAuth) {
-    return jsonResponse({ error: "You are not allowed to access this download" }, 403);
+    return jsonResponse({ error: "You are not allowed to access this delivery" }, 403);
   }
 
   const isCreatorOrAdmin = Boolean(requesterId) && (creatorId === requesterId || isAdmin);
@@ -110,11 +128,23 @@ Deno.serve(async (request) => {
   } catch (error) {
     return jsonResponse(
       {
-        error: "Unable to load the locked delivery file",
+        error: "Unable to load the purchased delivery",
         details: error instanceof Error ? error.message : "Unknown error"
       },
       500
     );
+  }
+
+  await markBuyerOpened(supabase, order.id, isCreatorOrAdmin, order.status, order.buyer_opened_at ?? null);
+
+  if (deliverySnapshot.deliveryType === "external_link") {
+    return jsonResponse({
+      url: deliverySnapshot.url,
+      expires_in: 0,
+      filename: deliverySnapshot.originalName,
+      delivery_type: "external_link",
+      action_label: deliverySnapshot.actionLabel
+    });
   }
 
   const { data: signedData, error: signedError } = await supabase.storage
@@ -127,17 +157,11 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Unable to create signed URL", details: signedError?.message }, 500);
   }
 
-  if (!isCreatorOrAdmin && order.status === "paid" && !order.buyer_opened_at) {
-    await supabase
-      .from("orders")
-      .update({ buyer_opened_at: new Date().toISOString() })
-      .eq("id", order.id)
-      .is("buyer_opened_at", null);
-  }
-
   return jsonResponse({
     url: signedData.signedUrl,
     expires_in: expiresIn,
-    filename: deliverySnapshot.originalName
+    filename: deliverySnapshot.originalName,
+    delivery_type: "file",
+    action_label: deliverySnapshot.actionLabel
   });
 });

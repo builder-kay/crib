@@ -539,7 +539,7 @@ function AssetPreviewCard({ asset }: { asset: Asset }) {
         {appLabel} - {formatLabel}
       </p>
       <div className="mt-3 flex items-center justify-between">
-        <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} />
+        <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} pricingModel={asset.pricing_model} minimumPriceKobo={asset.minimum_price_kobo} />
         <Link to={`/asset/${asset.id}`} className="text-xs font-semibold uppercase tracking-wide text-cobalt-700 hover:text-cobalt-800">
           View
         </Link>
@@ -547,3 +547,4 @@ function AssetPreviewCard({ asset }: { asset: Asset }) {
     </article>
   );
 }
+

@@ -126,7 +126,7 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
               </span>
             </p>
           </div>
-          <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} className="shrink-0 text-[11px]" />
+          <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} pricingModel={asset.pricing_model} minimumPriceKobo={asset.minimum_price_kobo} className="shrink-0 text-[11px]" />
         </div>
 
         <p className="line-clamp-2 text-sm leading-relaxed text-sand-600">{asset.description}</p>
@@ -164,3 +164,4 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
     </article>
   );
 }
+

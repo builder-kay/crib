@@ -72,7 +72,7 @@ export function OrdersPage() {
     onSuccess: async (payload) => {
       if (payload.order_status === "paid") {
         if (payload.escrow_status === "awaiting_review") {
-          pushToast("Payment verified. Download unlocked and escrow is now waiting for your file check.", "success");
+          pushToast("Payment verified. Delivery unlocked and escrow is now waiting for your authenticity check.", "success");
         } else {
           pushToast("Payment verified and order marked as paid.", "success");
         }
@@ -104,9 +104,9 @@ export function OrdersPage() {
 
   const headline = useMemo(() => {
     if (reference) {
-      return "Download the file you just bought, inspect it, then confirm if it is genuine or report a scam within 24 hours.";
+      return "Open or download the template you just bought, inspect it, then confirm if it is genuine or report a scam within 24 hours.";
     }
-    return "Your purchases, secure downloads, and escrow confirmations live here.";
+    return "Your purchases, receipts, delivery links, downloads, and escrow confirmations live here.";
   }, [reference]);
 
   const signInRedirect = `/auth?redirect=${encodeURIComponent(`${location.pathname}${sanitizedSearch}`)}`;
@@ -244,7 +244,7 @@ export function OrdersPage() {
   const confirmEscrowMutation = useMutation({
     mutationFn: (orderId: string) => confirmOrderEscrow(orderId),
     onSuccess: async () => {
-      pushToast("Thanks for confirming the file. The seller payout has been released.", "success");
+      pushToast("Thanks for confirming the delivery. The seller payout has been released.", "success");
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
     onError: (error) => {
@@ -255,7 +255,7 @@ export function OrdersPage() {
   const reportScamMutation = useMutation({
     mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) => reportOrderFileScam(orderId, reason),
     onSuccess: async () => {
-      pushToast("File scam reported. The seller payout will stay on hold while this is reviewed.", "success");
+      pushToast("Delivery issue reported. The seller payout will stay on hold while this is reviewed.", "success");
       setReportOrderId(null);
       setScamReason("");
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -363,7 +363,7 @@ export function OrdersPage() {
     return (
       <EmptyState
         title="No order access yet"
-        body="Sign in to view your orders, verify payment, unlock downloads, and confirm whether a file is genuine."
+        body="Sign in to view your orders, verify payment, unlock deliveries, and confirm whether a purchase is genuine."
         action={<Link to={signInRedirect} className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">Sign in</Link>}
       />
     );
@@ -411,7 +411,7 @@ export function OrdersPage() {
       {!ordersQuery.isLoading && orders.length === 0 ? (
         <EmptyState
           title="No orders yet"
-          body="After your first purchase, your secure download and escrow confirmation steps show up here."
+          body="After your first purchase, your delivery access and escrow confirmation steps show up here."
           action={
             <Link to="/market" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">
               Browse marketplace
@@ -423,13 +423,16 @@ export function OrdersPage() {
       <section className="space-y-3">
         {orders.map((order) => {
           const previewUrl = order.asset?.previews?.[0]?.preview_url;
-          const canDownload = order.status === "paid";
+          const canAccessDelivery = order.status === "paid";
           const canViewReceipt = order.status === "paid" || order.status === "refunded";
           const appLabel = order.asset ? getAssetAppLabel(order.asset) : "Creative App";
           const formatLabel = order.asset ? getAssetFormatLabel(order.asset) : "Source files";
           const awaitingReview = order.status === "paid" && order.escrow_status === "awaiting_review";
           const released = order.status === "paid" && order.escrow_status === "released";
           const reported = order.status === "paid" && order.escrow_status === "scam_reported";
+          const isExternalLinkDelivery = order.delivery_mode === "external_link" || order.asset?.delivery_mode === "external_link";
+          const deliveryButtonLabel = isExternalLinkDelivery ? "Open link" : "Download";
+          const deliveryPromptLabel = isExternalLinkDelivery ? "template link" : "file";
           const escrowButtonsEnabled = awaitingReview && Boolean(order.buyer_opened_at);
 
           return (
@@ -474,31 +477,45 @@ export function OrdersPage() {
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
-                      disabled={!canDownload}
+                      disabled={!canAccessDelivery}
                       onClick={async () => {
                         try {
                           const payload = await generateDownload(order.id);
-                          const link = document.createElement("a");
-                          link.href = payload.url;
-                          link.download = payload.filename || "creative-cloud-download";
-                          link.rel = "noopener noreferrer";
-                          document.body.appendChild(link);
-                          link.click();
-                          link.remove();
+
+                          if (payload.delivery_type === "external_link") {
+                            const link = document.createElement("a");
+                            link.href = payload.url;
+                            link.target = "_blank";
+                            link.rel = "noopener noreferrer";
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                          } else {
+                            const link = document.createElement("a");
+                            link.href = payload.url;
+                            link.download = payload.filename || "creative-cloud-download";
+                            link.rel = "noopener noreferrer";
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                          }
+
                           pushToast(
                             awaitingReview
-                              ? "Download opened. Inspect the file, then confirm it is genuine or report a scam."
-                              : "Download link generated.",
+                              ? isExternalLinkDelivery
+                                ? "Template link opened. Inspect it, then confirm it is genuine or report a scam."
+                                : "Download opened. Inspect the file, then confirm it is genuine or report a scam."
+                              : payload.action_label ?? (isExternalLinkDelivery ? "Template link opened." : "Download link generated."),
                             "success"
                           );
                           await queryClient.invalidateQueries({ queryKey: ["orders"] });
                         } catch (error) {
-                          pushToast(error instanceof Error ? error.message : "Download failed", "error");
+                          pushToast(error instanceof Error ? error.message : "Delivery access failed", "error");
                         }
                       }}
                       className="rounded-lg bg-ink px-3 py-2 text-sm font-semibold text-white transition hover:bg-ink/85 disabled:cursor-not-allowed disabled:bg-sand-300"
                     >
-                      {canDownload ? "Download" : "Locked"}
+                      {canAccessDelivery ? deliveryButtonLabel : "Locked"}
                     </button>
 
                     {canViewReceipt ? (
@@ -510,7 +527,7 @@ export function OrdersPage() {
                       </Link>
                     ) : null}
 
-                    {!canDownload ? <p className="text-xs text-sand-600">Download unlocks after payment confirmation.</p> : null}
+                    {!canAccessDelivery ? <p className="text-xs text-sand-600">Access unlocks after payment confirmation.</p> : null}
                   </div>
 
                   {order.status === "paid" ? (
@@ -519,7 +536,7 @@ export function OrdersPage() {
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Escrow Review</p>
                           <p className="mt-1 text-sm text-cobalt-900">
-                            Open the file and check that it matches the listing. If you do not confirm or report an issue by{" "}
+                            Open the delivery and check that it matches the listing. If you do not confirm or report an issue by{" "}
                             <span className="font-semibold">{formatDateTime(order.escrow_due_at) ?? "the end of the 24-hour review window"}</span>,
                             we treat it as genuine and release the seller payout automatically.
                           </p>
@@ -531,8 +548,8 @@ export function OrdersPage() {
                         <div className="mt-3 space-y-3">
                           <p className="text-xs text-cobalt-900/80">
                             {order.buyer_opened_at
-                              ? "You can confirm the file now or report a scam if the delivery is wrong."
-                              : "Download the file once to unlock the confirm and report buttons."}
+                              ? `You can confirm the ${deliveryPromptLabel} now or report a scam if the delivery is wrong.`
+                              : `Open the ${deliveryPromptLabel} once to unlock the confirm and report buttons.`}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -541,7 +558,7 @@ export function OrdersPage() {
                               onClick={() => confirmEscrowMutation.mutate(order.id)}
                               className="rounded-full bg-forest-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-forest-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              {confirmEscrowMutation.isPending ? "Confirming..." : "Confirm Genuine File"}
+                              {confirmEscrowMutation.isPending ? "Confirming..." : "Confirm Genuine Delivery"}
                             </button>
                             <button
                               type="button"
@@ -552,7 +569,7 @@ export function OrdersPage() {
                               }}
                               className="rounded-full border border-rose-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              Report File Scam
+                              Report Delivery Scam
                             </button>
                           </div>
                         </div>
@@ -560,7 +577,9 @@ export function OrdersPage() {
 
                       {released ? (
                         <p className="mt-3 text-xs text-cobalt-900/80">
-                          Seller payout released{order.escrow_release_reason === "auto_timeout" ? " automatically after the 24-hour review window." : " after your confirmation."}
+                          {order.escrow_release_reason === "free_access"
+                            ? "Access unlocked instantly because this template is free."
+                            : `Seller payout released${order.escrow_release_reason === "auto_timeout" ? " automatically after the 24-hour review window." : " after your confirmation."}`}
                         </p>
                       ) : null}
 
@@ -627,7 +646,7 @@ export function OrdersPage() {
 
       <Modal
         open={Boolean(selectedReportOrder)}
-        title="Report File Scam"
+        title="Report Delivery Scam"
         onClose={() => {
           setReportOrderId(null);
           setScamReason("");
@@ -644,7 +663,7 @@ export function OrdersPage() {
               value={scamReason}
               onChange={(event) => setScamReason(event.target.value)}
               rows={4}
-              placeholder="Example: file format is wrong, asset is corrupt, preview does not match the download, or key layers are missing."
+              placeholder="Example: wrong file, broken access link, corrupt asset, preview mismatch, or key layers are missing."
               className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
             />
           </label>
@@ -716,6 +735,14 @@ function escrowChipLabel(status: Order["escrow_status"]) {
   return "In Escrow";
 }
 
+function isExternalLinkOrder(order: Order) {
+  return order.delivery_mode === "external_link" || order.asset?.delivery_mode === "external_link";
+}
+
+function deliveryActionCopy(order: Order) {
+  return isExternalLinkOrder(order) ? "open the template link" : "download the file";
+}
+
 function statusDescription(order: Order) {
   if (order.status === "pending") {
     return "Payment initiated. We are waiting for confirmation from the payment provider.";
@@ -724,15 +751,18 @@ function statusDescription(order: Order) {
     return "Payment failed. Try purchasing again if you still want this listing.";
   }
   if (order.status === "refunded") {
-    return "This order was refunded. Download access may be restricted.";
+    return "This order was refunded. Delivery access may be restricted.";
   }
   if (order.escrow_status === "scam_reported") {
-    return "Payment cleared, but you flagged the file for review. The seller payout is still on hold.";
+    return "Payment cleared, but you flagged the delivery for review. The seller payout is still on hold.";
   }
   if (order.escrow_status === "released") {
-    return "Payment cleared, the file was accepted, and the seller payout has been released.";
+    if (order.escrow_release_reason === "free_access" || order.amount_kobo === 0) {
+      return "Free checkout completed. Your delivery and receipt are ready whenever you need them.";
+    }
+    return "Payment cleared, the delivery was accepted, and the seller payout has been released.";
   }
-  return "Payment cleared. Download the file, inspect it, then confirm it is genuine or report a scam within 24 hours.";
+  return `Payment cleared. ${deliveryActionCopy(order)}, inspect it, then confirm it is genuine or report a scam within 24 hours.`;
 }
 
 function formatDateTime(value?: string | null) {
@@ -776,3 +806,6 @@ function OrderStatCard({
     </article>
   );
 }
+
+
+

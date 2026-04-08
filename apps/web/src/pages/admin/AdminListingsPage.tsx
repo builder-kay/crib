@@ -178,7 +178,7 @@ export function AdminListingsPage() {
                   </div>
 
                   <div className="admin-record-actions">
-                    <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} />
+                    <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} pricingModel={asset.pricing_model} minimumPriceKobo={asset.minimum_price_kobo} />
                     <label className="admin-input-group w-full">
                       <span>Publish state</span>
                       <select value={asset.status} disabled={isUpdating} onChange={(event) => setAssetStatus(asset.id, event.target.value as Asset["status"])} className="admin-input">
@@ -197,3 +197,4 @@ export function AdminListingsPage() {
     </section>
   );
 }
+

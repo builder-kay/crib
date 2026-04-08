@@ -24,6 +24,8 @@ import type {
   AdminOrderRecord,
   AdminOverview,
   Asset,
+  AssetDeliveryMode,
+  AssetPricingModel,
   AssetReview,
   CreatorDashboard,
   CreatorDirectoryEntry,
@@ -86,7 +88,11 @@ type AssetRow = {
   category: string;
   tags: string[];
   price_kobo: number;
+  minimum_price_kobo?: number | null;
   currency: string;
+  delivery_mode?: AssetDeliveryMode | null;
+  external_delivery_url?: string | null;
+  pricing_model?: AssetPricingModel | null;
   status: "draft" | "published" | "archived";
   created_at: string;
   profile?: AssetProfileRow | AssetProfileRow[] | null;
@@ -109,6 +115,8 @@ type OrderRow = {
   paid_at?: string | null;
   commission_kobo?: number | null;
   seller_net_amount_kobo?: number | null;
+  delivery_mode?: AssetDeliveryMode | null;
+  delivery_external_url?: string | null;
   escrow_status?: Order["escrow_status"];
   escrow_due_at?: string | null;
   buyer_opened_at?: string | null;
@@ -128,6 +136,8 @@ type OrderRow = {
         id: string;
         title: string;
         category: string;
+        delivery_mode?: AssetDeliveryMode | null;
+        pricing_model?: AssetPricingModel | null;
         previews?: Array<{ id: string; preview_url: string }>;
         files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
       }
@@ -135,6 +145,8 @@ type OrderRow = {
         id: string;
         title: string;
         category: string;
+        delivery_mode?: AssetDeliveryMode | null;
+        pricing_model?: AssetPricingModel | null;
         previews?: Array<{ id: string; preview_url: string }>;
         files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
       }>;
@@ -380,7 +392,11 @@ function mapAsset(row: AssetRow): Asset {
     category: row.category,
     tags: row.tags ?? [],
     price_kobo: row.price_kobo,
+    minimum_price_kobo: row.minimum_price_kobo ?? row.price_kobo,
     currency: row.currency,
+    delivery_mode: row.delivery_mode ?? "file",
+    external_delivery_url: row.external_delivery_url ?? null,
+    pricing_model: row.pricing_model ?? (row.price_kobo > 0 ? "paid" : "free"),
     status: row.status,
     created_at: row.created_at,
     profile: profile
@@ -409,6 +425,8 @@ function mapOrder(row: OrderRow): Order {
     paid_at: row.paid_at ?? null,
     commission_kobo: row.commission_kobo ?? 0,
     seller_net_amount_kobo: row.seller_net_amount_kobo ?? Math.max(row.amount_kobo - (row.commission_kobo ?? 0), 0),
+    delivery_mode: row.delivery_mode ?? asset?.delivery_mode ?? "file",
+    delivery_external_url: row.delivery_external_url ?? null,
     escrow_status: row.escrow_status ?? (row.status === "paid" ? "released" : null),
     escrow_due_at: row.escrow_due_at ?? null,
     buyer_opened_at: row.buyer_opened_at ?? null,
@@ -428,6 +446,8 @@ function mapOrder(row: OrderRow): Order {
           id: asset.id,
           title: asset.title,
           category: asset.category,
+          delivery_mode: asset.delivery_mode ?? row.delivery_mode ?? "file",
+          pricing_model: asset.pricing_model ?? "paid",
           previews: asset.previews ?? [],
           files: asset.files ?? []
         }
@@ -1605,7 +1625,11 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
       category,
       tags,
       price_kobo,
+      minimum_price_kobo,
       currency,
+      delivery_mode,
+      external_delivery_url,
+      pricing_model,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
@@ -1628,12 +1652,13 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
       asset,
       relevance: scoreAssetSearchMatch(asset, searchTokens)
     }))
-    .filter(({ asset, relevance }) => {
+        .filter(({ asset, relevance }) => {
+      const comparablePriceKobo = asset.pricing_model === "pay_what_you_want" ? asset.minimum_price_kobo : asset.price_kobo;
       const matchesSearch = searchTokens.length === 0 ? true : relevance > 0;
       const matchesCategory = !filters.category || filters.category === "all" ? true : asset.category === filters.category;
       const matchesCreator = creatorQuery ? (asset.profile?.display_name ?? "").toLowerCase().includes(creatorQuery) : true;
-      const matchesMin = typeof filters.minPrice === "number" ? asset.price_kobo >= Math.round(filters.minPrice * 100) : true;
-      const matchesMax = typeof filters.maxPrice === "number" ? asset.price_kobo <= Math.round(filters.maxPrice * 100) : true;
+      const matchesMin = typeof filters.minPrice === "number" ? comparablePriceKobo >= Math.round(filters.minPrice * 100) : true;
+      const matchesMax = typeof filters.maxPrice === "number" ? comparablePriceKobo <= Math.round(filters.maxPrice * 100) : true;
       const matchesFileType =
         !filters.fileType || filters.fileType === "all" ? true : getAssetFilterFileType(asset) === filters.fileType;
 
@@ -1661,7 +1686,11 @@ export async function getAssetById(assetId: string): Promise<Asset> {
       category,
       tags,
       price_kobo,
+      minimum_price_kobo,
       currency,
+      delivery_mode,
+      external_delivery_url,
+      pricing_model,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
@@ -1690,7 +1719,11 @@ export async function getCreatorAssets(userId: string): Promise<Asset[]> {
       category,
       tags,
       price_kobo,
+      minimum_price_kobo,
       currency,
+      delivery_mode,
+      external_delivery_url,
+      pricing_model,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
@@ -2155,7 +2188,7 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput): Prom
 export async function createAssetListing(
   userId: string,
   input: UploadAssetInput,
-  mainFile: File,
+  mainFile: File | null,
   previewFiles: File[]
 ): Promise<{ assetId: string }> {
   const { data: moderationProfile, error: moderationProfileError } = await supabase
@@ -2181,6 +2214,10 @@ export async function createAssetListing(
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
 
+  const normalizedPriceKobo = Math.round(input.price * 100);
+  const normalizedMinimumPriceKobo = input.pricing_model === "paid" ? normalizedPriceKobo : Math.round(input.minimum_price * 100);
+  const normalizedExternalDeliveryUrl = input.delivery_mode === "external_link" ? input.external_delivery_url.trim() : null;
+
   const { data: asset, error: assetError } = await supabase
     .from("assets")
     .insert({
@@ -2189,8 +2226,12 @@ export async function createAssetListing(
       description: input.description,
       category: input.category,
       tags,
-      price_kobo: Math.round(input.price * 100),
+      price_kobo: normalizedPriceKobo,
+      minimum_price_kobo: normalizedMinimumPriceKobo,
       currency: input.currency.toUpperCase(),
+      delivery_mode: input.delivery_mode,
+      external_delivery_url: normalizedExternalDeliveryUrl,
+      pricing_model: input.pricing_model,
       status: input.status
     })
     .select("id")
@@ -2203,33 +2244,39 @@ export async function createAssetListing(
   const uploadedPaths: Array<{ bucket: "assets" | "previews"; path: string }> = [];
 
   try {
-    const safeName = slugify(mainFile.name.replace(/\.[^.]+$/, ""));
-    const mainPath = `${userId}/${asset.id}/${Date.now()}-${safeName}-${mainFile.name}`;
+    if (input.delivery_mode === "file") {
+      if (!mainFile) {
+        throw new Error("Attach the main file buyers should receive.");
+      }
 
-    const { error: uploadMainError } = await supabase.storage.from("assets").upload(mainPath, mainFile, {
-      upsert: false,
-      contentType: mainFile.type || "application/octet-stream"
-    });
+      const safeName = slugify(mainFile.name.replace(/\.[^.]+$/, ""));
+      const mainPath = `${userId}/${asset.id}/${Date.now()}-${safeName}-${mainFile.name}`;
 
-    if (uploadMainError) {
-      throw mapStorageUploadError(uploadMainError, {
-        fileName: mainFile.name,
-        maxBytes: MAX_PRIMARY_ASSET_SIZE_BYTES
+      const { error: uploadMainError } = await supabase.storage.from("assets").upload(mainPath, mainFile, {
+        upsert: false,
+        contentType: mainFile.type || "application/octet-stream"
       });
-    }
 
-    uploadedPaths.push({ bucket: "assets", path: mainPath });
+      if (uploadMainError) {
+        throw mapStorageUploadError(uploadMainError, {
+          fileName: mainFile.name,
+          maxBytes: MAX_PRIMARY_ASSET_SIZE_BYTES
+        });
+      }
 
-    const { error: fileRowError } = await supabase.from("asset_files").insert({
-      asset_id: asset.id,
-      storage_path: mainPath,
-      file_type: mainFile.type || "application/octet-stream",
-      file_size: mainFile.size,
-      original_name: mainFile.name
-    });
+      uploadedPaths.push({ bucket: "assets", path: mainPath });
 
-    if (fileRowError) {
-      throw new Error(fileRowError.message);
+      const { error: fileRowError } = await supabase.from("asset_files").insert({
+        asset_id: asset.id,
+        storage_path: mainPath,
+        file_type: mainFile.type || "application/octet-stream",
+        file_size: mainFile.size,
+        original_name: mainFile.name
+      });
+
+      if (fileRowError) {
+        throw new Error(fileRowError.message);
+      }
     }
 
     if (previewFiles.length > 0) {
@@ -2275,16 +2322,25 @@ export async function createAssetListing(
     await supabase.from("assets").delete().eq("id", asset.id);
 
     throw mapStorageUploadError(error, {
-      fileName: mainFile.name,
+      fileName: mainFile?.name ?? `${slugify(input.title)}-listing`,
       maxBytes: MAX_PRIMARY_ASSET_SIZE_BYTES
     });
   }
 }
 
-export async function createPayment(assetId: string, buyerEmailOverride?: string) {
+export async function createPayment(
+  assetId: string,
+  options?: {
+    buyerEmailOverride?: string;
+    amountKobo?: number;
+  }
+) {
   const { data } = await supabase.auth.getSession();
   const accessToken = data.session?.access_token;
-  const buyerEmail = getUserContactEmail(data.session?.user) ?? buyerEmailOverride?.trim() ?? "";
+  const buyerEmail = getUserContactEmail(data.session?.user) ?? options?.buyerEmailOverride?.trim() ?? "";
+  const normalizedAmountKobo = typeof options?.amountKobo === "number" && Number.isFinite(options.amountKobo)
+    ? Math.max(Math.round(options.amountKobo), 0)
+    : undefined;
 
   if (!accessToken) {
     throw new Error("Sign in to continue to checkout.");
@@ -2301,7 +2357,8 @@ export async function createPayment(assetId: string, buyerEmailOverride?: string
     headers,
     body: JSON.stringify({
       asset_id: assetId,
-      ...(buyerEmail ? { email: buyerEmail } : {})
+      ...(buyerEmail ? { email: buyerEmail } : {}),
+      ...(typeof normalizedAmountKobo === "number" ? { amount_kobo: normalizedAmountKobo } : {})
     })
   });
 
@@ -2312,13 +2369,14 @@ export async function createPayment(assetId: string, buyerEmailOverride?: string
 
   const payload = (await response.json()) as {
     order_id: string;
-    reference: string;
+    reference?: string;
     email?: string;
     amount_kobo?: number;
     currency?: string;
-    authorization_url: string;
+    authorization_url?: string;
     access_code?: string;
     public_key?: string;
+    checkout_mode?: "paystack" | "instant";
   };
 
   return payload;
@@ -2347,6 +2405,8 @@ export async function generateDownload(orderId: string) {
     url: string;
     expires_in: number;
     filename: string;
+    delivery_type: "file" | "external_link";
+    action_label?: string;
   };
 }
 
@@ -2445,6 +2505,8 @@ export async function getBuyerOrders(options: {
       paid_at,
       commission_kobo,
       seller_net_amount_kobo,
+      delivery_mode,
+      delivery_external_url,
       escrow_status,
       escrow_due_at,
       buyer_opened_at,
@@ -2459,7 +2521,7 @@ export async function getBuyerOrders(options: {
       seller_moderation_action,
       refund_reference,
       refund_provider_status,
-      asset:assets(id, title, category, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
+      asset:assets(id, title, category, delivery_mode, pricing_model, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
     )
     .order("created_at", { ascending: false });
 
@@ -2635,7 +2697,7 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
           seller_moderation_action,
           refund_reference,
           refund_provider_status,
-          asset:assets!inner(id, title, category, creator_id, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
+          asset:assets!inner(id, title, category, creator_id, delivery_mode, pricing_model, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
         )
         .eq("assets.creator_id", userId)
         .order("created_at", { ascending: false })
@@ -3120,6 +3182,8 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
       paid_at,
       commission_kobo,
       seller_net_amount_kobo,
+      delivery_mode,
+      delivery_external_url,
       escrow_status,
       escrow_due_at,
       buyer_opened_at,
@@ -3139,7 +3203,7 @@ export async function getAdminOrders(limit = 18): Promise<AdminOrderRecord[]> {
         title,
         category,
         creator_id,
-        profile:profiles!assets_creator_id_fkey(display_name, avatar_url, creator_category, is_verified, seller_account_status, seller_account_note)
+        profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT})
       ),
       payment:payments(provider, reference, status, updated_at)`
     )
@@ -3392,7 +3456,11 @@ export async function getAdminAssets() {
       category,
       tags,
       price_kobo,
+      minimum_price_kobo,
       currency,
+      delivery_mode,
+      external_delivery_url,
+      pricing_model,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
@@ -3421,7 +3489,11 @@ export async function updateAssetStatus(assetId: string, status: "draft" | "publ
       category,
       tags,
       price_kobo,
+      minimum_price_kobo,
       currency,
+      delivery_mode,
+      external_delivery_url,
+      pricing_model,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
@@ -3437,3 +3509,5 @@ export async function updateAssetStatus(assetId: string, status: "draft" | "publ
   const [asset] = await attachAssetRatingSummaries([mapAsset(data as AssetRow)]);
   return asset;
 }
+
+
