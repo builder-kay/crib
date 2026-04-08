@@ -1,5 +1,5 @@
 import { getUserContactEmail, looksLikeEmailIdentifier, normalizeAuthPhoneInput } from "@/lib/auth";
-import { getAssetAppLabel, getAssetFilterFileType, getAssetPrimaryFilename } from "@/lib/assetCatalog";
+import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFilterFileType, getAssetFormatLabel, getAssetPrimaryFilename } from "@/lib/assetCatalog";
 import { env } from "@/lib/env";
 import { slugify } from "@/lib/format";
 import { DEFAULT_HIRE_TERMS } from "@/lib/hire";
@@ -806,7 +806,11 @@ function scoreAssetSearchMatch(asset: Asset, tokens: string[]): number {
   const description = asset.description.toLowerCase();
   const category = asset.category.toLowerCase();
   const creator = (asset.profile?.display_name ?? "").toLowerCase();
+  const creatorCategory = (asset.profile?.creator_category ?? "").toLowerCase();
+  const creatorNiche = (asset.profile?.niche ?? "").toLowerCase();
   const appLabel = getAssetAppLabel(asset).toLowerCase();
+  const formatLabel = getAssetFormatLabel(asset).toLowerCase();
+  const deliveryLabel = getAssetDeliveryLabel(asset).toLowerCase();
   const primaryFileName = getAssetPrimaryFilename(asset).toLowerCase();
   const tags = (asset.tags ?? []).map((tag) => tag.toLowerCase());
 
@@ -819,11 +823,23 @@ function scoreAssetSearchMatch(asset: Asset, tokens: string[]): number {
     if (creator.includes(token)) {
       tokenScore += 6;
     }
+    if (creatorCategory.includes(token)) {
+      tokenScore += 5;
+    }
+    if (creatorNiche.includes(token)) {
+      tokenScore += 5;
+    }
     if (category.includes(token)) {
       tokenScore += 4;
     }
     if (appLabel.includes(token)) {
       tokenScore += 4;
+    }
+    if (formatLabel.includes(token)) {
+      tokenScore += 4;
+    }
+    if (deliveryLabel.includes(token)) {
+      tokenScore += 3;
     }
     if (primaryFileName.includes(token)) {
       tokenScore += 5;

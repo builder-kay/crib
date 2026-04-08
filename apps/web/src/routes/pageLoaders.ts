@@ -90,6 +90,7 @@ export const routePreloaders = {
   landing: () => landingPage.preload(),
   market: () => marketPage.preload(),
   creators: () => creatorsPage.preload(),
+  sell: () => uploadPage.preload(),
   blog: () => editorialPage.preload(),
   blogPost: () => editorialPostPage.preload(),
   assetDetail: () => assetDetailPage.preload(),

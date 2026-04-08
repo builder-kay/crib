@@ -48,7 +48,7 @@ export function LandingPage() {
   };
 
   const prefetchUpload = () => {
-    void routePreloaders.upload();
+    void routePreloaders.sell();
   };
 
   return (
@@ -60,13 +60,13 @@ export function LandingPage() {
 
         <div className="relative z-10 grid gap-8 lg:grid-cols-[1.03fr,0.97fr] lg:gap-6">
           <div className="space-y-4 md:space-y-5">
-            <p className="chip-spectrum w-fit landing-reveal">Creative template marketplace</p>
+            <p className="chip-spectrum w-fit landing-reveal">Creative marketplace</p>
             <h1 className="headline text-[2.1rem] leading-tight sm:text-[2.4rem] md:text-5xl lg:text-6xl">
-              Buy and sell creative templates from specialist creators.
+              Buy and sell creative templates from local creators.
             </h1>
             <p className="max-w-2xl text-sm text-sand-700 md:text-base">
               Crib starts with one clear product type: editable templates, source files, presets, and digital packs. Buyers discover
-              high-fit work from specialist creators across African cities, then purchase with confidence from profile-rich storefronts.
+              high-fit work from local creators across African cities, then purchase with confidence from profile-rich storefronts.
             </p>
 
             <div className="flex flex-wrap gap-3 pt-1">
@@ -82,7 +82,7 @@ export function LandingPage() {
                 Browse Creators
               </Link>
               <Link
-                to="/dashboard/upload"
+                to="/sell"
                 onMouseEnter={prefetchUpload}
                 onFocus={prefetchUpload}
                 className="rounded-full border border-sand-300 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
@@ -173,12 +173,12 @@ export function LandingPage() {
           </div>
           <div className="flex flex-wrap gap-3 lg:justify-end">
             <Link
-              to="/dashboard/upload"
+              to="/sell"
               onMouseEnter={prefetchUpload}
               onFocus={prefetchUpload}
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-cobalt-700 transition hover:bg-sand-100"
             >
-              Publish first listing
+              Publish first asset
             </Link>
             <Link
               to="/creators"

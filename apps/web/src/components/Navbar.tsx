@@ -9,11 +9,12 @@ import { useAuthStore } from "@/store/authStore";
 
 const baseNavItems = [
   { to: "/market", label: "Discover" },
+  { to: "/sell", label: "Sell" },
   { to: "/creators", label: "Creators" },
   { to: "/editorial", label: "Blog" }
 ];
 
-type MobilePrimaryNavId = "discover" | "creators" | "editorial" | "dashboard";
+type MobilePrimaryNavId = "discover" | "sell" | "creators" | "editorial" | "dashboard";
 
 type NavItem = {
   to: string;
@@ -42,6 +43,8 @@ function isMobilePrimaryNavActive(pathname: string, itemId: MobilePrimaryNavId) 
       return pathname === "/market";
     case "creators":
       return pathname === "/creators";
+    case "sell":
+      return pathname === "/sell";
     case "editorial":
       return pathname === "/editorial" || pathname.startsWith("/editorial/");
     case "dashboard":
@@ -75,6 +78,14 @@ function MobilePrimaryNavIcon({ id, active }: { id: MobilePrimaryNavId; active: 
           <circle cx="10" cy="7" r="3" />
           <path d="M20 20v-1a4 4 0 0 0-3-3.87" />
           <path d="M16 4.13a3 3 0 0 1 0 5.74" />
+        </svg>
+      );
+    case "sell":
+      return (
+        <svg {...sharedProps}>
+          <path d="M12 17V6" />
+          <path d="m7.5 10.5 4.5-4.5 4.5 4.5" />
+          <path d="M5 19h14" />
         </svg>
       );
     case "editorial":
@@ -144,8 +155,9 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   const navItems = useMemo(() => {
     const items: NavItem[] = [
       { ...baseNavItems[0], preload: routePreloaders.market },
-      { ...baseNavItems[1], preload: routePreloaders.creators },
-      { ...baseNavItems[2], preload: routePreloaders.blog }
+      { ...baseNavItems[1], preload: routePreloaders.sell },
+      { ...baseNavItems[2], preload: routePreloaders.creators },
+      { ...baseNavItems[3], preload: routePreloaders.blog }
     ];
     if (user) {
       items.push({ to: "/dashboard", label: "Dashboard", preload: routePreloaders.dashboard });
@@ -162,6 +174,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   const mobilePrimaryNavItems = useMemo<MobilePrimaryNavItem[]>(
     () => [
       { id: "discover", to: "/market", label: "Discover", preload: routePreloaders.market },
+      { id: "sell", to: "/sell", label: "Sell", preload: routePreloaders.sell },
       { id: "creators", to: "/creators", label: "Creators", preload: routePreloaders.creators },
       { id: "editorial", to: "/editorial", label: "Blog", preload: routePreloaders.blog },
       ...(user ? [{ id: "dashboard", to: "/dashboard", label: "Dashboard", preload: routePreloaders.dashboard } satisfies MobilePrimaryNavItem] : [])
@@ -211,7 +224,6 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
 
   useEffect(() => {
     if (location.pathname !== "/market") {
-      setGlobalSearch("");
       return;
     }
 
@@ -252,9 +264,15 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                const trimmed = globalSearch.trim();
-                navigate(trimmed ? `/market?q=${encodeURIComponent(trimmed)}` : "/market");
+                const trimmed = globalSearch.trim().replace(/\s+/g, " ");
+                const nextParams = new URLSearchParams();
+                if (trimmed) {
+                  nextParams.set("q", trimmed);
+                }
+                nextParams.set("reset", "1");
+                navigate(`/market?${nextParams.toString()}`);
               }}
+              onFocus={() => prefetchRoute(routePreloaders.market)}
               className="flex w-full max-w-xl items-center gap-2 rounded-full border border-sand-200 bg-sand-100/80 px-4 py-2 text-sm text-sand-600 transition hover:border-cobalt-200 hover:bg-white focus-within:border-cobalt-300 focus-within:bg-white"
             >
               <svg className="h-4 w-4 text-sand-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -264,7 +282,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
               <input
                 value={globalSearch}
                 onChange={(event) => setGlobalSearch(event.target.value)}
-                placeholder="Search templates, creators, or styles"
+                placeholder="Search assets, creators, Canva, Figma, Photoshop..."
                 className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-sand-500"
               />
               <button type="submit" className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
@@ -415,7 +433,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
         aria-label="Primary navigation"
       >
-        <div className={`mx-auto grid w-full max-w-[1400px] gap-1 px-2 pt-2 ${user ? "grid-cols-4" : "grid-cols-3"}`}>
+        <div className={`mx-auto grid w-full max-w-[1400px] gap-1 px-2 pt-2 ${user ? "grid-cols-5" : "grid-cols-4"}`}>
           {mobilePrimaryNavItems.map((item) => {
             const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
 

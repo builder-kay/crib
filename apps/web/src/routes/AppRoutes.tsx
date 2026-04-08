@@ -66,6 +66,7 @@ export function AppRoutes() {
             <Route element={<ProtectedRoute />}>
               <Route path="/profile/:id" element={<ProfilePage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/sell" element={<UploadPage />} />
               <Route path="/dashboard" element={<DashboardLayoutPage />}>
                 <Route index element={<DashboardPage />} />
                 <Route path="orders" element={<OrdersPage />} />

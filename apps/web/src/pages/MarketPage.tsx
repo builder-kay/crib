@@ -17,6 +17,7 @@ export function MarketPage() {
   const introSectionRef = useRef<HTMLElement | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const querySearch = searchParams.get("q") ?? "";
+  const shouldResetFromGlobalSearch = searchParams.get("reset") === "1";
   const [search, setSearch] = useState(querySearch);
   const [category, setCategory] = useState("all");
   const [minPrice, setMinPrice] = useState("");
@@ -42,6 +43,21 @@ export function MarketPage() {
     }
     setSearchParams(nextParams, { replace: true });
   }, [querySearch, search, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!shouldResetFromGlobalSearch) {
+      return;
+    }
+
+    setCategory("all");
+    setMinPrice("");
+    setMaxPrice("");
+    setFileType("all");
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("reset");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams, shouldResetFromGlobalSearch]);
 
   const deferredSearch = useDeferredValue(search);
 
@@ -177,6 +193,16 @@ export function MarketPage() {
                 Browse Canva, Figma, and Adobe-ready assets made for launches, client work, storefronts, decks, and
                 content systems before you open another blank file.
               </p>
+              <a
+                href="#discover-explore"
+                className="inline-flex items-center gap-2 rounded-full bg-cobalt-600 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700"
+              >
+                <span>Start exploring</span>
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14" />
+                  <path d="m7 14 5 5 5-5" />
+                </svg>
+              </a>
             </div>
           </div>
         </section>
