@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
+import { useToast } from "@/components/Toast";
 import { getOrderReceipt } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Order, OrderReceipt } from "@/lib/types";
@@ -12,6 +13,7 @@ type ViewerRole = "buyer" | "seller" | "admin";
 export function ReceiptPage() {
   const { orderId = "" } = useParams();
   const user = useAuthStore((state) => state.user);
+  const { pushToast } = useToast();
 
   const receiptQuery = useQuery({
     queryKey: ["order-receipt", orderId],
@@ -43,6 +45,25 @@ export function ReceiptPage() {
       : viewerRole === "admin"
         ? "This archive copy keeps the payment trail, payout share, and review status in one place for future references."
         : "Your buyer copy confirms the purchase, payment trail, and the current escrow state protecting the delivery.";
+
+  function handleDownloadPng() {
+    if (!receipt) {
+      return;
+    }
+
+    try {
+      const canvas = renderReceiptCanvas(receipt, viewerRole);
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `${receipt.receipt_number.toLowerCase()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      pushToast("Receipt PNG downloaded.", "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "Could not export this receipt.", "error");
+    }
+  }
 
   if (!user) {
     return (
@@ -108,6 +129,13 @@ export function ReceiptPage() {
             <div className="receipt-print-hide flex flex-wrap gap-2">
               <button
                 type="button"
+                onClick={handleDownloadPng}
+                className="rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cobalt-700"
+              >
+                Download PNG
+              </button>
+              <button
+                type="button"
                 onClick={() => window.print()}
                 className="rounded-full border border-sand-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
               >
@@ -131,7 +159,7 @@ export function ReceiptPage() {
           <div className="grid gap-3 md:grid-cols-4">
             <MetaCard label="Receipt Number" value={receipt.receipt_number} tone="cobalt" />
             <MetaCard label="Paid On" value={formatDate(receipt.paid_at)} tone="sunset" />
-            <MetaCard label="Payment Trail" value={`${receipt.payment_provider.toUpperCase()} • ${receipt.payment_reference}`} tone="lagoon" />
+            <MetaCard label="Payment Trail" value={`${receipt.payment_provider.toUpperCase()} - ${receipt.payment_reference}`} tone="lagoon" />
             <MetaCard label="Gross Total" value={formatCurrency(receipt.amount_kobo, receipt.currency)} tone="forest" />
           </div>
         </div>
@@ -282,6 +310,359 @@ export function ReceiptPage() {
       </div>
     </div>
   );
+}
+
+function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 1900;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Receipt export is unavailable right now.");
+  }
+
+  const ctx = context;
+  const width = canvas.width;
+  const height = canvas.height;
+  const margin = 88;
+  const cardWidth = width - margin * 2;
+
+  ctx.fillStyle = "#f6efe5";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#1f46ef";
+  ctx.fillRect(0, 0, width, 34);
+  ctx.fillStyle = "#f4c542";
+  ctx.fillRect(240, 0, 120, 34);
+  ctx.fillStyle = "#159391";
+  ctx.fillRect(620, 0, 160, 34);
+  ctx.fillStyle = "#e33910";
+  ctx.fillRect(1100, 0, 220, 34);
+
+  drawRoundedRect(ctx, margin, 72, cardWidth, 330, 42);
+  ctx.fillStyle = "#fffdf9";
+  ctx.fill();
+  ctx.strokeStyle = "#d9d3c8";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(31,70,239,0.08)";
+  ctx.beginPath();
+  ctx.arc(width - 170, 180, 150, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(21,147,145,0.12)";
+  ctx.beginPath();
+  ctx.arc(210, 300, 110, 0, Math.PI * 2);
+  ctx.fill();
+
+  const motifY = 118;
+  const motifX = width - 388;
+  const motifColors = ["#1f46ef", "#f4c542", "#e33910", "#159391"];
+  motifColors.forEach((color, index) => {
+    ctx.fillStyle = color;
+    drawRoundedRect(ctx, motifX + index * 46, motifY + (index % 2 === 0 ? 0 : 22), 30, 110, 14);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = "#1f46ef";
+  ctx.font = "700 24px Georgia, serif";
+  ctx.fillText("Crib receipt archive", margin + 34, 132);
+
+  ctx.fillStyle = "#101324";
+  ctx.font = "700 64px Georgia, serif";
+  ctx.fillText("Payment Receipt", margin + 34, 208);
+
+  ctx.fillStyle = "#4f5a64";
+  ctx.font = "400 28px Arial";
+  drawWrappedText(ctx, heroCopyForCanvas(viewerRole), margin + 34, 258, 770, 40);
+
+  drawPill(ctx, margin + 34, 312, viewerRoleLabel(viewerRole), "#e7efff", "#1f46ef");
+  drawPill(
+    ctx,
+    margin + 250,
+    312,
+    receipt.order_status.toUpperCase(),
+    receipt.order_status === "refunded" ? "#fde8e8" : "#e6f7ef",
+    receipt.order_status === "refunded" ? "#b42318" : "#0f7a47"
+  );
+  drawPill(ctx, margin + 438, 312, escrowStatusLabel(receipt.escrow_status).toUpperCase(), "#eef5ff", "#0f3c8c");
+
+  let currentY = 446;
+  currentY = drawInfoSection(
+    ctx,
+    {
+      title: "Receipt snapshot",
+      tone: "#1f46ef",
+      rows: [
+        ["Receipt number", receipt.receipt_number],
+        ["Paid on", formatDate(receipt.paid_at)],
+        ["Payment trail", `${receipt.payment_provider.toUpperCase()} - ${receipt.payment_reference}`],
+        ["Order state", finalStateLabel(receipt)]
+      ]
+    },
+    margin,
+    currentY,
+    cardWidth
+  );
+
+  currentY += 26;
+  currentY = drawInfoSection(
+    ctx,
+    {
+      title: "People and listing",
+      tone: "#159391",
+      rows: [
+        ["Buyer", receipt.buyer_display_name || receipt.buyer_email],
+        ["Buyer email", receipt.buyer_email],
+        ["Seller", receipt.seller_display_name],
+        ["Listing", receipt.asset_title],
+        ["Category", receipt.asset_category ?? "Creative asset"]
+      ]
+    },
+    margin,
+    currentY,
+    cardWidth
+  );
+
+  currentY += 26;
+  drawRoundedRect(ctx, margin, currentY, cardWidth, 320, 34);
+  ctx.fillStyle = "#fffdf9";
+  ctx.fill();
+  ctx.strokeStyle = "#d9d3c8";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#e33910";
+  ctx.font = "700 24px Arial";
+  ctx.fillText("Settlement breakdown", margin + 32, currentY + 50);
+
+  const boxY = currentY + 86;
+  const boxWidth = (cardWidth - 64) / 3;
+  const amountCards = [
+    {
+      label: viewerRole === "buyer" ? "You paid" : "Gross sale",
+      value: formatCurrency(receipt.amount_kobo, receipt.currency),
+      tone: "#1f46ef",
+      fill: "#eef3ff"
+    },
+    {
+      label: "Commission",
+      value: formatCurrency(receipt.commission_kobo, receipt.currency),
+      tone: "#e33910",
+      fill: "#fff0e8"
+    },
+    {
+      label: "Seller net",
+      value: formatCurrency(receipt.seller_net_amount_kobo, receipt.currency),
+      tone: "#0f7a47",
+      fill: "#eefaf2"
+    }
+  ];
+
+  amountCards.forEach((card, index) => {
+    const x = margin + 20 + index * (boxWidth + 12);
+    drawRoundedRect(ctx, x, boxY, boxWidth, 182, 26);
+    ctx.fillStyle = card.fill;
+    ctx.fill();
+    ctx.strokeStyle = "#d9d3c8";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = card.tone;
+    ctx.font = "700 22px Arial";
+    ctx.fillText(card.label.toUpperCase(), x + 22, boxY + 42);
+    ctx.fillStyle = "#101324";
+    ctx.font = "700 40px Georgia, serif";
+    ctx.fillText(card.value, x + 22, boxY + 104);
+  });
+
+  currentY += 356;
+  currentY = drawInfoSection(
+    ctx,
+    {
+      title: "Escrow and reference notes",
+      tone: "#f4c542",
+      rows: [
+        ["Escrow state", escrowStatusLabel(receipt.escrow_status)],
+        ["Escrow note", escrowDescription(receipt, viewerRole)],
+        ["Refund reference", receipt.refund_reference ?? "Not refunded"],
+        ["Scam report", receipt.scam_report_reason?.trim() || "No buyer report recorded"]
+      ]
+    },
+    margin,
+    currentY,
+    cardWidth
+  );
+
+  const footerY = height - 148;
+  ctx.fillStyle = "#101324";
+  ctx.fillRect(0, footerY, width, height - footerY);
+  ["#1f46ef", "#f4c542", "#e33910", "#159391"].forEach((color, index) => {
+    ctx.fillStyle = color;
+    drawRoundedRect(ctx, margin + index * 92, footerY - 34 - (index % 2 === 0 ? 0 : 16), 62, 62, 18);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "700 24px Arial";
+  ctx.fillText("Buyer, seller, and admin copies point to the same archived source.", margin, footerY + 64);
+  ctx.font = "400 22px Arial";
+  ctx.fillText("Generated from Crib's receipt archive for future reference and reconciliation.", margin, footerY + 104);
+
+  return canvas;
+}
+
+function heroCopyForCanvas(viewerRole: ViewerRole) {
+  if (viewerRole === "seller") {
+    return "Seller copy showing gross sale, platform commission, and current payout state.";
+  }
+
+  if (viewerRole === "admin") {
+    return "Admin archive copy preserving payment trail, payout share, and review status.";
+  }
+
+  return "Buyer copy confirming the purchase, payment trail, and escrow protection state.";
+}
+
+function drawInfoSection(
+  ctx: CanvasRenderingContext2D,
+  section: {
+    title: string;
+    tone: string;
+    rows: Array<[string, string]>;
+  },
+  x: number,
+  y: number,
+  width: number
+) {
+  ctx.font = "600 27px Arial";
+  const rowHeights = section.rows.map(([, value]) => Math.max(78, 40 + measureWrappedTextHeight(ctx, value, width - 64, 34)));
+  const baseHeight = 110;
+  const height = baseHeight + rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0);
+
+  drawRoundedRect(ctx, x, y, width, height, 34);
+  ctx.fillStyle = "#fffdf9";
+  ctx.fill();
+  ctx.strokeStyle = "#d9d3c8";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = section.tone;
+  ctx.font = "700 24px Arial";
+  ctx.fillText(section.title, x + 32, y + 52);
+
+  let rowY = y + 98;
+  section.rows.forEach(([label, value], index) => {
+    const rowHeight = rowHeights[index];
+
+    if (index > 0) {
+      ctx.strokeStyle = "#ebe6dd";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 28, rowY - 22);
+      ctx.lineTo(x + width - 28, rowY - 22);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "#6a726d";
+    ctx.font = "700 19px Arial";
+    ctx.fillText(label.toUpperCase(), x + 32, rowY);
+    ctx.fillStyle = "#101324";
+    ctx.font = "600 27px Arial";
+    drawWrappedText(ctx, value, x + 32, rowY + 34, width - 64, 34);
+    rowY += rowHeight;
+  });
+
+  return y + height;
+}
+
+function drawPill(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, fill: string, textColor: string) {
+  const width = Math.max(150, Math.min(320, label.length * 12 + 40));
+  drawRoundedRect(ctx, x, y, width, 44, 22);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.fillStyle = textColor;
+  ctx.font = "700 18px Arial";
+  ctx.fillText(label, x + 18, y + 28);
+}
+
+function drawWrappedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  let line = "";
+  let currentY = y;
+
+  words.forEach((word) => {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, currentY);
+      line = word;
+      currentY += lineHeight;
+      return;
+    }
+
+    line = testLine;
+  });
+
+  if (line) {
+    ctx.fillText(line, x, currentY);
+  }
+
+  return currentY;
+}
+
+function measureWrappedTextHeight(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  lineHeight: number
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  let line = "";
+  let lines = 1;
+
+  words.forEach((word) => {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      lines += 1;
+      line = word;
+      return;
+    }
+
+    line = testLine;
+  });
+
+  return lines * lineHeight;
+}
+
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function viewerRoleLabel(viewerRole: ViewerRole) {

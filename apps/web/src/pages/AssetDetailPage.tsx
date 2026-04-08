@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ImageGalleryModal } from "@/components/ImageGalleryModal";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
@@ -11,12 +12,15 @@ import {
   addAssetToWishlist,
   createPayment,
   deleteAssetReview,
+  followCreator,
   getAssetById,
+  getCreatorFollowStats,
   getAssetReviews,
   getWishlistAssetIds,
   hasPaidOrderForAsset,
   removeAssetFromWishlist,
   trackAnalyticsEvent,
+  unfollowCreator,
   upsertAssetReview
 } from "@/lib/api";
 import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFormatLabel, getAssetPrimaryFilename } from "@/lib/assetCatalog";
@@ -37,6 +41,8 @@ export function AssetDetailPage() {
   const [reviewText, setReviewText] = useState("");
   const [checkoutEmail, setCheckoutEmail] = useState("");
   const [customAmount, setCustomAmount] = useState("");
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   const assetQuery = useQuery({
     queryKey: ["asset", id],
@@ -45,6 +51,25 @@ export function AssetDetailPage() {
   });
 
   const previews = useMemo(() => assetQuery.data?.previews ?? [], [assetQuery.data]);
+  const galleryImages = useMemo(() => {
+    if (!assetQuery.data) {
+      return [];
+    }
+
+    if (previews.length > 0) {
+      return previews.map((preview, index) => ({
+        src: preview.preview_url,
+        alt: `${assetQuery.data!.title} preview ${index + 1}`
+      }));
+    }
+
+    return [
+      {
+        src: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80",
+        alt: assetQuery.data.title
+      }
+    ];
+  }, [assetQuery.data, previews]);
 
   const assetReviewsQuery = useQuery({
     queryKey: ["asset-reviews", id],
@@ -62,6 +87,12 @@ export function AssetDetailPage() {
     queryKey: ["asset-paid-order", id, user?.id, userContactEmail],
     queryFn: () => hasPaidOrderForAsset(id, user!.id, userContactEmail),
     enabled: Boolean(id && user?.id)
+  });
+
+  const followStatsQuery = useQuery({
+    queryKey: ["creator-follow-stats", assetQuery.data?.creator_id, user?.id],
+    queryFn: () => getCreatorFollowStats(assetQuery.data!.creator_id, user?.id ?? null),
+    enabled: Boolean(assetQuery.data?.creator_id)
   });
 
   const existingUserReview = useMemo(() => {
@@ -304,6 +335,30 @@ export function AssetDetailPage() {
     }
   });
 
+  const followMutation = useMutation({
+    mutationFn: async (nextState: boolean) => {
+      if (!user?.id || !assetQuery.data || user.id === assetQuery.data.creator_id) {
+        throw new Error("You can only follow other creators.");
+      }
+
+      if (nextState) {
+        await followCreator(user.id, assetQuery.data.creator_id);
+      } else {
+        await unfollowCreator(user.id, assetQuery.data.creator_id);
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["creator-follow-stats", assetQuery.data?.creator_id] }),
+        queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
+        queryClient.invalidateQueries({ queryKey: ["market-assets"] })
+      ]);
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not update follow state.", "error");
+    }
+  });
+
   if (assetQuery.isLoading) {
     return <div className="surface-card p-6 text-sm text-sand-600">Loading listing...</div>;
   }
@@ -355,6 +410,11 @@ export function AssetDetailPage() {
   const creatorSalesLabel = `${new Intl.NumberFormat("en-US").format(creatorSalesCount)} sales`;
   const creatorVerified = Boolean(asset.profile?.is_verified);
   const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Template Creator";
+  const assetSoldCount = Math.max(0, asset.sold_count ?? 0);
+  const assetSoldLabel = `${new Intl.NumberFormat("en-US").format(assetSoldCount)} sold`;
+  const creatorFollowerCount = followStatsQuery.data?.followerCount ?? 0;
+  const creatorFollowerLabel = `${new Intl.NumberFormat("en-US").format(creatorFollowerCount)} follower${creatorFollowerCount === 1 ? "" : "s"}`;
+  const isFollowingCreator = followStatsQuery.data?.isFollowing ?? false;
   const checkoutContactEmail = userContactEmail ?? checkoutEmail.trim();
   const appLabel = getAssetAppLabel(asset);
   const formatLabel = getAssetFormatLabel(asset);
@@ -364,8 +424,7 @@ export function AssetDetailPage() {
   const creatorProfilePath = user
     ? `/profile/${asset.creator_id}`
     : `/auth?redirect=${encodeURIComponent(`/profile/${asset.creator_id}`)}`;
-  const primaryPreview =
-    previews[0]?.preview_url ?? "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
+  const primaryPreview = galleryImages[0]?.src ?? "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
   const unavailableReason =
     asset.status !== "published"
       ? "Only published listings can be purchased."
@@ -390,19 +449,39 @@ export function AssetDetailPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr),360px]">
         <section className="space-y-4">
           <div className="overflow-hidden rounded-2xl border border-sand-200 bg-white">
-            <div className="aspect-[16/10] overflow-hidden bg-sand-100">
-              <img src={primaryPreview} alt={asset.title} className="h-full w-full object-cover" />
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setGalleryIndex(0);
+                setGalleryOpen(true);
+              }}
+              className="group relative block w-full text-left"
+            >
+              <div className="aspect-[16/10] overflow-hidden bg-sand-100">
+                <img src={primaryPreview} alt={asset.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+              </div>
+              <div className="absolute bottom-4 right-4 rounded-full bg-cobalt-600 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white shadow-lg transition group-hover:bg-cobalt-700">
+                Open gallery
+              </div>
+            </button>
           </div>
 
-          {previews.length > 1 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {previews.slice(1, 7).map((preview) => (
-                <div key={preview.id} className="overflow-hidden rounded-xl border border-sand-200 bg-white">
+          {galleryImages.length > 1 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {galleryImages.slice(1).map((preview, index) => (
+                <button
+                  key={`${preview.src}-${index}`}
+                  type="button"
+                  onClick={() => {
+                    setGalleryIndex(index + 1);
+                    setGalleryOpen(true);
+                  }}
+                  className="group overflow-hidden rounded-xl border border-sand-200 bg-white text-left transition hover:border-cobalt-300 hover:shadow-md"
+                >
                   <div className="aspect-[4/3] overflow-hidden bg-sand-100">
-                    <img src={preview.preview_url} alt={asset.title} className="h-full w-full object-cover" />
+                    <img src={preview.src} alt={preview.alt ?? asset.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : null}
@@ -429,14 +508,14 @@ export function AssetDetailPage() {
                   {creatorVerified ? <VerifiedBadge size="sm" /> : null}
                 </div>
                 <p className="mt-1 text-xs text-sand-600">
-                  {creatorCategory} - {creatorSalesLabel}
+                  {creatorCategory} - {creatorSalesLabel} - {creatorFollowerLabel}
                 </p>
               </div>
               <MetaItem label="Compatible App" value={appLabel} preserveCase />
               <MetaItem label="Primary Format" value={formatLabel} preserveCase />
               <MetaItem label="Delivery" value={deliveryLabel} preserveCase />
               <MetaItem label="Uploaded" value={formatDate(asset.created_at)} preserveCase />
-              <MetaItem label="Status" value={asset.status} />
+              <MetaItem label="Sold" value={assetSoldLabel} preserveCase />
             </div>
 
             {primaryFileName ? (
@@ -559,6 +638,15 @@ export function AssetDetailPage() {
             <span>{reviewCount > 0 ? `${averageRating.toFixed(1)}/5 (${reviewCount})` : "No reviews yet"}</span>
           </div>
 
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-full border border-cobalt-100 bg-cobalt-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cobalt-700">
+              {assetSoldLabel}
+            </span>
+            <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sand-700">
+              {creatorFollowerLabel}
+            </span>
+          </div>
+
           <div className="mt-5 flex items-center justify-between gap-3">
             <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} pricingModel={asset.pricing_model} minimumPriceKobo={asset.minimum_price_kobo} className="text-base" />
             <span className="text-xs text-sand-500">Updated {formatDate(asset.created_at)}</span>
@@ -677,6 +765,26 @@ export function AssetDetailPage() {
             </Link>
           )}
 
+          {!isOwnAsset ? (
+            user ? (
+              <button
+                type="button"
+                onClick={() => followMutation.mutate(!isFollowingCreator)}
+                disabled={followMutation.isPending}
+                className="mt-3 w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {followMutation.isPending ? "Updating..." : isFollowingCreator ? "Following creator" : "Follow creator"}
+              </button>
+            ) : (
+              <Link
+                to={`/auth?redirect=${encodeURIComponent(`/asset/${asset.id}`)}`}
+                className="mt-3 block w-full rounded-full bg-cobalt-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-cobalt-700"
+              >
+                Sign in to follow
+              </Link>
+            )
+          ) : null}
+
           {purchaseAvailable && !user ? (
             <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">
               {isFreeAsset ? "Sign in to claim this template and keep it in your orders." : "Sign in to buy this template, verify payment, and access creator profiles."}
@@ -715,6 +823,14 @@ export function AssetDetailPage() {
           </Link>
         </div>
       </Modal>
+
+      <ImageGalleryModal
+        open={galleryOpen}
+        title={asset.title}
+        images={galleryImages}
+        initialIndex={galleryIndex}
+        onClose={() => setGalleryOpen(false)}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   getBuyerOrders,
   getReviewedAssetIdsForUser,
   reportOrderFileScam,
+  resolveReportedOrderAsGenuine,
   upsertAssetReview,
   verifyPayment
 } from "@/lib/api";
@@ -262,6 +263,17 @@ export function OrdersPage() {
     },
     onError: (error) => {
       pushToast(error instanceof Error ? error.message : "Could not report this order", "error");
+    }
+  });
+
+  const resolveReportedMutation = useMutation({
+    mutationFn: (orderId: string) => resolveReportedOrderAsGenuine(orderId),
+    onSuccess: async () => {
+      pushToast("Marked as resolved. The report has been cleared and the order is now treated as genuine.", "success");
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not resolve this reported order", "error");
     }
   });
 
@@ -584,10 +596,20 @@ export function OrdersPage() {
                       ) : null}
 
                       {reported ? (
-                        <p className="mt-3 text-xs text-rose-700">
-                          Scam reported{order.buyer_reported_at ? ` on ${formatDateTime(order.buyer_reported_at)}` : ""}. The payout stays on hold while the issue is reviewed.
-                          {order.scam_report_reason ? ` Reason: ${order.scam_report_reason}` : ""}
-                        </p>
+                        <div className="mt-3 space-y-3">
+                          <p className="text-xs text-rose-700">
+                            Scam reported{order.buyer_reported_at ? ` on ${formatDateTime(order.buyer_reported_at)}` : ""}. The payout stays on hold while the issue is reviewed.
+                            {order.scam_report_reason ? ` Reason: ${order.scam_report_reason}` : ""}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => resolveReportedMutation.mutate(order.id)}
+                            disabled={resolveReportedMutation.isPending}
+                            className="rounded-full bg-cobalt-600 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-cobalt-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {resolveReportedMutation.isPending ? "Resolving..." : "Resolved"}
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

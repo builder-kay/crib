@@ -17,19 +17,6 @@ import {
 } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
 
-const STATUS_OPTIONS = [
-  {
-    value: "published",
-    label: "Publish now",
-    description: "Make the listing visible immediately after save."
-  },
-  {
-    value: "draft",
-    label: "Save draft",
-    description: "Keep it private while you refine the template."
-  }
-] as const;
-
 const PLATFORM_COMMISSION_RATE = 0.1;
 
 const AFRICAN_CURRENCIES = [
@@ -157,7 +144,7 @@ export function UploadPage() {
   const [pricingModel, setPricingModel] = useState<"free" | "paid" | "pay_what_you_want">("paid");
   const [deliveryMode, setDeliveryMode] = useState<"file" | "external_link">(getDefaultDeliveryMode("canva"));
   const [externalDeliveryUrl, setExternalDeliveryUrl] = useState("");
-  const [status, setStatus] = useState<"draft" | "published">("published");
+  const status: "published" = "published";
   const [mainFile, setMainFile] = useState<File[]>([]);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [activeStepId, setActiveStepId] = useState<UploadStepId>("template");
@@ -220,7 +207,7 @@ export function UploadPage() {
       {
         id: "thumbnail" as const,
         title: "Thumbnail",
-        description: "Upload preview images and decide whether to publish or save as draft.",
+        description: "Upload preview images so the listing looks strong in the marketplace.",
         done: previewFiles.length > 0
       }
     ],
@@ -619,25 +606,6 @@ export function UploadPage() {
                     tone="lagoon"
                   />
                 </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-sand-800">Visibility</p>
-                    <p className="mt-1 text-xs text-sand-600">Choose whether this template goes live now or stays private as a draft.</p>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {STATUS_OPTIONS.map((option) => (
-                      <ChoiceCard
-                        key={option.value}
-                        active={status === option.value}
-                        label={option.label}
-                        description={option.description}
-                        onClick={() => setStatus(option.value)}
-                      />
-                    ))}
-                  </div>
-                </div>
               </div>
             ) : null}
           </div>
@@ -658,7 +626,7 @@ export function UploadPage() {
                   disabled={uploadMutation.isPending}
                   className="upload-nav-button upload-nav-button-primary upload-nav-button-primary-template disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {uploadMutation.isPending ? "Saving..." : status === "published" ? "Publish template" : "Save draft"}
+                  {uploadMutation.isPending ? "Saving..." : "Publish template"}
                 </button>
               )}
             </div>
@@ -758,4 +726,5 @@ function Field({
     </label>
   );
 }
+
 

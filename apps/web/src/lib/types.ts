@@ -69,6 +69,7 @@ export type Asset = {
   delivery_mode: AssetDeliveryMode;
   external_delivery_url: string | null;
   pricing_model: AssetPricingModel;
+  sold_count: number;
   status: "draft" | "published" | "archived";
   created_at: string;
   average_rating?: number;
@@ -387,6 +388,7 @@ export type PayoutBank = {
   code: string;
   name: string;
 };
+
 
 
 

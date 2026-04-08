@@ -48,8 +48,8 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
   const userContactEmail = getUserContactEmail(user);
   const creatorName = asset.profile?.display_name ?? "Creator";
   const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Template Creator";
-  const creatorSales = Math.max(0, asset.profile?.sales_count ?? 0);
-  const creatorSalesLabel = `${new Intl.NumberFormat("en-US").format(creatorSales)} sold`;
+  const soldCount = Math.max(0, asset.sold_count ?? 0);
+  const soldLabel = `${new Intl.NumberFormat("en-US").format(soldCount)} sold`;
   const isVerified = Boolean(asset.profile?.is_verified);
   const rating = asset.average_rating ?? 0;
   const reviewCount = asset.review_count ?? 0;
@@ -138,7 +138,7 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
 
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="rounded-full border border-sand-200 bg-sand-50 px-2 py-0.5 text-[11px] font-medium text-sand-700">{creatorCategory}</span>
-          <span className="text-[11px] text-sand-500">{creatorSalesLabel}</span>
+          <span className="rounded-full border border-cobalt-100 bg-cobalt-50 px-2 py-0.5 text-[11px] font-semibold text-cobalt-700">{soldLabel}</span>
         </div>
 
         <div className="mt-auto flex items-center justify-between pt-1">
@@ -164,4 +164,3 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
     </article>
   );
 }
-

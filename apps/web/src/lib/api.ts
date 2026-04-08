@@ -105,6 +105,11 @@ type AssetRatingRow = {
   rating: number;
 };
 
+type AssetOrderCountRow = {
+  asset_id: string;
+  status: Order["status"];
+};
+
 type OrderRow = {
   id: string;
   email: string;
@@ -192,6 +197,7 @@ type OrderReceiptStatusRow = {
 };
 
 type ReceiptSellerProfileRow = {
+  display_name?: string | null;
   avatar_url: string | null;
   creator_category: string | null;
   is_verified: boolean | null;
@@ -397,6 +403,7 @@ function mapAsset(row: AssetRow): Asset {
     delivery_mode: row.delivery_mode ?? "file",
     external_delivery_url: row.external_delivery_url ?? null,
     pricing_model: row.pricing_model ?? (row.price_kobo > 0 ? "paid" : "free"),
+    sold_count: 0,
     status: row.status,
     created_at: row.created_at,
     profile: profile
@@ -745,17 +752,29 @@ async function attachAssetRatingSummaries(assets: Asset[]): Promise<Asset[]> {
   }
 
   const assetIds = Array.from(new Set(assets.map((asset) => asset.id)));
-  const { data, error } = await supabase.from("asset_reviews").select("asset_id, rating").in("asset_id", assetIds);
+  const [{ data: ratingData, error: ratingError }, { data: orderData, error: orderError }] = await Promise.all([
+    supabase.from("asset_reviews").select("asset_id, rating").in("asset_id", assetIds),
+    supabase.from("orders").select("asset_id, status").in("asset_id", assetIds).in("status", ["paid", "refunded"])
+  ]);
 
-  if (error) {
-    throw new Error(error.message);
+  if (ratingError) {
+    throw new Error(ratingError.message);
+  }
+
+  if (orderError) {
+    throw new Error(orderError.message);
   }
 
   const ratingsByAsset = new Map<string, number[]>();
-  for (const row of (data ?? []) as AssetRatingRow[]) {
+  for (const row of (ratingData ?? []) as AssetRatingRow[]) {
     const existing = ratingsByAsset.get(row.asset_id) ?? [];
     existing.push(row.rating);
     ratingsByAsset.set(row.asset_id, existing);
+  }
+
+  const salesByAsset = new Map<string, number>();
+  for (const row of (orderData ?? []) as AssetOrderCountRow[]) {
+    salesByAsset.set(row.asset_id, (salesByAsset.get(row.asset_id) ?? 0) + 1);
   }
 
   return assets.map((asset) => {
@@ -763,6 +782,7 @@ async function attachAssetRatingSummaries(assets: Asset[]): Promise<Asset[]> {
     const summary = summarizeRatings(ratings);
     return {
       ...asset,
+      sold_count: salesByAsset.get(asset.id) ?? asset.sold_count ?? 0,
       average_rating: summary.average_rating,
       review_count: summary.review_count
     };
@@ -1614,8 +1634,8 @@ export async function getCreatorDirectory(filters: CreatorDirectoryFilters = {})
   return creators;
 }
 
-export async function getPublishedAssets(filters: MarketFilters = {}): Promise<Asset[]> {
-  const { data, error } = await supabase
+export async function getPublishedAssets(filters: MarketFilters = {}, viewerId?: string | null): Promise<Asset[]> {
+  const assetQuery = supabase
     .from("assets")
     .select(
       `id,
@@ -1639,10 +1659,20 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
     .eq("status", "published")
     .order("created_at", { ascending: false });
 
+  const [{ data, error }, followResult] = await Promise.all([
+    assetQuery,
+    viewerId ? supabase.from("creator_follows").select("creator_id").eq("follower_id", viewerId) : Promise.resolve({ data: [], error: null })
+  ]);
+
   if (error) {
     throw new Error(error.message);
   }
 
+  if (followResult.error) {
+    throw new Error(followResult.error.message);
+  }
+
+  const followedCreatorIds = new Set(((followResult.data ?? []) as CreatorFollowRow[]).map((row) => row.creator_id));
   const withRatings = await attachAssetRatingSummaries((data as AssetRow[]).map(mapAsset));
   const searchTokens = toNormalizedTokens(filters.search ?? "");
   const creatorQuery = (filters.creator ?? "").trim().toLowerCase();
@@ -1650,9 +1680,10 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
   const filtered = withRatings
     .map((asset) => ({
       asset,
-      relevance: scoreAssetSearchMatch(asset, searchTokens)
+      relevance: scoreAssetSearchMatch(asset, searchTokens),
+      followed: followedCreatorIds.has(asset.creator_id)
     }))
-        .filter(({ asset, relevance }) => {
+    .filter(({ asset, relevance }) => {
       const comparablePriceKobo = asset.pricing_model === "pay_what_you_want" ? asset.minimum_price_kobo : asset.price_kobo;
       const matchesSearch = searchTokens.length === 0 ? true : relevance > 0;
       const matchesCategory = !filters.category || filters.category === "all" ? true : asset.category === filters.category;
@@ -1666,9 +1697,14 @@ export async function getPublishedAssets(filters: MarketFilters = {}): Promise<A
     });
 
   filtered.sort((a, b) => {
+    if (a.followed !== b.followed) {
+      return a.followed ? -1 : 1;
+    }
+
     if (searchTokens.length > 0) {
       return b.relevance - a.relevance || toTimestamp(b.asset.created_at) - toTimestamp(a.asset.created_at);
     }
+
     return toTimestamp(b.asset.created_at) - toTimestamp(a.asset.created_at);
   });
 
@@ -2484,6 +2520,26 @@ export async function reportOrderFileScam(orderId: string, reason: string) {
     scamReportReason: row?.scam_report_reason ?? ""
   };
 }
+export async function resolveReportedOrderAsGenuine(orderId: string) {
+  await requireAccessToken("Sign in to resolve this reported delivery.");
+  const { data, error } = await supabase.rpc("resolve_reported_order_as_genuine", {
+    p_order_id: orderId
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    orderId: String(row?.order_id ?? orderId),
+    escrowStatus: (row?.escrow_status ?? "released") as NonNullable<Order["escrow_status"]>,
+    credited: Boolean(row?.credited),
+    escrowReleasedAt: row?.escrow_released_at ?? null,
+    escrowReleaseReason: row?.escrow_release_reason ?? null,
+    scamResolutionStatus: row?.scam_resolution_status ?? "genuine_released"
+  };
+}
 export async function getBuyerOrders(options: {
   userId?: string;
 }): Promise<Order[]> {
@@ -2543,6 +2599,29 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt> {
     throw new Error("Order ID is required.");
   }
 
+  const buildFallbackReceiptNumber = (nextOrderId: string, paidAt: string | null, createdAt: string) => {
+    const date = new Date(paidAt ?? createdAt);
+    const year = Number.isNaN(date.getTime()) ? "0000" : String(date.getUTCFullYear()).padStart(4, "0");
+    const month = Number.isNaN(date.getTime()) ? "00" : String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = Number.isNaN(date.getTime()) ? "00" : String(date.getUTCDate()).padStart(2, "0");
+    const suffix = nextOrderId.replace(/-/g, "").slice(-8).toUpperCase();
+    return `CRIB-RCP-${year}${month}${day}-${suffix}`;
+  };
+
+  const fallbackDisplayName = (displayName: string | null | undefined, email: string | null | undefined, fallback: string) => {
+    const trimmedDisplayName = displayName?.trim() ?? "";
+    if (trimmedDisplayName) {
+      return trimmedDisplayName;
+    }
+
+    const emailPrefix = email?.split("@")[0]?.trim() ?? "";
+    if (emailPrefix) {
+      return emailPrefix;
+    }
+
+    return fallback;
+  };
+
   const { data: receiptRows, error: receiptError } = await supabase
     .from("order_receipts")
     .select(
@@ -2575,47 +2654,191 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt> {
     throw new Error(receiptError.message);
   }
 
-  const receipt = ((receiptRows ?? []) as OrderReceiptRow[])[0];
+  const receipt = ((receiptRows ?? []) as OrderReceiptRow[])[0] ?? null;
 
-  if (!receipt) {
-    throw new Error("Receipt not found.");
+  if (receipt) {
+    const [{ data: orderRows, error: orderError }, { data: sellerRows, error: sellerError }, { data: previewRows, error: previewError }] = await Promise.all([
+      supabase
+        .from("orders")
+        .select(
+          "status, created_at, escrow_status, escrow_due_at, buyer_confirmed_at, buyer_reported_at, escrow_released_at, escrow_release_reason, refund_reference, refund_provider_status, scam_report_reason, scam_resolution_status"
+        )
+        .eq("id", receipt.order_id)
+        .limit(1),
+      supabase
+        .from("profiles")
+        .select("display_name, avatar_url, creator_category, is_verified")
+        .eq("id", receipt.seller_id)
+        .limit(1),
+      supabase
+        .from("asset_previews")
+        .select("preview_url")
+        .eq("asset_id", receipt.asset_id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+    ]);
+
+    if (orderError) {
+      throw new Error(orderError.message);
+    }
+    if (sellerError) {
+      throw new Error(sellerError.message);
+    }
+    if (previewError) {
+      throw new Error(previewError.message);
+    }
+
+    return mapOrderReceipt(
+      receipt,
+      (((orderRows ?? []) as OrderReceiptStatusRow[])[0] ?? null) as OrderReceiptStatusRow | null,
+      (((sellerRows ?? []) as ReceiptSellerProfileRow[])[0] ?? null) as ReceiptSellerProfileRow | null,
+      ((previewRows ?? []) as Array<{ preview_url: string | null }>)[0]?.preview_url ?? null
+    );
   }
 
-  const [{ data: orderRows, error: orderError }, { data: sellerRows, error: sellerError }, { data: previewRows, error: previewError }] = await Promise.all([
-    supabase
-      .from("orders")
-      .select(
-        "status, created_at, escrow_status, escrow_due_at, buyer_confirmed_at, buyer_reported_at, escrow_released_at, escrow_release_reason, refund_reference, refund_provider_status, scam_report_reason, scam_resolution_status"
-      )
-      .eq("id", receipt.order_id)
-      .limit(1),
-    supabase
-      .from("profiles")
-      .select("avatar_url, creator_category, is_verified")
-      .eq("id", receipt.seller_id)
-      .limit(1),
-    supabase
-      .from("asset_previews")
-      .select("preview_url")
-      .eq("asset_id", receipt.asset_id)
-      .order("created_at", { ascending: true })
-      .limit(1)
-  ]);
+  const { data: orderRows, error: orderError } = await supabase
+    .from("orders")
+    .select(
+      `id,
+      buyer_id,
+      email,
+      amount_kobo,
+      currency,
+      paid_at,
+      created_at,
+      commission_kobo,
+      seller_net_amount_kobo,
+      status,
+      escrow_status,
+      escrow_due_at,
+      buyer_confirmed_at,
+      buyer_reported_at,
+      escrow_released_at,
+      escrow_release_reason,
+      refund_reference,
+      refund_provider_status,
+      scam_report_reason,
+      scam_resolution_status,
+      asset:assets!inner(id, title, category, creator_id),
+      payment:payments(id, provider, reference)`
+    )
+    .eq("id", orderId)
+    .limit(1);
 
   if (orderError) {
     throw new Error(orderError.message);
   }
+
+  const fallbackOrder = ((orderRows ?? [])[0] ?? null) as ({
+    id: string;
+    buyer_id: string | null;
+    email: string;
+    amount_kobo: number;
+    currency: string;
+    paid_at: string | null;
+    created_at: string;
+    commission_kobo: number | null;
+    seller_net_amount_kobo: number | null;
+    status: Order["status"];
+    escrow_status: Order["escrow_status"];
+    escrow_due_at: string | null;
+    buyer_confirmed_at: string | null;
+    buyer_reported_at: string | null;
+    escrow_released_at: string | null;
+    escrow_release_reason: string | null;
+    refund_reference: string | null;
+    refund_provider_status: string | null;
+    scam_report_reason: string | null;
+    scam_resolution_status: Order["scam_resolution_status"];
+    asset: { id: string; title: string; category: string; creator_id: string } | Array<{ id: string; title: string; category: string; creator_id: string }> | null;
+    payment: { id?: string; provider?: string | null; reference?: string | null } | Array<{ id?: string; provider?: string | null; reference?: string | null }> | null;
+  }) | null;
+
+  if (!fallbackOrder) {
+    throw new Error("Receipt not found.");
+  }
+
+  if (!["paid", "refunded"].includes(fallbackOrder.status)) {
+    throw new Error("Receipt not found.");
+  }
+
+  const fallbackAsset = normalizeJoinedRecord(fallbackOrder.asset);
+  const fallbackPayment = normalizeJoinedRecord(fallbackOrder.payment);
+
+  if (!fallbackAsset) {
+    throw new Error("Receipt not found.");
+  }
+
+  const [{ data: sellerRows, error: sellerError }, { data: previewRows, error: previewError }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name, avatar_url, creator_category, is_verified")
+      .eq("id", fallbackAsset.creator_id)
+      .limit(1),
+    supabase
+      .from("asset_previews")
+      .select("preview_url")
+      .eq("asset_id", fallbackAsset.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+  ]);
+
   if (sellerError) {
     throw new Error(sellerError.message);
   }
+
   if (previewError) {
     throw new Error(previewError.message);
   }
 
+  const fallbackSeller = (((sellerRows ?? []) as ReceiptSellerProfileRow[])[0] ?? null) as ReceiptSellerProfileRow | null;
+  const paidAt = fallbackOrder.paid_at ?? fallbackOrder.created_at;
+  const fallbackReferenceSuffix = fallbackOrder.id.replace(/-/g, "");
+  const fallbackReceiptRow: OrderReceiptRow = {
+    id: `derived-${fallbackOrder.id}`,
+    order_id: fallbackOrder.id,
+    receipt_number: buildFallbackReceiptNumber(fallbackOrder.id, fallbackOrder.paid_at, fallbackOrder.created_at),
+    buyer_id: fallbackOrder.buyer_id,
+    seller_id: fallbackAsset.creator_id,
+    asset_id: fallbackAsset.id,
+    buyer_email: fallbackOrder.email,
+    seller_email: null,
+    buyer_display_name: fallbackDisplayName(null, fallbackOrder.email, "Buyer"),
+    seller_display_name: fallbackDisplayName(fallbackSeller?.display_name ?? null, null, "Creator"),
+    asset_title: fallbackAsset.title,
+    asset_category: fallbackAsset.category,
+    payment_provider: fallbackPayment?.provider?.trim() || (fallbackOrder.amount_kobo === 0 ? "free" : "paystack"),
+    payment_reference:
+      fallbackPayment?.reference?.trim() ||
+      (fallbackOrder.amount_kobo === 0 ? `free-${fallbackReferenceSuffix}` : `order-${fallbackReferenceSuffix}`),
+    amount_kobo: fallbackOrder.amount_kobo,
+    commission_kobo: fallbackOrder.commission_kobo ?? 0,
+    seller_net_amount_kobo: fallbackOrder.seller_net_amount_kobo ?? Math.max(fallbackOrder.amount_kobo - (fallbackOrder.commission_kobo ?? 0), 0),
+    currency: fallbackOrder.currency,
+    paid_at: paidAt,
+    created_at: fallbackOrder.created_at,
+    updated_at: paidAt
+  };
+
+  const fallbackStatusRow: OrderReceiptStatusRow = {
+    status: fallbackOrder.status,
+    created_at: fallbackOrder.created_at,
+    escrow_status: fallbackOrder.escrow_status,
+    escrow_due_at: fallbackOrder.escrow_due_at,
+    buyer_confirmed_at: fallbackOrder.buyer_confirmed_at,
+    buyer_reported_at: fallbackOrder.buyer_reported_at,
+    escrow_released_at: fallbackOrder.escrow_released_at,
+    escrow_release_reason: fallbackOrder.escrow_release_reason,
+    refund_reference: fallbackOrder.refund_reference,
+    refund_provider_status: fallbackOrder.refund_provider_status,
+    scam_report_reason: fallbackOrder.scam_report_reason,
+    scam_resolution_status: fallbackOrder.scam_resolution_status
+  };
+
   return mapOrderReceipt(
-    receipt,
-    (((orderRows ?? []) as OrderReceiptStatusRow[])[0] ?? null) as OrderReceiptStatusRow | null,
-    (((sellerRows ?? []) as ReceiptSellerProfileRow[])[0] ?? null) as ReceiptSellerProfileRow | null,
+    fallbackReceiptRow,
+    fallbackStatusRow,
+    fallbackSeller,
     ((previewRows ?? []) as Array<{ preview_url: string | null }>)[0]?.preview_url ?? null
   );
 }
@@ -3509,5 +3732,10 @@ export async function updateAssetStatus(assetId: string, status: "draft" | "publ
   const [asset] = await attachAssetRatingSummaries([mapAsset(data as AssetRow)]);
   return asset;
 }
+
+
+
+
+
 
 

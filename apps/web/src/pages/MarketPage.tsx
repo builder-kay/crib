@@ -57,8 +57,8 @@ export function MarketPage() {
   );
 
   const assetsQuery = useQuery({
-    queryKey: ["market-assets", filters],
-    queryFn: () => getPublishedAssets(filters)
+    queryKey: ["market-assets", filters, user?.id ?? null],
+    queryFn: () => getPublishedAssets(filters, user?.id ?? null)
   });
 
   const displayAssets = assetsQuery.data ?? [];
@@ -188,7 +188,7 @@ export function MarketPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Marketplace</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Start with templates built for real workflows.</h2>
             <p className="mt-2 text-sm leading-6 text-sand-700 md:text-base md:leading-7">
-              Explore creator-made Canva, Figma, and Adobe assets, then narrow by tool, format, price, or creator until the right fit shows up fast.
+              Explore locally designed Canva, Figma, and Adobe assets, then narrow by tool, format, price, or creator until the right fit shows up fast.
             </p>
           </div>
         </div>
@@ -309,3 +309,4 @@ function FilterPill({ label, onClear }: { label: string; onClear: () => void }) 
     </button>
   );
 }
+
