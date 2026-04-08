@@ -8,7 +8,7 @@ import { routePreloaders } from "@/routes/pageLoaders";
 import { useAuthStore } from "@/store/authStore";
 
 const baseNavItems = [
-  { to: "/market", label: "Discover" },
+{ to: "/market", label: "Ghetto" },
   { to: "/sell", label: "Sell" },
   { to: "/creators", label: "Creators" },
   { to: "/editorial", label: "Blog" }
@@ -173,7 +173,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
 
   const mobilePrimaryNavItems = useMemo<MobilePrimaryNavItem[]>(
     () => [
-      { id: "discover", to: "/market", label: "Discover", preload: routePreloaders.market },
+{ id: "discover", to: "/market", label: "Ghetto", preload: routePreloaders.market },
       { id: "sell", to: "/sell", label: "Sell", preload: routePreloaders.sell },
       { id: "creators", to: "/creators", label: "Creators", preload: routePreloaders.creators },
       { id: "editorial", to: "/editorial", label: "Blog", preload: routePreloaders.blog },
