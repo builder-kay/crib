@@ -107,6 +107,14 @@ export function ImageGalleryModal({
         </div>
 
         <div className="relative flex min-h-[64vh] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(31,70,239,0.18),transparent_36%),linear-gradient(180deg,#0b1324_0%,#08101d_100%)] px-4 py-5 md:px-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/35 text-xl font-semibold text-white shadow-lg transition hover:bg-black/50"
+            aria-label="Close gallery"
+          >
+            ×
+          </button>
           {images.length > 1 ? (
             <>
               <button
