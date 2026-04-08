@@ -429,11 +429,11 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
       </header>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-sand-200 bg-white/95 shadow-[0_-24px_44px_-34px_rgba(16,19,36,0.45)] backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 overflow-x-auto border-t border-sand-200 bg-white/95 shadow-[0_-24px_44px_-34px_rgba(16,19,36,0.45)] backdrop-blur lg:hidden"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
         aria-label="Primary navigation"
       >
-        <div className={`mx-auto grid w-full max-w-[1400px] gap-1 px-2 pt-2 ${user ? "grid-cols-5" : "grid-cols-4"}`}>
+        <div className="mx-auto flex min-w-max gap-1 px-2 pt-2">
           {mobilePrimaryNavItems.map((item) => {
             const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
 
@@ -444,7 +444,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                 aria-current={isActive ? "page" : undefined}
                 onMouseEnter={() => prefetchRoute(item.preload)}
                 onFocus={() => prefetchRoute(item.preload)}
-                className={`flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center transition ${
+                className={`flex min-h-[68px] min-w-[86px] flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-center transition ${
                   isActive ? "bg-cobalt-50 text-cobalt-700" : "text-sand-600 hover:bg-sand-100 hover:text-ink"
                 }`}
               >
