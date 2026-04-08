@@ -4,6 +4,7 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  server: {},
   envDir: path.resolve(__dirname, "../.."),
   build: {
     rollupOptions: {

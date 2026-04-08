@@ -1,0 +1,1 @@
+- [x] 1. Fixed vite.config.ts by removing invalid server.mimeTypes (not a Vite option; auto-handled)

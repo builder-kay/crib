@@ -66,7 +66,7 @@ export function EditorialPage() {
         <section className="surface-card overflow-hidden p-0">
           <div className="grid gap-0 lg:grid-cols-[1fr,1fr]">
             <div className="relative h-56 overflow-hidden bg-sand-100 md:h-64 lg:h-[300px] xl:h-[320px]">
-              <img src={featuredPost.cover_image} alt={featuredPost.title} className="h-full w-full object-cover" decoding="async" fetchPriority="high" />
+<img src={featuredPost.cover_image} alt={featuredPost.title} className="h-full w-full object-cover" decoding="async" />
               <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/15 to-transparent" />
             </div>
 

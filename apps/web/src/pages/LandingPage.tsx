@@ -24,13 +24,13 @@ const citySignals = [
 const spotlightTiles = [
   {
     title: "Startup landing UI kit",
-    discipline: "Figma systems - Nairobi",
-    image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=900&q=80"
+    image: "/assets/landing/spotlight-ui-kit.jpg",
+    discipline: "UI kit"
   },
   {
     title: "Launch carousel pack",
-    discipline: "Canva content design - Johannesburg",
-    image: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=900&q=80"
+    image: "/assets/landing/spotlight-carousel.jpg",
+    discipline: "Carousel pack"
   }
 ];
 
@@ -109,13 +109,20 @@ export function LandingPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <article className="surface-card group overflow-hidden sm:col-span-2 landing-float">
               <div className="relative aspect-[16/9] overflow-hidden">
-                <img
-                  src="https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1400&q=80"
-                  alt="Creative studio collage"
-                  className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
-                  decoding="async"
-                  fetchPriority="high"
-                />
+                <video
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+                >
+                  <source src="/assets/landing/hero-video.mp4" type="video/mp4" />
+                  <img
+                    src="https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1400&q=80"
+                    alt="Creative studio collage"
+                    className="h-full w-full object-cover"
+                  />
+                </video>
                 <div className="absolute inset-0 bg-gradient-to-t from-ink/60 via-ink/10 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3 rounded-xl border border-white/35 bg-white/12 px-3 py-2 backdrop-blur-sm">
                   <div>

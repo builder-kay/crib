@@ -55,7 +55,7 @@ export function EditorialPostPage() {
 
       <section className="surface-card overflow-hidden p-0">
         <div className="relative aspect-[18/8] min-h-[260px] overflow-hidden bg-sand-100">
-          <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover" decoding="async" fetchPriority="high" />
+<img src={post.cover_image} alt={post.title} className="h-full w-full object-cover" decoding="async" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/20 to-transparent" />
           <div className="absolute left-4 right-4 top-4 flex flex-wrap gap-2 md:left-6 md:right-6 md:top-6">
             <Badge value={post.category} tone="light" />

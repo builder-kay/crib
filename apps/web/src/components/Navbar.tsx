@@ -237,7 +237,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
         <nav className="mx-auto flex w-full max-w-[1400px] items-center gap-3 px-4 py-3 md:px-6">
           <div className="flex items-center gap-5">
             <Link to="/" className="flex items-center gap-2">
-              <img src="/crib-logo.png" alt="Crib logo" className="h-10 w-10 rounded-full object-cover" decoding="async" fetchPriority="high" />
+<img src="/crib-logo.png" alt="Crib logo" className="h-10 w-10 rounded-full object-cover" decoding="async" />
               <p className="font-display text-xl font-bold leading-none text-ink">Crib</p>
             </Link>
 
