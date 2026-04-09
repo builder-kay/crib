@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
+import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { getOrderReceipt } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -9,10 +10,34 @@ import type { Order, OrderReceipt } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
 
 type ViewerRole = "buyer" | "seller" | "admin";
+type ReceiptDisplayMode = "page" | "modal";
+type ReceiptPageProps = {
+  displayMode?: ReceiptDisplayMode;
+};
 
-export function ReceiptPage() {
+let receiptLogoPromise: Promise<HTMLImageElement | null> | null = null;
+
+function loadReceiptLogo() {
+  if (typeof window === "undefined") {
+    return Promise.resolve(null);
+  }
+
+  if (!receiptLogoPromise) {
+    receiptLogoPromise = new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = "/crib-logo.png";
+    });
+  }
+
+  return receiptLogoPromise;
+}
+
+export function ReceiptPage({ displayMode = "page" }: ReceiptPageProps) {
   const { orderId = "" } = useParams();
   const user = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
   const { pushToast } = useToast();
 
   const receiptQuery = useQuery({
@@ -38,21 +63,45 @@ export function ReceiptPage() {
     return "admin";
   }, [receipt, user]);
 
+  const isBuyerReceipt = viewerRole === "buyer";
+  const showOperationalPanels = viewerRole !== "buyer";
   const backPath = viewerRole === "seller" ? "/dashboard" : viewerRole === "admin" ? "/admin/orders" : "/orders";
   const heroCopy =
     viewerRole === "seller"
       ? "Your seller copy captures the sale value, the platform commission, and the current payout state tied to this order."
       : viewerRole === "admin"
         ? "This archive copy keeps the payment trail, payout share, and review status in one place for future references."
-        : "Your buyer copy confirms the purchase, payment trail, and the current escrow state protecting the delivery.";
+        : "Your buyer receipt confirms the purchase details, amount paid, and payment reference for your records.";
+  const assetSectionCopy = isBuyerReceipt
+    ? "Keep this copy as proof of payment for the listing you purchased. If you need help with access or assistance after checkout, share this receipt number with Crib support."
+    : "This receipt preserves the purchase snapshot as it existed when payment cleared, while the status panels reflect the latest settlement and review activity.";
 
-  function handleDownloadPng() {
+  function renderInDisplayFrame(content: ReactNode, title = "Receipt") {
+    if (displayMode !== "modal") {
+      return <>{content}</>;
+    }
+
+    return (
+      <Modal
+        open
+        title={title}
+        onClose={() => navigate(-1)}
+        hideHeader
+        maxWidthClassName="max-w-6xl"
+        panelClassName="!max-h-none !overflow-visible !bg-transparent !p-0 !shadow-none"
+      >
+        <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain pr-1 sm:pr-2">{content}</div>
+      </Modal>
+    );
+  }
+
+  async function handleDownloadPng() {
     if (!receipt) {
       return;
     }
 
     try {
-      const canvas = renderReceiptCanvas(receipt, viewerRole);
+      const canvas = await renderReceiptCanvas(receipt, viewerRole);
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `${receipt.receipt_number.toLowerCase()}.png`;
@@ -66,7 +115,7 @@ export function ReceiptPage() {
   }
 
   if (!user) {
-    return (
+    return renderInDisplayFrame(
       <EmptyState
         title="Receipt access requires sign-in"
         body="Sign in to open your purchase and seller receipts."
@@ -75,16 +124,17 @@ export function ReceiptPage() {
             Sign in
           </Link>
         }
-      />
+      />,
+      "Receipt access"
     );
   }
 
   if (receiptQuery.isLoading) {
-    return <div className="surface-card p-5 text-sm text-sand-600">Loading receipt...</div>;
+    return renderInDisplayFrame(<div className="surface-card p-5 text-sm text-sand-600">Loading receipt...</div>, "Loading receipt");
   }
 
   if (receiptQuery.isError || !receipt) {
-    return (
+    return renderInDisplayFrame(
       <EmptyState
         title="Receipt unavailable"
         body={receiptQuery.error instanceof Error ? receiptQuery.error.message : "We could not load this receipt."}
@@ -93,11 +143,12 @@ export function ReceiptPage() {
             Back
           </Link>
         }
-      />
+      />,
+      "Receipt unavailable"
     );
   }
 
-  return (
+  return renderInDisplayFrame(
     <div className="receipt-page space-y-6">
       <section className="surface-card-vivid subtle-pattern relative overflow-hidden rounded-[2rem] p-5 md:p-8">
         <div
@@ -112,60 +163,93 @@ export function ReceiptPage() {
         <div className="pointer-events-none absolute bottom-0 left-1/3 h-44 w-44 rounded-full bg-cobalt-100/70 blur-3xl" />
 
         <div className="relative z-10 flex flex-col gap-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-cobalt-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cobalt-700">
-                  {viewerRoleLabel(viewerRole)}
-                </span>
-                <span className={receiptStatusChip(receipt.order_status)}>{receipt.order_status}</span>
-                <span className={escrowStatusChip(receipt.escrow_status)}>{escrowStatusLabel(receipt.escrow_status)}</span>
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex flex-1 items-start gap-4">
+              <div className="grid h-16 w-16 shrink-0 place-items-center rounded-[1.45rem] border border-white/70 bg-white/85 shadow-lg shadow-cobalt-200/50">
+                <img src="/crib-logo.png" alt="Crib logo" className="h-11 w-11 rounded-full object-cover" decoding="async" />
               </div>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-700">Crib receipt archive</p>
-              <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-5xl">Payment Receipt</h1>
-              <p className="mt-3 max-w-3xl text-sm text-sand-700 md:text-base">{heroCopy}</p>
+
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-cobalt-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cobalt-700">
+                    {viewerRoleLabel(viewerRole)}
+                  </span>
+                  <span className="rounded-full border border-white/80 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sand-700">
+                    {receipt.receipt_number}
+                  </span>
+                  {showOperationalPanels ? (
+                    <>
+                      <span className={receiptStatusChip(receipt.order_status)}>{receipt.order_status}</span>
+                      <span className={escrowStatusChip(receipt.escrow_status)}>{escrowStatusLabel(receipt.escrow_status)}</span>
+                    </>
+                  ) : null}
+                </div>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-700">Crib official receipt</p>
+                <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-5xl">Payment Receipt</h1>
+                <p className="mt-3 max-w-3xl text-sm text-sand-700 md:text-base">{heroCopy}</p>
+              </div>
             </div>
 
-            <div className="receipt-print-hide flex flex-wrap gap-2">
+            <div className="min-w-[250px] rounded-[1.6rem] border border-white/75 bg-white/88 p-4 shadow-lg shadow-sand-300/30 backdrop-blur">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sand-500">Support & assistance</p>
+              <a href="mailto:cribafrica@gmail.com" className="mt-3 block text-base font-semibold text-ink hover:text-cobalt-700">
+                cribafrica@gmail.com
+              </a>
+              <p className="mt-2 text-sm text-sand-600">
+                Share receipt number <span className="font-semibold text-ink">{receipt.receipt_number}</span> if you need help with this order.
+              </p>
+            </div>
+          </div>
+
+          <div className="receipt-print-hide flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDownloadPng()}
+              className="rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cobalt-700"
+            >
+              Download PNG
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-full border border-sand-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
+            >
+              Print
+            </button>
+            {displayMode === "modal" ? (
               <button
                 type="button"
-                onClick={handleDownloadPng}
-                className="rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cobalt-700"
-              >
-                Download PNG
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
+                onClick={() => navigate(-1)}
                 className="rounded-full border border-sand-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
               >
-                Print
+                Close
               </button>
+            ) : (
               <Link
                 to={backPath}
                 className="rounded-full border border-sand-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
               >
                 Back
               </Link>
-              <Link
-                to={`/asset/${receipt.asset_id}`}
-                className="rounded-full bg-cobalt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-cobalt-700"
-              >
-                View listing
-              </Link>
-            </div>
+            )}
+            <Link
+              to={`/asset/${receipt.asset_id}`}
+              className="rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink/90"
+            >
+              View listing
+            </Link>
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">
             <MetaCard label="Receipt Number" value={receipt.receipt_number} tone="cobalt" />
             <MetaCard label="Paid On" value={formatDate(receipt.paid_at)} tone="sunset" />
             <MetaCard label="Payment Trail" value={`${receipt.payment_provider.toUpperCase()} - ${receipt.payment_reference}`} tone="lagoon" />
-            <MetaCard label="Gross Total" value={formatCurrency(receipt.amount_kobo, receipt.currency)} tone="forest" />
+            <MetaCard label={isBuyerReceipt ? "Amount Paid" : "Gross Total"} value={formatCurrency(receipt.amount_kobo, receipt.currency)} tone="forest" />
           </div>
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr,0.75fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
         <section className="space-y-6">
           <section className="surface-card overflow-hidden rounded-[1.8rem]">
             <div className="grid gap-0 lg:grid-cols-[0.95fr,1.05fr]">
@@ -201,9 +285,7 @@ export function ReceiptPage() {
               <div className="p-5 md:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Purchased Creative</p>
                 <h2 className="mt-2 font-display text-2xl font-bold text-ink md:text-3xl">{receipt.asset_title}</h2>
-                <p className="mt-3 text-sm text-sand-700">
-                  This receipt preserves the purchase snapshot as it existed when payment cleared, while the status panel reflects the current escrow or refund state.
-                </p>
+                <p className="mt-3 text-sm text-sand-700">{assetSectionCopy}</p>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <InfoBlock label="Buyer" value={receipt.buyer_display_name || receipt.buyer_email} detail={receipt.buyer_email} />
@@ -213,9 +295,17 @@ export function ReceiptPage() {
                 </div>
 
                 <div className="mt-5 rounded-[1.4rem] border border-cobalt-100 bg-cobalt-50/80 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Escrow Protection</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">
+                    {isBuyerReceipt ? "Need help with this order?" : "Settlement note"}
+                  </p>
                   <p className="mt-2 text-sm text-cobalt-900">
-                    {escrowDescription(receipt, viewerRole)}
+                    {isBuyerReceipt ? (
+                      <>
+                        For help or assistance, email <span className="font-semibold">cribafrica@gmail.com</span> and include this receipt number.
+                      </>
+                    ) : (
+                      escrowDescription(receipt, viewerRole)
+                    )}
                   </p>
                 </div>
               </div>
@@ -225,94 +315,162 @@ export function ReceiptPage() {
           <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Settlement Breakdown</p>
-                <h2 className="mt-2 font-display text-2xl font-bold text-ink">How the payment was split</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">
+                  {isBuyerReceipt ? "Payment Summary" : "Settlement Breakdown"}
+                </p>
+                <h2 className="mt-2 font-display text-2xl font-bold text-ink">
+                  {isBuyerReceipt ? "What you paid" : "How the payment was split"}
+                </h2>
               </div>
               <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sand-700">
                 {receipt.currency}
               </span>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className={`mt-5 grid gap-3 ${showOperationalPanels ? "md:grid-cols-3" : "md:grid-cols-1"}`}>
               <AmountCard
                 label={viewerRole === "buyer" ? "You Paid" : "Gross Sale"}
                 value={formatCurrency(receipt.amount_kobo, receipt.currency)}
-                note="Marketplace checkout total"
+                note={viewerRole === "buyer" ? "Total charged at checkout" : "Marketplace checkout total"}
                 tone="cobalt"
               />
-              <AmountCard
-                label="Platform Commission"
-                value={formatCurrency(receipt.commission_kobo, receipt.currency)}
-                note="Held by Crib"
-                tone="sunset"
-              />
-              <AmountCard
-                label="Seller Net"
-                value={formatCurrency(receipt.seller_net_amount_kobo, receipt.currency)}
-                note="Released after escrow clears"
-                tone="forest"
-              />
+              {showOperationalPanels ? (
+                <>
+                  <AmountCard
+                    label="Platform Commission"
+                    value={formatCurrency(receipt.commission_kobo, receipt.currency)}
+                    note="Held by Crib"
+                    tone="sunset"
+                  />
+                  <AmountCard
+                    label="Seller Net"
+                    value={formatCurrency(receipt.seller_net_amount_kobo, receipt.currency)}
+                    note="Released after escrow clears"
+                    tone="forest"
+                  />
+                </>
+              ) : null}
             </div>
           </section>
         </section>
 
         <aside className="space-y-6">
-          <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Status Trail</p>
-            <h2 className="mt-2 font-display text-2xl font-bold text-ink">Order Timeline</h2>
+          {isBuyerReceipt ? (
+            <>
+              <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Receipt Notes</p>
+                <h2 className="mt-2 font-display text-2xl font-bold text-ink">Reference details</h2>
 
-            <div className="mt-5 space-y-4">
-              <TimelineRow title="Payment confirmed" detail={formatDate(receipt.paid_at)} tone="cobalt" active />
-              <TimelineRow
-                title="Escrow review window"
-                detail={receipt.escrow_due_at ? `Due ${formatDate(receipt.escrow_due_at)}` : "No escrow deadline recorded"}
-                tone="sunset"
-                active={Boolean(receipt.escrow_due_at)}
-              />
-              <TimelineRow
-                title="Buyer confirmation"
-                detail={receipt.buyer_confirmed_at ? formatDate(receipt.buyer_confirmed_at) : "Waiting for buyer action"}
-                tone="lagoon"
-                active={Boolean(receipt.buyer_confirmed_at)}
-              />
-              <TimelineRow
-                title="Release or refund state"
-                detail={finalStateLabel(receipt)}
-                tone={receipt.order_status === "refunded" || receipt.buyer_reported_at ? "rose" : "forest"}
-                active
-              />
-            </div>
-          </section>
+                <div className="mt-5 space-y-3">
+                  <StatusNote label="Receipt number" value={receipt.receipt_number} />
+                  <StatusNote label="Payment trail" value={`${receipt.payment_provider.toUpperCase()} - ${receipt.payment_reference}`} />
+                  <StatusNote label="Purchased from" value={receipt.seller_display_name} />
+                  <StatusNote label="Support email" value="cribafrica@gmail.com" />
+                </div>
+              </section>
 
-          <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Reference Notes</p>
-            <div className="mt-4 space-y-3">
-              <StatusNote label="Escrow state" value={escrowStatusLabel(receipt.escrow_status)} />
-              <StatusNote label="Refund reference" value={receipt.refund_reference ?? "Not refunded"} />
-              <StatusNote label="Refund provider status" value={receipt.refund_provider_status ?? "No refund event"} />
-              <StatusNote label="Scam report" value={receipt.scam_report_reason?.trim() || "No buyer report recorded"} />
-            </div>
+              <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Archive Note</p>
+                <div
+                  className="mt-4 rounded-[1.5rem] border border-sand-200 px-4 py-4"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(244,248,255,0.96) 52%, rgba(255,244,238,0.95) 100%)"
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <img src="/crib-logo.png" alt="Crib logo" className="h-11 w-11 rounded-full border border-white bg-white object-cover shadow-sm" decoding="async" />
+                    <div>
+                      <p className="font-display text-xl font-bold text-ink">Crib</p>
+                      <p className="text-sm text-sand-600">Professional receipt record</p>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm text-sand-700">
+                    This buyer copy serves as your proof of payment. Keep it for reimbursements, record keeping, or any future support request related to this purchase.
+                  </p>
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Status Trail</p>
+                <h2 className="mt-2 font-display text-2xl font-bold text-ink">Order Timeline</h2>
 
-            <div
-              className="mt-5 rounded-[1.4rem] border border-sand-200 px-4 py-4"
-              style={{
-                backgroundImage:
-                  "linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(244,248,255,0.96) 52%, rgba(255,244,238,0.95) 100%)"
-              }}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-600">Receipt custody</p>
-              <p className="mt-2 text-sm text-sand-700">
-                Buyer, seller, and admin copies all point to the same archived receipt record so future disputes, payout checks, and reconciliation work from one source.
-              </p>
-            </div>
-          </section>
+                <div className="mt-5 space-y-4">
+                  <TimelineRow title="Payment confirmed" detail={formatDate(receipt.paid_at)} tone="cobalt" active />
+                  <TimelineRow
+                    title="Escrow review window"
+                    detail={receipt.escrow_due_at ? `Due ${formatDate(receipt.escrow_due_at)}` : "No escrow deadline recorded"}
+                    tone="sunset"
+                    active={Boolean(receipt.escrow_due_at)}
+                  />
+                  <TimelineRow
+                    title="Buyer confirmation"
+                    detail={receipt.buyer_confirmed_at ? formatDate(receipt.buyer_confirmed_at) : "Waiting for buyer action"}
+                    tone="lagoon"
+                    active={Boolean(receipt.buyer_confirmed_at)}
+                  />
+                  <TimelineRow
+                    title="Release or refund state"
+                    detail={finalStateLabel(receipt)}
+                    tone={receipt.order_status === "refunded" || receipt.buyer_reported_at ? "rose" : "forest"}
+                    active
+                  />
+                </div>
+              </section>
+
+              <section className="surface-card rounded-[1.8rem] p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-700">Reference & Support</p>
+                <div className="mt-4 space-y-3">
+                  <StatusNote label="Escrow state" value={escrowStatusLabel(receipt.escrow_status)} />
+                  <StatusNote label="Refund reference" value={receipt.refund_reference ?? "Not refunded"} />
+                  <StatusNote label="Refund provider status" value={receipt.refund_provider_status ?? "No refund event"} />
+                  <StatusNote label="Scam report" value={receipt.scam_report_reason?.trim() || "No buyer report recorded"} />
+                  <StatusNote label="Support email" value="cribafrica@gmail.com" />
+                </div>
+
+                <div
+                  className="mt-5 rounded-[1.4rem] border border-sand-200 px-4 py-4"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(244,248,255,0.96) 52%, rgba(255,244,238,0.95) 100%)"
+                  }}
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-600">Receipt custody</p>
+                  <p className="mt-2 text-sm text-sand-700">
+                    Buyer, seller, and admin copies all point to the same archived receipt record so reconciliation and support requests work from one source of truth.
+                  </p>
+                </div>
+              </section>
+            </>
+          )}
         </aside>
       </div>
-    </div>
+
+      <section className="surface-card overflow-hidden rounded-[1.8rem] p-5 md:p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-[1rem] border border-sand-200 bg-white shadow-sm">
+              <img src="/crib-logo.png" alt="Crib logo" className="h-9 w-9 rounded-full object-cover" decoding="async" />
+            </div>
+            <div>
+              <p className="font-display text-xl font-bold text-ink">Crib</p>
+              <p className="text-sm text-sand-600">Professional receipt archive for digital marketplace purchases.</p>
+            </div>
+          </div>
+
+          <div className="rounded-[1.3rem] border border-cobalt-100 bg-cobalt-50/80 px-4 py-3 text-sm text-cobalt-900">
+            Need help or assistance? <a href="mailto:cribafrica@gmail.com" className="font-semibold underline underline-offset-2">cribafrica@gmail.com</a>
+          </div>
+        </div>
+      </section>
+    </div>,
+    `${receipt.receipt_number} receipt`
   );
 }
 
-function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
+async function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
   canvas.height = 1900;
@@ -327,6 +485,8 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
   const height = canvas.height;
   const margin = 88;
   const cardWidth = width - margin * 2;
+  const isBuyerReceipt = viewerRole === "buyer";
+  const logo = await loadReceiptLogo();
 
   ctx.fillStyle = "#f6efe5";
   ctx.fillRect(0, 0, width, height);
@@ -366,28 +526,45 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
     ctx.fill();
   });
 
+  if (logo) {
+    drawRoundedRect(ctx, margin + 30, 106, 92, 92, 28);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.drawImage(logo, margin + 40, 116, 72, 72);
+  }
+
   ctx.fillStyle = "#1f46ef";
   ctx.font = "700 24px Georgia, serif";
-  ctx.fillText("Crib receipt archive", margin + 34, 132);
+  ctx.fillText("Crib official receipt", margin + 144, 136);
 
   ctx.fillStyle = "#101324";
   ctx.font = "700 64px Georgia, serif";
-  ctx.fillText("Payment Receipt", margin + 34, 208);
+  ctx.fillText("Payment Receipt", margin + 144, 208);
 
   ctx.fillStyle = "#4f5a64";
   ctx.font = "400 28px Arial";
-  drawWrappedText(ctx, heroCopyForCanvas(viewerRole), margin + 34, 258, 770, 40);
+  drawWrappedText(ctx, heroCopyForCanvas(viewerRole), margin + 144, 258, 660, 40);
 
-  drawPill(ctx, margin + 34, 312, viewerRoleLabel(viewerRole), "#e7efff", "#1f46ef");
-  drawPill(
-    ctx,
-    margin + 250,
-    312,
-    receipt.order_status.toUpperCase(),
-    receipt.order_status === "refunded" ? "#fde8e8" : "#e6f7ef",
-    receipt.order_status === "refunded" ? "#b42318" : "#0f7a47"
-  );
-  drawPill(ctx, margin + 438, 312, escrowStatusLabel(receipt.escrow_status).toUpperCase(), "#eef5ff", "#0f3c8c");
+  drawPill(ctx, margin + 144, 312, viewerRoleLabel(viewerRole), "#e7efff", "#1f46ef");
+  drawPill(ctx, margin + 360, 312, receipt.receipt_number.toUpperCase(), "#ffffff", "#434c62");
+
+  if (!isBuyerReceipt) {
+    drawPill(
+      ctx,
+      margin + 650,
+      312,
+      receipt.order_status.toUpperCase(),
+      receipt.order_status === "refunded" ? "#fde8e8" : "#e6f7ef",
+      receipt.order_status === "refunded" ? "#b42318" : "#0f7a47"
+    );
+    drawPill(ctx, margin + 888, 312, escrowStatusLabel(receipt.escrow_status).toUpperCase(), "#eef5ff", "#0f3c8c");
+  }
+
+  ctx.fillStyle = "#6a726d";
+  ctx.font = "600 22px Arial";
+  ctx.fillText("Support: cribafrica@gmail.com", width - 500, 136);
+  ctx.font = "400 20px Arial";
+  ctx.fillText("Use this email for help or assistance with the receipt.", width - 500, 170);
 
   let currentY = 446;
   currentY = drawInfoSection(
@@ -399,7 +576,7 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
         ["Receipt number", receipt.receipt_number],
         ["Paid on", formatDate(receipt.paid_at)],
         ["Payment trail", `${receipt.payment_provider.toUpperCase()} - ${receipt.payment_reference}`],
-        ["Order state", finalStateLabel(receipt)]
+        ...(isBuyerReceipt ? [] : [["Order state", finalStateLabel(receipt)] as [string, string]])
       ]
     },
     margin,
@@ -427,7 +604,8 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
   );
 
   currentY += 26;
-  drawRoundedRect(ctx, margin, currentY, cardWidth, 320, 34);
+  const settlementCardHeight = isBuyerReceipt ? 248 : 320;
+  drawRoundedRect(ctx, margin, currentY, cardWidth, settlementCardHeight, 34);
   ctx.fillStyle = "#fffdf9";
   ctx.fill();
   ctx.strokeStyle = "#d9d3c8";
@@ -436,30 +614,39 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
 
   ctx.fillStyle = "#e33910";
   ctx.font = "700 24px Arial";
-  ctx.fillText("Settlement breakdown", margin + 32, currentY + 50);
+  ctx.fillText(isBuyerReceipt ? "Payment summary" : "Settlement breakdown", margin + 32, currentY + 50);
 
   const boxY = currentY + 86;
-  const boxWidth = (cardWidth - 64) / 3;
-  const amountCards = [
-    {
-      label: viewerRole === "buyer" ? "You paid" : "Gross sale",
-      value: formatCurrency(receipt.amount_kobo, receipt.currency),
-      tone: "#1f46ef",
-      fill: "#eef3ff"
-    },
-    {
-      label: "Commission",
-      value: formatCurrency(receipt.commission_kobo, receipt.currency),
-      tone: "#e33910",
-      fill: "#fff0e8"
-    },
-    {
-      label: "Seller net",
-      value: formatCurrency(receipt.seller_net_amount_kobo, receipt.currency),
-      tone: "#0f7a47",
-      fill: "#eefaf2"
-    }
-  ];
+  const amountCards = isBuyerReceipt
+    ? [
+        {
+          label: "You paid",
+          value: formatCurrency(receipt.amount_kobo, receipt.currency),
+          tone: "#1f46ef",
+          fill: "#eef3ff"
+        }
+      ]
+    : [
+        {
+          label: "Gross sale",
+          value: formatCurrency(receipt.amount_kobo, receipt.currency),
+          tone: "#1f46ef",
+          fill: "#eef3ff"
+        },
+        {
+          label: "Commission",
+          value: formatCurrency(receipt.commission_kobo, receipt.currency),
+          tone: "#e33910",
+          fill: "#fff0e8"
+        },
+        {
+          label: "Seller net",
+          value: formatCurrency(receipt.seller_net_amount_kobo, receipt.currency),
+          tone: "#0f7a47",
+          fill: "#eefaf2"
+        }
+      ];
+  const boxWidth = (cardWidth - 64 - (amountCards.length - 1) * 12) / amountCards.length;
 
   amountCards.forEach((card, index) => {
     const x = margin + 20 + index * (boxWidth + 12);
@@ -478,18 +665,24 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
     ctx.fillText(card.value, x + 22, boxY + 104);
   });
 
-  currentY += 356;
+  currentY += settlementCardHeight + 36;
   currentY = drawInfoSection(
     ctx,
     {
-      title: "Escrow and reference notes",
+      title: isBuyerReceipt ? "Support and archive notes" : "Escrow and reference notes",
       tone: "#f4c542",
-      rows: [
-        ["Escrow state", escrowStatusLabel(receipt.escrow_status)],
-        ["Escrow note", escrowDescription(receipt, viewerRole)],
-        ["Refund reference", receipt.refund_reference ?? "Not refunded"],
-        ["Scam report", receipt.scam_report_reason?.trim() || "No buyer report recorded"]
-      ]
+      rows: isBuyerReceipt
+        ? [
+            ["Support email", "cribafrica@gmail.com"],
+            ["Receipt note", "Keep this buyer copy as proof of payment and include the receipt number in any support request."],
+            ["Seller", receipt.seller_display_name]
+          ]
+        : [
+            ["Escrow state", escrowStatusLabel(receipt.escrow_status)],
+            ["Escrow note", escrowDescription(receipt, viewerRole)],
+            ["Refund reference", receipt.refund_reference ?? "Not refunded"],
+            ["Scam report", receipt.scam_report_reason?.trim() || "No buyer report recorded"]
+          ]
     },
     margin,
     currentY,
@@ -507,7 +700,7 @@ function renderReceiptCanvas(receipt: OrderReceipt, viewerRole: ViewerRole) {
 
   ctx.fillStyle = "#f8fafc";
   ctx.font = "700 24px Arial";
-  ctx.fillText("Buyer, seller, and admin copies point to the same archived source.", margin, footerY + 64);
+  ctx.fillText("Need help or assistance? Contact cribafrica@gmail.com.", margin, footerY + 64);
   ctx.font = "400 22px Arial";
   ctx.fillText("Generated from Crib's receipt archive for future reference and reconciliation.", margin, footerY + 104);
 
@@ -523,7 +716,7 @@ function heroCopyForCanvas(viewerRole: ViewerRole) {
     return "Admin archive copy preserving payment trail, payout share, and review status.";
   }
 
-  return "Buyer copy confirming the purchase, payment trail, and escrow protection state.";
+  return "Buyer receipt confirming the purchase details, amount paid, and payment reference for your records.";
 }
 
 function drawInfoSection(

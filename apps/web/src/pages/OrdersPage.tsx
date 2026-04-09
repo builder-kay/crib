@@ -533,6 +533,7 @@ export function OrdersPage() {
                     {canViewReceipt ? (
                       <Link
                         to={`/receipts/${order.id}`}
+                        state={{ backgroundLocation: location }}
                         className="rounded-lg border border-cobalt-200 bg-cobalt-50 px-3 py-2 text-sm font-semibold text-cobalt-700 transition hover:border-cobalt-300 hover:bg-cobalt-100"
                       >
                         Receipt
