@@ -67,6 +67,26 @@ export function ImageGalleryModal({
   }, [images.length, open]);
 
   const activeImage = useMemo(() => images[activeIndex] ?? null, [activeIndex, images]);
+  const canZoomOut = zoom > 1;
+  const canZoomIn = zoom < 3;
+
+  function goToPreviousImage() {
+    setActiveIndex((current) => (current - 1 + images.length) % images.length);
+    setZoom(1);
+  }
+
+  function goToNextImage() {
+    setActiveIndex((current) => (current + 1) % images.length);
+    setZoom(1);
+  }
+
+  function zoomOut() {
+    setZoom((current) => Math.max(Number((current - 0.25).toFixed(2)), 1));
+  }
+
+  function zoomIn() {
+    setZoom((current) => Math.min(Number((current + 0.25).toFixed(2)), 3));
+  }
 
   if (!open || !activeImage) {
     return null;
@@ -78,82 +98,98 @@ export function ImageGalleryModal({
       onClose={onClose}
       hideHeader
       maxWidthClassName="max-w-6xl"
-      panelClassName="overflow-hidden rounded-[2rem] bg-[#09111f] p-0 text-white"
+      panelClassName="image-gallery-modal-panel overflow-x-hidden rounded-[2rem] p-0"
     >
-      <div className="flex flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/5 px-4 py-3 md:px-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cobalt-200">Preview gallery</p>
-            <h3 className="mt-1 font-display text-xl font-semibold text-white">{title}</h3>
-          </div>
+      <div className="image-gallery-shell flex flex-col">
+        <div className="image-gallery-toolbar sticky top-0 px-4 py-4 md:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="image-gallery-eyebrow">Preview gallery</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-ink md:text-2xl">{title}</h3>
+              <p className="mt-1 max-w-2xl text-sm text-sand-700">
+                Browse every preview, inspect details with zoom, and use the left and right arrows to move quickly.
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-              {activeIndex + 1} / {images.length}
-            </span>
-            <button type="button" onClick={() => setZoom((current) => Math.max(Number((current - 0.25).toFixed(2)), 1))} className="rounded-full bg-cobalt-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-cobalt-500">
-              Zoom out
-            </button>
-            <button type="button" onClick={() => setZoom(1)} className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15">
-              Reset
-            </button>
-            <button type="button" onClick={() => setZoom((current) => Math.min(Number((current + 0.25).toFixed(2)), 3))} className="rounded-full bg-cobalt-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-cobalt-500">
-              Zoom in
-            </button>
-            <button type="button" onClick={onClose} className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15">
-              Close
-            </button>
+            <div className="flex flex-col gap-2 lg:items-end">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="image-gallery-counter">
+                  {activeIndex + 1} of {images.length}
+                </span>
+                <button type="button" onClick={zoomOut} disabled={!canZoomOut} className="image-gallery-control" aria-label="Zoom out">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+                <button type="button" onClick={() => setZoom(1)} disabled={zoom === 1} className="image-gallery-control px-3 text-xs font-semibold">
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={zoomIn}
+                  disabled={!canZoomIn}
+                  className="image-gallery-control image-gallery-control-primary"
+                  aria-label="Zoom in"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+                <button type="button" onClick={onClose} className="image-gallery-control image-gallery-close-button" aria-label="Close gallery">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m6 6 12 12" />
+                    <path d="M18 6 6 18" />
+                  </svg>
+                  <span className="hidden sm:inline">Close</span>
+                </button>
+              </div>
+
+              <p className="text-xs text-sand-600">Arrow keys switch images. Use +, -, and 0 for quick zoom controls.</p>
+            </div>
           </div>
         </div>
 
-        <div className="relative flex min-h-[64vh] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(31,70,239,0.18),transparent_36%),linear-gradient(180deg,#0b1324_0%,#08101d_100%)] px-4 py-5 md:px-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/35 text-xl font-semibold text-white shadow-lg transition hover:bg-black/50"
-            aria-label="Close gallery"
-          >
-            ×
-          </button>
-          {images.length > 1 ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveIndex((current) => (current - 1 + images.length) % images.length);
-                  setZoom(1);
-                }}
-                className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-cobalt-600 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-cobalt-500"
-                aria-label="Previous image"
-              >
-                {"<"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveIndex((current) => (current + 1) % images.length);
-                  setZoom(1);
-                }}
-                className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-cobalt-600 px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-cobalt-500"
-                aria-label="Next image"
-              >
-                {">"}
-              </button>
-            </>
-          ) : null}
+        <div className="image-gallery-stage px-4 py-4 md:px-6 md:py-5">
+          <div className="relative flex min-h-[60vh] items-center justify-center">
+            {images.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={goToPreviousImage}
+                  className="image-gallery-nav-button absolute left-2 top-1/2 z-10 -translate-y-1/2 md:left-4"
+                  aria-label="Previous image"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m15 6-6 6 6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={goToNextImage}
+                  className="image-gallery-nav-button absolute right-2 top-1/2 z-10 -translate-y-1/2 md:right-4"
+                  aria-label="Next image"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+              </>
+            ) : null}
 
-          <div className="flex h-full w-full items-center justify-center overflow-auto rounded-[1.5rem] border border-white/10 bg-black/20 p-3 md:p-5">
-            <img
-              src={activeImage.src}
-              alt={activeImage.alt ?? title}
-              className="max-h-[70vh] w-auto max-w-full rounded-[1.25rem] object-contain shadow-[0_18px_50px_rgba(0,0,0,0.35)] transition duration-200"
-              style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
-            />
+            <div className="image-gallery-figure flex h-full w-full items-center justify-center overflow-auto rounded-[1.7rem] p-3 md:p-5">
+              <img
+                src={activeImage.src}
+                alt={activeImage.alt ?? title}
+                className="max-h-[70vh] w-auto max-w-full rounded-[1.3rem] object-contain shadow-[0_18px_50px_rgba(0,0,0,0.2)] transition duration-200"
+                style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
+              />
+            </div>
           </div>
         </div>
 
         {images.length > 1 ? (
-          <div className="border-t border-white/10 bg-white/5 px-4 py-3 md:px-5">
+          <div className="image-gallery-thumbs px-4 py-3 md:px-6">
             <div className="flex gap-2 overflow-x-auto pb-1">
               {images.map((image, index) => (
                 <button
@@ -163,11 +199,17 @@ export function ImageGalleryModal({
                     setActiveIndex(index);
                     setZoom(1);
                   }}
-                  className={`shrink-0 overflow-hidden rounded-xl border transition ${
-                    index === activeIndex ? "border-cobalt-400 ring-2 ring-cobalt-400/35" : "border-white/10 opacity-80 hover:opacity-100"
+                  className={`image-gallery-thumb group relative shrink-0 overflow-hidden rounded-[1.05rem] transition ${
+                    index === activeIndex ? "image-gallery-thumb-active" : ""
                   }`}
+                  aria-label={`Open image ${index + 1}`}
                 >
-                  <img src={image.src} alt={image.alt ?? `${title} preview ${index + 1}`} className="h-20 w-24 object-cover" />
+                  <img
+                    src={image.src}
+                    alt={image.alt ?? `${title} preview ${index + 1}`}
+                    className="h-20 w-24 object-cover transition duration-200 group-hover:scale-[1.03]"
+                  />
+                  <span className="image-gallery-thumb-index">{index + 1}</span>
                 </button>
               ))}
             </div>
