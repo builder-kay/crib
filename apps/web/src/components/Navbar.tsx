@@ -56,7 +56,7 @@ function isMobilePrimaryNavActive(pathname: string, itemId: MobilePrimaryNavId) 
 
 function MobilePrimaryNavIcon({ id, active }: { id: MobilePrimaryNavId; active: boolean }) {
   const sharedProps = {
-    className: `h-5 w-5 transition ${active ? "text-current" : "text-sand-500"}`,
+    className: `h-5 w-5 transition ${active ? "text-current" : "text-sand-700"}`,
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
@@ -429,30 +429,40 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
       </header>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 overflow-x-auto border-t border-sand-200 bg-white/95 shadow-[0_-24px_44px_-34px_rgba(16,19,36,0.45)] backdrop-blur lg:hidden [-webkit-mask-image:linear-gradient(to_right,black,black_calc(100%-2.5rem),transparent)] [mask-image:linear-gradient(to_right,black,black_calc(100%-2.5rem),transparent)]"
+        className="fixed inset-x-0 bottom-0 z-40 bg-transparent lg:hidden"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
         aria-label="Primary navigation"
       >
-        <div className="mx-auto flex min-w-full snap-x snap-mandatory gap-2 px-3 pt-2.5">
-          {mobilePrimaryNavItems.map((item) => {
-            const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
+        <div className="mx-auto max-w-[30rem] px-4 pt-2">
+          <div className="rounded-[2rem] border border-white/80 bg-white/95 p-2 shadow-[0_22px_40px_-18px_rgba(16,19,36,0.35)] backdrop-blur-xl">
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: `repeat(${mobilePrimaryNavItems.length}, minmax(0, 1fr))` }}
+            >
+              {mobilePrimaryNavItems.map((item) => {
+                const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
 
-            return (
-              <Link
-                key={item.id}
-                to={item.to}
-                aria-current={isActive ? "page" : undefined}
-                onMouseEnter={() => prefetchRoute(item.preload)}
-                onFocus={() => prefetchRoute(item.preload)}
-                className={`flex min-h-[74px] w-[5.75rem] min-w-[5.75rem] shrink-0 snap-start flex-col items-center justify-center gap-1.5 rounded-[1.35rem] border px-3 py-2.5 text-center transition duration-200 ${
-                  item.id === "discover" ? isActive ? "border-cobalt-200 bg-cobalt-100 text-cobalt-800 shadow-card -translate-y-0.5" : "border-cobalt-100 bg-cobalt-50/80 text-cobalt-700 hover:bg-cobalt-100/90" : item.id === "sell" ? isActive ? "border-sunset-200 bg-sunset-100 text-sunset-800 shadow-card -translate-y-0.5" : "border-sunset-100 bg-sunset-50/85 text-sunset-700 hover:bg-sunset-100/90" : item.id === "creators" ? isActive ? "border-lagoon-200 bg-lagoon-100 text-lagoon-900 shadow-card -translate-y-0.5" : "border-lagoon-100 bg-lagoon-50/85 text-lagoon-700 hover:bg-lagoon-100/90" : item.id === "editorial" ? isActive ? "border-ember-200 bg-ember-100 text-ember-900 shadow-card -translate-y-0.5" : "border-ember-100 bg-ember-50/90 text-ember-700 hover:bg-ember-100/90" : isActive ? "border-orchid-200 bg-orchid-100 text-orchid-900 shadow-card -translate-y-0.5" : "border-orchid-100 bg-orchid-50/90 text-orchid-700 hover:bg-orchid-100/90"
-                }`}
-              >
-                <MobilePrimaryNavIcon id={item.id} active={isActive} />
-                <span className="text-xs font-semibold leading-tight">{item.label}</span>
-              </Link>
-            );
-          })}
+                return (
+                  <Link
+                    key={item.id}
+                    to={item.to}
+                    aria-current={isActive ? "page" : undefined}
+                    onMouseEnter={() => prefetchRoute(item.preload)}
+                    onFocus={() => prefetchRoute(item.preload)}
+                    className={`flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-[1.2rem] px-1.5 py-2 text-center transition duration-200 ${
+                      isActive
+                        ? "bg-cobalt-100 text-cobalt-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_12px_24px_-18px_rgba(31,70,239,0.9)]"
+                        : "bg-cobalt-50/65 text-sand-700 hover:bg-cobalt-100/80 hover:text-cobalt-700"
+                    }`}
+                  >
+                    <MobilePrimaryNavIcon id={item.id} active={isActive} />
+                    <span className={`text-[11px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{item.label}</span>
+                    <span className={`mt-0.5 h-0.5 w-6 rounded-full transition ${isActive ? "bg-cobalt-500 opacity-100" : "bg-transparent opacity-0"}`} />
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </nav>
 
