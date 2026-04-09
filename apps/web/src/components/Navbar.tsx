@@ -120,6 +120,9 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmSignOutOpen, setConfirmSignOutOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const mobileNavScrollRef = useRef<HTMLDivElement | null>(null);
+  const [mobileNavCanScrollLeft, setMobileNavCanScrollLeft] = useState(false);
+  const [mobileNavCanScrollRight, setMobileNavCanScrollRight] = useState(false);
   const profileQuery = useQuery({
     queryKey: ["profile", user?.id],
     queryFn: () => getProfile(user!.id),
@@ -230,6 +233,41 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
     const params = new URLSearchParams(location.search);
     setGlobalSearch(params.get("q") ?? "");
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    const scroller = mobileNavScrollRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    const syncMobileNavScrollState = () => {
+      const maxScrollLeft = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+      setMobileNavCanScrollLeft(scroller.scrollLeft > 10);
+      setMobileNavCanScrollRight(scroller.scrollLeft < maxScrollLeft - 10);
+    };
+
+    const rafId = window.requestAnimationFrame(() => {
+      const activeItem = scroller.querySelector<HTMLElement>('[aria-current="page"]');
+      activeItem?.scrollIntoView({ inline: "center", block: "nearest" });
+      syncMobileNavScrollState();
+    });
+
+    scroller.addEventListener("scroll", syncMobileNavScrollState, { passive: true });
+    window.addEventListener("resize", syncMobileNavScrollState);
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      scroller.removeEventListener("scroll", syncMobileNavScrollState);
+      window.removeEventListener("resize", syncMobileNavScrollState);
+    };
+  }, [location.pathname, mobilePrimaryNavItems.length]);
+
+  function scrollMobileNav(direction: "left" | "right") {
+    mobileNavScrollRef.current?.scrollBy({
+      left: direction === "left" ? -220 : 220,
+      behavior: "smooth"
+    });
+  }
 
   return (
     <>
@@ -434,10 +472,42 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
         aria-label="Primary navigation"
       >
         <div className="mx-auto max-w-[30rem] px-4 pt-2">
-          <div className="rounded-[2rem] border border-white/80 bg-white/95 p-2 shadow-[0_22px_40px_-18px_rgba(16,19,36,0.35)] backdrop-blur-xl">
+          <div className="relative rounded-[2rem] border border-white/80 bg-white/95 p-2 shadow-[0_22px_40px_-18px_rgba(16,19,36,0.35)] backdrop-blur-xl">
+            {mobileNavCanScrollLeft ? (
+              <>
+                <div className="pointer-events-none absolute inset-y-2 left-2 z-10 w-8 rounded-l-[1.6rem] bg-gradient-to-r from-white via-white/90 to-white/0" />
+                <button
+                  type="button"
+                  onClick={() => scrollMobileNav("left")}
+                  className="absolute left-3 top-1/2 z-20 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-cobalt-100 bg-white/96 text-cobalt-600 shadow-[0_10px_20px_-14px_rgba(16,19,36,0.45)] transition hover:bg-cobalt-50"
+                  aria-label="Scroll navigation left"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="m15 6-6 6 6 6" />
+                  </svg>
+                </button>
+              </>
+            ) : null}
+
+            {mobileNavCanScrollRight ? (
+              <>
+                <div className="pointer-events-none absolute inset-y-2 right-2 z-10 w-8 rounded-r-[1.6rem] bg-gradient-to-l from-white via-white/90 to-white/0" />
+                <button
+                  type="button"
+                  onClick={() => scrollMobileNav("right")}
+                  className="absolute right-3 top-1/2 z-20 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-cobalt-100 bg-white/96 text-cobalt-600 shadow-[0_10px_20px_-14px_rgba(16,19,36,0.45)] transition hover:bg-cobalt-50"
+                  aria-label="Scroll navigation right"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </button>
+              </>
+            ) : null}
+
             <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${mobilePrimaryNavItems.length}, minmax(0, 1fr))` }}
+              ref={mobileNavScrollRef}
+              className="grid grid-flow-col auto-cols-[calc((100%-1.5rem)/4)] gap-2 overflow-x-auto scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             >
               {mobilePrimaryNavItems.map((item) => {
                 const isActive = isMobilePrimaryNavActive(location.pathname, item.id);
@@ -449,15 +519,15 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                     aria-current={isActive ? "page" : undefined}
                     onMouseEnter={() => prefetchRoute(item.preload)}
                     onFocus={() => prefetchRoute(item.preload)}
-                    className={`flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-[1.2rem] px-1.5 py-2 text-center transition duration-200 ${
+                    className={`flex min-h-[72px] snap-start flex-col items-center justify-center gap-1 rounded-[1.2rem] px-1.5 py-2 text-center transition duration-200 ${
                       isActive
-                        ? "bg-cobalt-100 text-cobalt-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_12px_24px_-18px_rgba(31,70,239,0.9)]"
-                        : "bg-cobalt-50/65 text-sand-700 hover:bg-cobalt-100/80 hover:text-cobalt-700"
+                        ? "bg-cobalt-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_14px_28px_-20px_rgba(31,70,239,1)]"
+                        : "bg-cobalt-50 text-sand-700 hover:bg-cobalt-100 hover:text-cobalt-700"
                     }`}
                   >
                     <MobilePrimaryNavIcon id={item.id} active={isActive} />
                     <span className={`text-[11px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{item.label}</span>
-                    <span className={`mt-0.5 h-0.5 w-6 rounded-full transition ${isActive ? "bg-cobalt-500 opacity-100" : "bg-transparent opacity-0"}`} />
+                    <span className={`mt-0.5 h-0.5 w-6 rounded-full transition ${isActive ? "bg-white/90 opacity-100" : "bg-transparent opacity-0"}`} />
                   </Link>
                 );
               })}

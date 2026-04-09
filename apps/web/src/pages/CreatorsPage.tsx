@@ -187,39 +187,41 @@ export function CreatorsPage() {
         </div>
       </section>
 
-      <section className="surface-card creators-filter-panel p-3 sm:p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-          <div className="min-w-0 flex-1">
-            <SearchInput value={search} onChange={setSearch} placeholder="Search creators, niches, categories, or styles..." />
-          </div>
+      <div className="sticky top-[4.7rem] z-30 -mx-2 rounded-[1.8rem] bg-sand-50/92 px-2 py-2 backdrop-blur md:top-[5.35rem] md:-mx-3 md:px-3">
+        <section className="surface-card creators-filter-panel p-3 sm:p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="min-w-0 flex-1">
+              <SearchInput value={search} onChange={setSearch} placeholder="Search creators, niches, categories, or styles..." />
+            </div>
 
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="rounded-full border border-sand-200 bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-cobalt-400"
-          >
-            {categories.map((item) => (
-              <option key={item} value={item}>
-                {item === "all" ? "All categories" : item}
-              </option>
-            ))}
-          </select>
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="rounded-full border border-sand-200 bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-cobalt-400"
+            >
+              {categories.map((item) => (
+                <option key={item} value={item}>
+                  {item === "all" ? "All categories" : item}
+                </option>
+              ))}
+            </select>
 
-          <div className="flex flex-wrap gap-2">
-            {spotlightFilters.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                onClick={() => setSpotlight(filter.key)}
-                className={`creators-segment-button ${spotlight === filter.key ? "creators-segment-button-active" : ""}`}
-              >
-                <span>{filter.label}</span>
-                <span className="creators-segment-count">{formatCompact(filter.count)}</span>
-              </button>
-            ))}
+            <div className="flex flex-wrap gap-2">
+              {spotlightFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setSpotlight(filter.key)}
+                  className={`creators-segment-button ${spotlight === filter.key ? "creators-segment-button-active" : ""}`}
+                >
+                  <span>{filter.label}</span>
+                  <span className="creators-segment-count">{formatCompact(filter.count)}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <section ref={directoryRef} className="space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
