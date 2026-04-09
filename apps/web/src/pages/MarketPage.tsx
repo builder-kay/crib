@@ -272,31 +272,33 @@ export function MarketPage() {
           </div>
         </div>
 
-        <FilterBar
-          search={search}
-          category={category}
-          minPrice={minPrice}
-          maxPrice={maxPrice}
-          fileType={fileType}
-          onSearchChange={setSearch}
-          onCategoryChange={setCategory}
-          onMinPriceChange={setMinPrice}
-          onMaxPriceChange={setMaxPrice}
-          onFileTypeChange={setFileType}
-          onResetFilters={handleResetFilters}
-          canResetFilters={hasActiveFilters}
-        />
+        <div className="sticky top-[4.7rem] z-30 -mx-2 rounded-[1.8rem] bg-sand-50/92 px-2 py-2 backdrop-blur md:top-[5.35rem] md:-mx-3 md:px-3">
+          <FilterBar
+            search={search}
+            category={category}
+            minPrice={minPrice}
+            maxPrice={maxPrice}
+            fileType={fileType}
+            onSearchChange={setSearch}
+            onCategoryChange={setCategory}
+            onMinPriceChange={setMinPrice}
+            onMaxPriceChange={setMaxPrice}
+            onFileTypeChange={setFileType}
+            onResetFilters={handleResetFilters}
+            canResetFilters={hasActiveFilters}
+          />
 
-        {hasActiveFilters ? (
-          <section className="flex flex-wrap items-center gap-2 px-1 text-xs">
-            <span className="font-medium uppercase tracking-[0.1em] text-sand-500">Active filters</span>
-            {category !== "all" ? <FilterPill label={category} onClear={() => setCategory("all")} /> : null}
-            {fileType !== "all" ? <FilterPill label={fileTypeLabel} onClear={() => setFileType("all")} /> : null}
-            {minPrice ? <FilterPill label={`Min ${minPrice}`} onClear={() => setMinPrice("")} /> : null}
-            {maxPrice ? <FilterPill label={`Max ${maxPrice}`} onClear={() => setMaxPrice("")} /> : null}
-            {search.trim() ? <FilterPill label={`"${search.trim()}"`} onClear={() => setSearch("")} /> : null}
-          </section>
-        ) : null}
+          {hasActiveFilters ? (
+            <section className="flex flex-wrap items-center gap-2 px-2 pt-2 text-xs">
+              <span className="font-medium uppercase tracking-[0.1em] text-sand-500">Active filters</span>
+              {category !== "all" ? <FilterPill label={category} onClear={() => setCategory("all")} /> : null}
+              {fileType !== "all" ? <FilterPill label={fileTypeLabel} onClear={() => setFileType("all")} /> : null}
+              {minPrice ? <FilterPill label={`Min ${minPrice}`} onClear={() => setMinPrice("")} /> : null}
+              {maxPrice ? <FilterPill label={`Max ${maxPrice}`} onClear={() => setMaxPrice("")} /> : null}
+              {search.trim() ? <FilterPill label={`"${search.trim()}"`} onClear={() => setSearch("")} /> : null}
+            </section>
+          ) : null}
+        </div>
 
         {assetsQuery.isLoading ? (
           <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
