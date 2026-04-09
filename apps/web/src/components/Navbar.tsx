@@ -54,9 +54,9 @@ function isMobilePrimaryNavActive(pathname: string, itemId: MobilePrimaryNavId) 
   }
 }
 
-function MobilePrimaryNavIcon({ id, active }: { id: MobilePrimaryNavId; active: boolean }) {
+function MobilePrimaryNavIcon({ id }: { id: MobilePrimaryNavId }) {
   const sharedProps = {
-    className: `h-5 w-5 transition ${active ? "text-current" : "text-sand-700"}`,
+    className: "h-5 w-5 text-current transition",
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
@@ -194,6 +194,26 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
   }, [profileQuery.data?.display_name, user]);
 
   const accountInitial = useMemo(() => accountLabel.charAt(0).toUpperCase() || "A", [accountLabel]);
+  const isDarkTheme = theme === "dark";
+  const mobileNavTrayClassName = isDarkTheme
+    ? "border-[#263a5f] bg-[#0d1627]/96 shadow-[0_26px_48px_-20px_rgba(0,0,0,0.72)]"
+    : "border-white/80 bg-white/95 shadow-[0_22px_40px_-18px_rgba(16,19,36,0.35)]";
+  const mobileNavFadeLeftClassName = isDarkTheme
+    ? "bg-gradient-to-r from-[#0d1627] via-[#0d1627]/92 to-[#0d1627]/0"
+    : "bg-gradient-to-r from-white via-white/90 to-white/0";
+  const mobileNavFadeRightClassName = isDarkTheme
+    ? "bg-gradient-to-l from-[#0d1627] via-[#0d1627]/92 to-[#0d1627]/0"
+    : "bg-gradient-to-l from-white via-white/90 to-white/0";
+  const mobileNavArrowClassName = isDarkTheme
+    ? "border-[#31466f] bg-[#142135]/96 text-[#d7e6ff] shadow-[0_12px_24px_-16px_rgba(0,0,0,0.82)] hover:border-[#486ca8] hover:bg-[#1b2d47] hover:text-white"
+    : "border-cobalt-100 bg-white/96 text-cobalt-600 shadow-[0_10px_20px_-14px_rgba(16,19,36,0.45)] hover:bg-cobalt-50";
+  const mobileNavActiveClassName = isDarkTheme
+    ? "border border-[#6f93ff] bg-cobalt-500 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_18px_32px_-22px_rgba(20,81,255,0.82)]"
+    : "bg-cobalt-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_14px_28px_-20px_rgba(31,70,239,1)]";
+  const mobileNavInactiveClassName = isDarkTheme
+    ? "border border-[#2e4265] bg-[#152237] text-[#dce8ff] hover:border-[#486ca8] hover:bg-[#1b2d47] hover:text-white"
+    : "bg-cobalt-50 text-sand-700 hover:bg-cobalt-100 hover:text-cobalt-700";
+  const mobileNavIndicatorClassName = isDarkTheme ? "bg-white opacity-100" : "bg-white/90 opacity-100";
 
   useEffect(() => {
     if (!menuOpen) {
@@ -472,14 +492,14 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
         aria-label="Primary navigation"
       >
         <div className="mx-auto max-w-[30rem] px-4 pt-2">
-          <div className="relative rounded-[2rem] border border-white/80 bg-white/95 p-2 shadow-[0_22px_40px_-18px_rgba(16,19,36,0.35)] backdrop-blur-xl">
+          <div className={`relative rounded-[2rem] border p-2 backdrop-blur-xl ${mobileNavTrayClassName}`}>
             {mobileNavCanScrollLeft ? (
               <>
-                <div className="pointer-events-none absolute inset-y-2 left-2 z-10 w-8 rounded-l-[1.6rem] bg-gradient-to-r from-white via-white/90 to-white/0" />
+                <div className={`pointer-events-none absolute inset-y-2 left-2 z-10 w-8 rounded-l-[1.6rem] ${mobileNavFadeLeftClassName}`} />
                 <button
                   type="button"
                   onClick={() => scrollMobileNav("left")}
-                  className="absolute left-3 top-1/2 z-20 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-cobalt-100 bg-white/96 text-cobalt-600 shadow-[0_10px_20px_-14px_rgba(16,19,36,0.45)] transition hover:bg-cobalt-50"
+                  className={`absolute left-3 top-1/2 z-20 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border transition ${mobileNavArrowClassName}`}
                   aria-label="Scroll navigation left"
                 >
                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -491,11 +511,11 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
 
             {mobileNavCanScrollRight ? (
               <>
-                <div className="pointer-events-none absolute inset-y-2 right-2 z-10 w-8 rounded-r-[1.6rem] bg-gradient-to-l from-white via-white/90 to-white/0" />
+                <div className={`pointer-events-none absolute inset-y-2 right-2 z-10 w-8 rounded-r-[1.6rem] ${mobileNavFadeRightClassName}`} />
                 <button
                   type="button"
                   onClick={() => scrollMobileNav("right")}
-                  className="absolute right-3 top-1/2 z-20 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-cobalt-100 bg-white/96 text-cobalt-600 shadow-[0_10px_20px_-14px_rgba(16,19,36,0.45)] transition hover:bg-cobalt-50"
+                  className={`absolute right-3 top-1/2 z-20 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border transition ${mobileNavArrowClassName}`}
                   aria-label="Scroll navigation right"
                 >
                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -520,14 +540,12 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
                     onMouseEnter={() => prefetchRoute(item.preload)}
                     onFocus={() => prefetchRoute(item.preload)}
                     className={`flex min-h-[72px] snap-start flex-col items-center justify-center gap-1 rounded-[1.2rem] px-1.5 py-2 text-center transition duration-200 ${
-                      isActive
-                        ? "bg-cobalt-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_14px_28px_-20px_rgba(31,70,239,1)]"
-                        : "bg-cobalt-50 text-sand-700 hover:bg-cobalt-100 hover:text-cobalt-700"
+                      isActive ? mobileNavActiveClassName : mobileNavInactiveClassName
                     }`}
                   >
-                    <MobilePrimaryNavIcon id={item.id} active={isActive} />
+                    <MobilePrimaryNavIcon id={item.id} />
                     <span className={`text-[11px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{item.label}</span>
-                    <span className={`mt-0.5 h-0.5 w-6 rounded-full transition ${isActive ? "bg-white/90 opacity-100" : "bg-transparent opacity-0"}`} />
+                    <span className={`mt-0.5 h-0.5 w-6 rounded-full transition ${isActive ? mobileNavIndicatorClassName : "bg-transparent opacity-0"}`} />
                   </Link>
                 );
               })}
