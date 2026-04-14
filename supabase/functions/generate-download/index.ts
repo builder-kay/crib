@@ -16,6 +16,24 @@ function clampExpiry(input: unknown): number {
   return Math.min(900, Math.max(300, parsed));
 }
 
+function isSeedStoragePath(value: string | null | undefined) {
+  return typeof value === "string" && value.trim().toLowerCase().startsWith("seed/");
+}
+
+function buildSeedDemoUrl(fileName: string, storagePath: string) {
+  const message = [
+    "Crib seeded demo download",
+    "",
+    `Requested file: ${fileName}`,
+    `Source path: ${storagePath}`,
+    "",
+    "This placeholder lets you exercise the checkout and delivery flow locally.",
+    "Upload a matching real file into the assets bucket if you want the downloaded file itself to be production-like."
+  ].join("\n");
+
+  return `data:text/plain;charset=utf-8,${encodeURIComponent(message)}`;
+}
+
 async function markBuyerOpened(
   supabase: ReturnType<typeof createClient>,
   orderId: string,
@@ -175,6 +193,16 @@ Deno.serve(async (request) => {
               : selectedFile.file_role === "midi"
                 ? "Download MIDI file"
                 : "Download file";
+  }
+
+  if (isSeedStoragePath(targetStoragePath)) {
+    return jsonResponse({
+      url: buildSeedDemoUrl(targetOriginalName, targetStoragePath),
+      expires_in: 0,
+      filename: targetOriginalName,
+      delivery_type: "file",
+      action_label: "Download demo file"
+    });
   }
 
   const { data: signedData, error: signedError } = await supabase.storage

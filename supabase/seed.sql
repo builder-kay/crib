@@ -1,4 +1,4 @@
--- Demo template marketplace seed data.
+-- Demo creative asset marketplace seed data.
 -- Safe to run multiple times after migrations.
 --
 -- Seeded auth users all use the same password:
@@ -6,6 +6,7 @@
 --
 -- Notes:
 -- - `asset_files.storage_path` values are placeholders for demo catalog data.
+-- - Audio listings include public MP3 preview URLs so the on-page player works immediately.
 -- - Upload matching files into the `assets` bucket if you want download links to resolve to real files.
 
 insert into auth.users (
@@ -47,6 +48,7 @@ from (
     ('22222222-2222-4222-8222-222222222222'::uuid, 'lilian.templates@example.com', 'Lilian Wekesa', 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=500&q=80'),
     ('33333333-3333-4333-8333-333333333333'::uuid, 'banele.templates@example.com', 'Banele Khumalo', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=500&q=80'),
     ('44444444-4444-4444-8444-444444444444'::uuid, 'tosin.templates@example.com', 'Tosin Adebayo', 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=500&q=80'),
+    ('77777777-7777-4777-8777-777777777777'::uuid, 'kojo.beats@example.com', 'Kojo Beatlab', 'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?auto=format&fit=crop&w=500&q=80'),
     ('55555555-5555-4555-8555-555555555555'::uuid, 'amina.buyer@example.com', 'Amina Bello', 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=500&q=80'),
     ('66666666-6666-4666-8666-666666666666'::uuid, 'david.buyer@example.com', 'David Cole', 'https://images.unsplash.com/photo-1504593811423-6dd665756598?auto=format&fit=crop&w=500&q=80')
 ) as seed(id, email, display_name, avatar_url)
@@ -104,6 +106,16 @@ from (
       false
     ),
     (
+      '77777777-7777-4777-8777-777777777777'::uuid,
+      'Kojo Beatlab',
+      'Producer building editable afrobeats, amapiano, and gospel packs with stems, MIDI, and clean DAW sessions for fast custom work.',
+      'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?auto=format&fit=crop&w=500&q=80',
+      'Music Producer',
+      'Editable beats, stems, and DAW sessions',
+      '{"website":"https://crib.example/kojo","instagram":"@kojobeatlab","x":"@kojobeatlab"}'::jsonb,
+      true
+    ),
+    (
       '55555555-5555-4555-8555-555555555555'::uuid,
       'Amina Bello',
       'Buyer account for local marketplace testing.',
@@ -144,7 +156,8 @@ values
   ('11111111-1111-4111-8111-111111111111'::uuid, 'paystack', 'active', 'ghana', 'bank', 'Adjoa Studio', 'CRIBSEED_ADJOA', '000', 'Seed Test Bank', '1111', 'Adjoa Mensah', '{"test_mode":true}'::jsonb),
   ('22222222-2222-4222-8222-222222222222'::uuid, 'paystack', 'active', 'kenya', 'bank', 'Lilian Vector Works', 'CRIBSEED_LILIAN', '000', 'Seed Test Bank', '2222', 'Lilian Wekesa', '{"test_mode":true}'::jsonb),
   ('33333333-3333-4333-8333-333333333333'::uuid, 'paystack', 'active', 'south_africa', 'bank', 'Banele Motion Lab', 'CRIBSEED_BANELE', '000', 'Seed Test Bank', '3333', 'Banele Khumalo', '{"test_mode":true}'::jsonb),
-  ('44444444-4444-4444-8444-444444444444'::uuid, 'paystack', 'active', 'nigeria', 'bank', 'Tosin Layout Studio', 'CRIBSEED_TOSIN', '000', 'Seed Test Bank', '4444', 'Tosin Adebayo', '{"test_mode":true}'::jsonb)
+  ('44444444-4444-4444-8444-444444444444'::uuid, 'paystack', 'active', 'nigeria', 'bank', 'Tosin Layout Studio', 'CRIBSEED_TOSIN', '000', 'Seed Test Bank', '4444', 'Tosin Adebayo', '{"test_mode":true}'::jsonb),
+  ('77777777-7777-4777-8777-777777777777'::uuid, 'paystack', 'active', 'ghana', 'bank', 'Kojo Beatlab', 'CRIBSEED_KOJO', '000', 'Seed Test Bank', '7777', 'Kojo Beatlab', '{"test_mode":true}'::jsonb)
 on conflict (creator_id) do update
 set
   status = excluded.status,
@@ -163,8 +176,10 @@ values
   ('55555555-5555-4555-8555-555555555555'::uuid, '11111111-1111-4111-8111-111111111111'::uuid, now() - interval '9 days'),
   ('55555555-5555-4555-8555-555555555555'::uuid, '22222222-2222-4222-8222-222222222222'::uuid, now() - interval '8 days'),
   ('55555555-5555-4555-8555-555555555555'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, now() - interval '7 days'),
+  ('55555555-5555-4555-8555-555555555555'::uuid, '77777777-7777-4777-8777-777777777777'::uuid, now() - interval '4 days'),
   ('66666666-6666-4666-8666-666666666666'::uuid, '11111111-1111-4111-8111-111111111111'::uuid, now() - interval '6 days'),
-  ('66666666-6666-4666-8666-666666666666'::uuid, '44444444-4444-4444-8444-444444444444'::uuid, now() - interval '5 days')
+  ('66666666-6666-4666-8666-666666666666'::uuid, '44444444-4444-4444-8444-444444444444'::uuid, now() - interval '5 days'),
+  ('66666666-6666-4666-8666-666666666666'::uuid, '77777777-7777-4777-8777-777777777777'::uuid, now() - interval '3 days')
 on conflict do nothing;
 
 insert into public.assets (
@@ -175,7 +190,10 @@ insert into public.assets (
   category,
   tags,
   price_kobo,
+  minimum_price_kobo,
   currency,
+  delivery_mode,
+  pricing_model,
   status,
   created_at,
   updated_at
@@ -189,7 +207,10 @@ values
     'Photoshop Templates',
     array['photoshop', 'flyer', 'event', 'smart objects', 'social kit'],
     18000,
+    18000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '18 days',
     now() - interval '18 days'
@@ -202,7 +223,10 @@ values
     'Lightroom Presets',
     array['lightroom', 'preset', 'portrait', 'warm tones', 'photography'],
     12000,
+    12000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '15 days',
     now() - interval '15 days'
@@ -215,7 +239,10 @@ values
     'Illustrator Templates',
     array['illustrator', 'branding', 'logo', 'vector', 'packaging'],
     22000,
+    22000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '14 days',
     now() - interval '14 days'
@@ -228,7 +255,10 @@ values
     'Creative Cloud Bundles',
     array['bundle', 'creative cloud', 'agency', 'branding', 'launch'],
     32000,
+    32000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '11 days',
     now() - interval '11 days'
@@ -241,7 +271,10 @@ values
     'After Effects Templates',
     array['after effects', 'opener', 'motion', 'logo reveal', 'promo'],
     26000,
+    26000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '10 days',
     now() - interval '10 days'
@@ -254,7 +287,10 @@ values
     'Premiere Pro Templates',
     array['premiere pro', 'reels', 'titles', 'captions', 'promo'],
     24000,
+    24000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '8 days',
     now() - interval '8 days'
@@ -267,7 +303,10 @@ values
     'InDesign Templates',
     array['indesign', 'media kit', 'deck', 'pitch', 'presentation'],
     28000,
+    28000,
     'GHS',
+    'file',
+    'paid',
     'published',
     now() - interval '6 days',
     now() - interval '6 days'
@@ -279,7 +318,93 @@ set
   category = excluded.category,
   tags = excluded.tags,
   price_kobo = excluded.price_kobo,
+  minimum_price_kobo = excluded.minimum_price_kobo,
   currency = excluded.currency,
+  delivery_mode = excluded.delivery_mode,
+  pricing_model = excluded.pricing_model,
+  status = excluded.status,
+  updated_at = excluded.updated_at;
+
+insert into public.assets (
+  id,
+  creator_id,
+  title,
+  description,
+  category,
+  tags,
+  price_kobo,
+  minimum_price_kobo,
+  currency,
+  delivery_mode,
+  pricing_model,
+  audio_preview_url,
+  audio_genre,
+  audio_bpm,
+  audio_key,
+  license_options,
+  status,
+  created_at,
+  updated_at
+)
+values
+  (
+    'eeee1111-1111-4111-8111-111111111111'::uuid,
+    '77777777-7777-4777-8777-777777777777'::uuid,
+    'Lagos Night Drive Beat Pack',
+    'An editable afrobeats production pack with bounced stems, dry and wet WAVs, MIDI chords, and an Ableton session for fast remixing or topline work.',
+    'Audio / Beats',
+    array['afrobeats', 'stems', 'ableton', 'midi', 'editable audio'],
+    22000,
+    22000,
+    'GHS',
+    'file',
+    'paid',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    'Afrobeats',
+    108,
+    'F Minor',
+    array['personal_use', 'commercial_use']::text[],
+    'published',
+    now() - interval '4 days',
+    now() - interval '4 days'
+  ),
+  (
+    'eeee2222-2222-4222-8222-222222222222'::uuid,
+    '77777777-7777-4777-8777-777777777777'::uuid,
+    'Sunday Lift Gospel Stems',
+    'A gospel-first beat suite with organ, choir, bass, and drum stems alongside FL Studio project files and MIDI for easy rearrangement or custom production work.',
+    'Audio / Beats',
+    array['gospel', 'fl studio', 'stems', 'midi', 'choir'],
+    30000,
+    15000,
+    'GHS',
+    'file',
+    'pay_what_you_want',
+    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    'Gospel',
+    74,
+    'C Major',
+    array['personal_use', 'commercial_use', 'exclusive_rights']::text[],
+    'published',
+    now() - interval '2 days',
+    now() - interval '2 days'
+  )
+on conflict (id) do update
+set
+  title = excluded.title,
+  description = excluded.description,
+  category = excluded.category,
+  tags = excluded.tags,
+  price_kobo = excluded.price_kobo,
+  minimum_price_kobo = excluded.minimum_price_kobo,
+  currency = excluded.currency,
+  delivery_mode = excluded.delivery_mode,
+  pricing_model = excluded.pricing_model,
+  audio_preview_url = excluded.audio_preview_url,
+  audio_genre = excluded.audio_genre,
+  audio_bpm = excluded.audio_bpm,
+  audio_key = excluded.audio_key,
+  license_options = excluded.license_options,
   status = excluded.status,
   updated_at = excluded.updated_at;
 
@@ -307,6 +432,37 @@ set
   file_size = excluded.file_size,
   original_name = excluded.original_name;
 
+insert into public.asset_files (
+  id,
+  asset_id,
+  storage_path,
+  file_type,
+  file_size,
+  original_name,
+  file_role,
+  sort_order,
+  created_at
+)
+values
+  ('feee1111-1111-4111-8111-111111111111'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-preview.mp3', 'audio/mpeg', 5242880, 'lagos-night-drive-preview.mp3', 'audio_preview', 0, now() - interval '4 days'),
+  ('feee1112-1111-4111-8111-111111111112'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-master.wav', 'audio/wav', 73400320, 'lagos-night-drive-master.wav', 'source_wav', 1, now() - interval '4 days'),
+  ('feee1113-1111-4111-8111-111111111113'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-stems-and-project.zip', 'application/zip', 157286400, 'lagos-night-drive-stems-and-project.zip', 'source_zip', 2, now() - interval '4 days'),
+  ('feee1114-1111-4111-8111-111111111114'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-session.als', 'application/octet-stream', 18874368, 'lagos-night-drive-session.als', 'project_file', 3, now() - interval '4 days'),
+  ('feee1115-1111-4111-8111-111111111115'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-chords.mid', 'application/octet-stream', 32768, 'lagos-night-drive-chords.mid', 'midi', 4, now() - interval '4 days'),
+  ('feee2221-2222-4222-8222-222222222221'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-preview.mp3', 'audio/mpeg', 4194304, 'sunday-lift-preview.mp3', 'audio_preview', 0, now() - interval '2 days'),
+  ('feee2222-2222-4222-8222-222222222222'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-master.wav', 'audio/wav', 62914560, 'sunday-lift-master.wav', 'source_wav', 1, now() - interval '2 days'),
+  ('feee2223-2222-4222-8222-222222222223'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-stems-and-project.zip', 'application/zip', 146800640, 'sunday-lift-stems-and-project.zip', 'source_zip', 2, now() - interval '2 days'),
+  ('feee2224-2222-4222-8222-222222222224'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-session.flp', 'application/octet-stream', 20971520, 'sunday-lift-session.flp', 'project_file', 3, now() - interval '2 days'),
+  ('feee2225-2222-4222-8222-222222222225'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-topline.mid', 'application/octet-stream', 24576, 'sunday-lift-topline.mid', 'midi', 4, now() - interval '2 days')
+on conflict (id) do update
+set
+  storage_path = excluded.storage_path,
+  file_type = excluded.file_type,
+  file_size = excluded.file_size,
+  original_name = excluded.original_name,
+  file_role = excluded.file_role,
+  sort_order = excluded.sort_order;
+
 insert into public.asset_previews (
   id,
   asset_id,
@@ -322,6 +478,21 @@ values
   ('3ccc1111-1111-4111-8111-111111111111'::uuid, 'cccc1111-1111-4111-8111-111111111111'::uuid, 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80', now() - interval '10 days'),
   ('3ccc2221-2222-4222-8222-222222222221'::uuid, 'cccc2222-2222-4222-8222-222222222222'::uuid, 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80', now() - interval '8 days'),
   ('3ddd1111-1111-4111-8111-111111111111'::uuid, 'dddd1111-1111-4111-8111-111111111111'::uuid, 'https://images.unsplash.com/photo-1516387938699-a93567ec168e?auto=format&fit=crop&w=1200&q=80', now() - interval '6 days')
+on conflict (id) do update
+set
+  preview_url = excluded.preview_url;
+
+insert into public.asset_previews (
+  id,
+  asset_id,
+  preview_url,
+  created_at
+)
+values
+  ('3eee1111-1111-4111-8111-111111111111'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1200&q=80', now() - interval '4 days'),
+  ('3eee1112-1111-4111-8111-111111111112'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=1200&q=80', now() - interval '4 days'),
+  ('3eee2221-2222-4222-8222-222222222221'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=1200&q=80', now() - interval '2 days'),
+  ('3eee2222-2222-4222-8222-222222222222'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80', now() - interval '2 days')
 on conflict (id) do update
 set
   preview_url = excluded.preview_url;
@@ -417,8 +588,10 @@ insert into public.wishlists (user_id, asset_id, created_at)
 values
   ('55555555-5555-4555-8555-555555555555'::uuid, 'bbbb2222-2222-4222-8222-222222222222'::uuid, now() - interval '4 days'),
   ('55555555-5555-4555-8555-555555555555'::uuid, 'dddd1111-1111-4111-8111-111111111111'::uuid, now() - interval '3 days'),
+  ('55555555-5555-4555-8555-555555555555'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, now() - interval '36 hours'),
   ('66666666-6666-4666-8666-666666666666'::uuid, 'aaaa1111-1111-4111-8111-111111111111'::uuid, now() - interval '2 days'),
-  ('66666666-6666-4666-8666-666666666666'::uuid, 'cccc2222-2222-4222-8222-222222222222'::uuid, now() - interval '1 day')
+  ('66666666-6666-4666-8666-666666666666'::uuid, 'cccc2222-2222-4222-8222-222222222222'::uuid, now() - interval '1 day'),
+  ('66666666-6666-4666-8666-666666666666'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, now() - interval '18 hours')
 on conflict do nothing;
 
 insert into public.asset_reviews (
@@ -434,7 +607,9 @@ values
   ('4aaa1111-1111-4111-8111-111111111111'::uuid, 'aaaa1111-1111-4111-8111-111111111111'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 5, 'Loved the layering and the smart objects. It was easy to swap images and export multiple sizes.', now() - interval '4 days', now() - interval '4 days'),
   ('4bbb1111-1111-4111-8111-111111111111'::uuid, 'bbbb2222-2222-4222-8222-222222222222'::uuid, '66666666-6666-4666-8666-666666666666'::uuid, 5, 'Excellent bundle for fast client work. The file organization is clear and the templates feel premium.', now() - interval '3 days', now() - interval '3 days'),
   ('4ccc1111-1111-4111-8111-111111111111'::uuid, 'cccc2222-2222-4222-8222-222222222222'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 4, 'Strong title pack for reels and short promos. Easy to adapt for different aspect ratios.', now() - interval '2 days', now() - interval '2 days'),
-  ('4ddd1111-1111-4111-8111-111111111111'::uuid, 'dddd1111-1111-4111-8111-111111111111'::uuid, '66666666-6666-4666-8666-666666666666'::uuid, 5, 'The deck structure is clean and saves a lot of prep time before sponsorship outreach.', now() - interval '1 day', now() - interval '1 day')
+  ('4ddd1111-1111-4111-8111-111111111111'::uuid, 'dddd1111-1111-4111-8111-111111111111'::uuid, '66666666-6666-4666-8666-666666666666'::uuid, 5, 'The deck structure is clean and saves a lot of prep time before sponsorship outreach.', now() - interval '1 day', now() - interval '1 day'),
+  ('4eee1111-1111-4111-8111-111111111111'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 5, 'The stems are clean and the Ableton session made it easy to flip the groove for a client cut.', now() - interval '28 hours', now() - interval '28 hours'),
+  ('4eee2222-2222-4222-8222-222222222222'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, '66666666-6666-4666-8666-666666666666'::uuid, 4, 'Great church-ready progression and useful MIDI. The editable files were organized well and fast to open.', now() - interval '16 hours', now() - interval '16 hours')
 on conflict (asset_id, reviewer_id) do update
 set
   rating = excluded.rating,
@@ -453,7 +628,8 @@ insert into public.creator_reviews (
 values
   ('caaa1111-1111-4111-8111-111111111111'::uuid, '11111111-1111-4111-8111-111111111111'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 5, 'Fast support, polished files, and very strong presentation quality.', now() - interval '3 days', now() - interval '3 days'),
   ('cbbb1111-1111-4111-8111-111111111111'::uuid, '22222222-2222-4222-8222-222222222222'::uuid, '66666666-6666-4666-8666-666666666666'::uuid, 5, 'Great vector quality and consistent naming throughout the pack.', now() - interval '2 days', now() - interval '2 days'),
-  ('cccc1111-1111-4111-8111-111111111111'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 4, 'Motion templates are well organized and easy to customize without digging for assets.', now() - interval '1 day', now() - interval '1 day')
+  ('cccc1111-1111-4111-8111-111111111111'::uuid, '33333333-3333-4333-8333-333333333333'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 4, 'Motion templates are well organized and easy to customize without digging for assets.', now() - interval '1 day', now() - interval '1 day'),
+  ('ceee1111-1111-4111-8111-111111111111'::uuid, '77777777-7777-4777-8777-777777777777'::uuid, '55555555-5555-4555-8555-555555555555'::uuid, 5, 'Strong pack organization and clearly labeled editable audio files throughout the delivery.', now() - interval '20 hours', now() - interval '20 hours')
 on conflict (creator_id, reviewer_id) do update
 set
   rating = excluded.rating,
@@ -484,7 +660,9 @@ where a.id in (
   'bbbb2222-2222-4222-8222-222222222222'::uuid,
   'cccc1111-1111-4111-8111-111111111111'::uuid,
   'cccc2222-2222-4222-8222-222222222222'::uuid,
-  'dddd1111-1111-4111-8111-111111111111'::uuid
+  'dddd1111-1111-4111-8111-111111111111'::uuid,
+  'eeee1111-1111-4111-8111-111111111111'::uuid,
+  'eeee2222-2222-4222-8222-222222222222'::uuid
 )
 on conflict do nothing;
 

@@ -114,10 +114,19 @@ function normalizeUrl(value: string | null | undefined): string | null {
   return trimmed || null;
 }
 
+function isSeedStoragePath(value: string | null | undefined) {
+  return typeof value === "string" && value.trim().toLowerCase().startsWith("seed/");
+}
+
 function toHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function computeTextSha256(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return toHex(digest);
 }
 
 function sanitizeFilenameSegment(value: string) {
@@ -203,6 +212,48 @@ function sortDeliveryFiles<T extends { file_role?: AssetFileRole | null; sort_or
 }
 
 async function ensureImmutableAssetFile(supabase: ServiceClient, file: AssetFileRow): Promise<ImmutableAssetFile> {
+  if (isSeedStoragePath(file.storage_path)) {
+    const immutableStoragePath = file.immutable_storage_path || file.storage_path;
+    const fileSha256 =
+      file.file_sha256 ??
+      (await computeTextSha256(
+        `${file.asset_id}:${file.id}:${file.storage_path}:${file.original_name}:${file.file_size}:${file.file_role ?? "primary"}`
+      ));
+    const lockedAt = file.immutable_locked_at || new Date().toISOString();
+    const patch: Record<string, string> = {};
+
+    // Seeded demo rows intentionally point at placeholder paths, so we lock a deterministic
+    // snapshot without requiring an object copy from the storage bucket.
+    if (file.immutable_storage_path !== immutableStoragePath) {
+      patch.immutable_storage_path = immutableStoragePath;
+    }
+    if (file.file_sha256 !== fileSha256) {
+      patch.file_sha256 = fileSha256;
+    }
+    if (!file.immutable_locked_at) {
+      patch.immutable_locked_at = lockedAt;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase.from("asset_files").update(patch).eq("id", file.id);
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+
+    return {
+      assetFileId: file.id,
+      fileRole: file.file_role ?? "primary",
+      sortOrder: file.sort_order ?? 0,
+      storagePath: immutableStoragePath,
+      originalName: file.original_name,
+      fileType: file.file_type,
+      fileSize: file.file_size,
+      fileSha256,
+      lockedAt
+    };
+  }
+
   const immutableStoragePath = file.immutable_storage_path || buildImmutableStoragePath(file);
 
   if (!file.immutable_storage_path) {

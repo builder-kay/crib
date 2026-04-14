@@ -256,6 +256,17 @@ export function MarketPage() {
               >
                 Canva
               </button>
+              <button
+                type="button"
+                onClick={() => setCategory("Audio / Beats")}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                  category === "Audio / Beats"
+                    ? "border-cobalt-600 bg-cobalt-600 text-white"
+                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
+                }`}
+              >
+                Audio / Beats
+              </button>
               <select
                 value={selectedAdobeCategory}
                 onChange={(event) => setCategory(event.target.value || "all")}
@@ -268,17 +279,6 @@ export function MarketPage() {
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={() => setCategory("Audio / Beats")}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                  category === "Audio / Beats"
-                    ? "border-cobalt-600 bg-cobalt-600 text-white"
-                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-                }`}
-              >
-                Audio / Beats
-              </button>
             </div>
           </div>
         </div>
