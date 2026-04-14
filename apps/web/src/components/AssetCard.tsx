@@ -1,9 +1,11 @@
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { PriceTag } from "@/components/PriceTag";
 import { StarRating } from "@/components/StarRating";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { getUserContactEmail } from "@/lib/auth";
 import { trackAnalyticsEvent } from "@/lib/api";
+import { isAudioAsset } from "@/lib/assetCatalog";
 import type { Asset } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
 
@@ -16,6 +18,8 @@ type AssetCardProps = {
   isWishlisted?: boolean;
   onToggleWishlist?: (assetId: string, nextState: boolean) => void;
 };
+
+const ASSET_CARD_AUDIO_EVENT = "crib:asset-card-audio-toggle";
 
 function categoryChipClass(category: string) {
   const key = category.toLowerCase();
@@ -49,6 +53,7 @@ function categoryChipClass(category: string) {
 export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: AssetCardProps) {
   const user = useAuthStore((state) => state.user);
   const userContactEmail = getUserContactEmail(user);
+  const audioPreviewUrl = isAudioAsset(asset) ? asset.audio_preview_url?.trim() ?? "" : "";
   const creatorName = asset.profile?.display_name ?? "Creator";
   const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Creative Seller";
   const soldCount = Math.max(0, asset.sold_count ?? 0);
@@ -87,6 +92,8 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
           >
             {asset.category}
           </div>
+
+          {audioPreviewUrl ? <AssetCardAudioPreviewButton assetId={asset.id} src={audioPreviewUrl} title={asset.title} /> : null}
 
           {onToggleWishlist ? (
             <button
@@ -165,5 +172,128 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
         </div>
       </div>
     </article>
+  );
+}
+
+type AssetCardAudioPreviewButtonProps = {
+  assetId: string;
+  src: string;
+  title: string;
+};
+
+function AssetCardAudioPreviewButton({ assetId, src, title }: AssetCardAudioPreviewButtonProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+    };
+  }, [src]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleExternalToggle = (event: Event) => {
+      const customEvent = event as CustomEvent<{ assetId?: string }>;
+      if (customEvent.detail?.assetId === assetId) {
+        return;
+      }
+
+      const audio = audioRef.current;
+      if (audio && !audio.paused) {
+        audio.pause();
+      }
+    };
+
+    window.addEventListener(ASSET_CARD_AUDIO_EVENT, handleExternalToggle as EventListener);
+
+    return () => {
+      window.removeEventListener(ASSET_CARD_AUDIO_EVENT, handleExternalToggle as EventListener);
+    };
+  }, [assetId]);
+
+  async function handleToggleAudio(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    if (audio.paused) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(ASSET_CARD_AUDIO_EVENT, { detail: { assetId } }));
+      }
+
+      try {
+        await audio.play();
+      } catch {
+        setIsPlaying(false);
+      }
+      return;
+    }
+
+    audio.pause();
+  }
+
+  return (
+    <>
+      <audio ref={audioRef} src={src} preload="none" />
+      <div className="absolute bottom-3 left-3 z-10 h-10 w-10">
+        {isPlaying ? (
+          <>
+            <span className="pointer-events-none absolute inset-[-4px] rounded-full border border-cobalt-200/85 bg-cobalt-300/20 animate-ping" />
+            <span
+              className="pointer-events-none absolute inset-[-10px] rounded-full border border-white/55 bg-cobalt-200/10 animate-ping"
+              style={{ animationDelay: "220ms" }}
+            />
+            <span className="pointer-events-none absolute inset-[-16px] rounded-full border border-white/35" />
+          </>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={handleToggleAudio}
+          aria-pressed={isPlaying}
+          className={`relative inline-flex h-10 w-10 items-center justify-center rounded-full border text-white shadow-lg backdrop-blur transition hover:scale-[1.03] ${
+            isPlaying
+              ? "border-cobalt-100 bg-cobalt-600 shadow-cobalt-950/30 hover:bg-cobalt-700"
+              : "border-white/85 bg-ink/80 shadow-black/25 hover:bg-ink/90"
+          }`}
+          aria-label={isPlaying ? `Pause preview for ${title}` : `Play preview for ${title}`}
+          title={isPlaying ? "Pause preview" : "Play preview"}
+        >
+          {isPlaying ? (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current text-white">
+              <path d="M7 5h3v14H7zM14 5h3v14h-3z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="ml-0.5 h-4 w-4 fill-current text-white">
+              <path d="m8 5 11 7-11 7z" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </>
   );
 }
