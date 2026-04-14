@@ -187,11 +187,11 @@ export function MarketPage() {
             <div className="max-w-4xl space-y-4 md:space-y-5">
               <h1 className="font-display text-4xl font-bold leading-[0.96] tracking-[-0.05em] text-ink sm:text-5xl md:text-6xl lg:text-[4.5rem]">
                 <span className="block">Discover creator-built</span>
-                <span className="block text-cobalt-600">templates that ship faster.</span>
+                <span className="block text-cobalt-600">assets that ship faster.</span>
               </h1>
               <p className="mx-auto max-w-2xl text-sm leading-6 text-sand-700 md:text-base md:leading-7">
-                Browse Canva, Figma, and Adobe-ready assets made for launches, client work, storefronts, decks, and
-                content systems before you open another blank file.
+                Browse Canva, Figma, Adobe, and editable audio assets made for launches, client work, storefronts,
+                songs, decks, and content systems before you open another blank file.
               </p>
               <a
                 href="#discover-explore"
@@ -212,9 +212,9 @@ export function MarketPage() {
         <div className="surface-card discover-mode-bar p-5 md:p-6">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Marketplace</p>
-            <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Start with templates built for real workflows.</h2>
+            <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Start with assets built for real workflows.</h2>
             <p className="mt-2 text-sm leading-6 text-sand-700 md:text-base md:leading-7">
-              Explore locally designed Canva, Figma, and Adobe assets, then narrow by tool, format, price, or creator until the right fit shows up fast.
+              Explore locally designed Canva, Figma, Adobe, and audio-ready listings, then narrow by tool, format, price, or creator until the right fit shows up fast.
             </p>
           </div>
         </div>
@@ -268,6 +268,17 @@ export function MarketPage() {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => setCategory("Audio / Beats")}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                  category === "Audio / Beats"
+                    ? "border-cobalt-600 bg-cobalt-600 text-white"
+                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
+                }`}
+              >
+                Audio / Beats
+              </button>
             </div>
           </div>
         </div>
@@ -318,7 +329,7 @@ export function MarketPage() {
         {displayAssets.length > 0 ? <AssetGrid assets={displayAssets} /> : null}
 
         {assetsQuery.data && assetsQuery.data.length === 0 ? (
-          <EmptyState title="No templates found" body="Adjust your filters or check back soon for fresh creator releases." />
+          <EmptyState title="No assets found" body="Adjust your filters or check back soon for fresh creator releases." />
         ) : null}
       </section>
     </div>

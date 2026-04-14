@@ -22,6 +22,9 @@ function categoryChipClass(category: string) {
   if (key.includes("figma")) {
     return "bg-lagoon-600 text-white";
   }
+  if (key.includes("audio / beats")) {
+    return "bg-forest-700 text-white";
+  }
   if (key.includes("canva")) {
     return "bg-sunset-600 text-white";
   }
@@ -47,7 +50,7 @@ export function AssetCard({ asset, isWishlisted = false, onToggleWishlist }: Ass
   const user = useAuthStore((state) => state.user);
   const userContactEmail = getUserContactEmail(user);
   const creatorName = asset.profile?.display_name ?? "Creator";
-  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Template Creator";
+  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Creative Seller";
   const soldCount = Math.max(0, asset.sold_count ?? 0);
   const soldLabel = `${new Intl.NumberFormat("en-US").format(soldCount)} sold`;
   const isVerified = Boolean(asset.profile?.is_verified);

@@ -11,6 +11,10 @@ import {
   normalizePlatformSupportEmail
 } from "@/lib/platform";
 import {
+  MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES,
+  MAX_AUDIO_EXTRA_FILE_SIZE_BYTES,
+  MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES,
+  MAX_AUDIO_WAV_FILE_SIZE_BYTES,
   formatFileSize,
   looksLikeUploadSizeError,
   MAX_PROFILE_AVATAR_SIZE_BYTES,
@@ -24,6 +28,8 @@ import type {
   AdminOrderRecord,
   AdminOverview,
   Asset,
+  AssetFileRole,
+  AssetLicenseOption,
   AssetDeliveryMode,
   AssetPricingModel,
   AssetReview,
@@ -36,6 +42,7 @@ import type {
   NotificationDeliveryStatus,
   CreatorReview,
   Order,
+  OrderDeliveryFile,
   OrderReceipt,
   PayoutAccount,
   PayoutBank,
@@ -93,11 +100,16 @@ type AssetRow = {
   delivery_mode?: AssetDeliveryMode | null;
   external_delivery_url?: string | null;
   pricing_model?: AssetPricingModel | null;
+  audio_preview_url?: string | null;
+  audio_genre?: string | null;
+  audio_bpm?: number | null;
+  audio_key?: string | null;
+  license_options?: AssetLicenseOption[] | null;
   status: "draft" | "published" | "archived";
   created_at: string;
   profile?: AssetProfileRow | AssetProfileRow[] | null;
   previews?: Array<{ id: string; preview_url: string }>;
-  files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
+  files?: Array<{ id: string; file_type: string; file_size: number; original_name: string; file_role?: AssetFileRole | null; sort_order?: number | null }>;
 };
 
 type AssetRatingRow = {
@@ -143,8 +155,13 @@ type OrderRow = {
         category: string;
         delivery_mode?: AssetDeliveryMode | null;
         pricing_model?: AssetPricingModel | null;
+        audio_preview_url?: string | null;
+        audio_genre?: string | null;
+        audio_bpm?: number | null;
+        audio_key?: string | null;
+        license_options?: AssetLicenseOption[] | null;
         previews?: Array<{ id: string; preview_url: string }>;
-        files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
+        files?: Array<{ id: string; file_type: string; file_size: number; original_name: string; file_role?: AssetFileRole | null; sort_order?: number | null }>;
       }
     | Array<{
         id: string;
@@ -152,9 +169,17 @@ type OrderRow = {
         category: string;
         delivery_mode?: AssetDeliveryMode | null;
         pricing_model?: AssetPricingModel | null;
+        audio_preview_url?: string | null;
+        audio_genre?: string | null;
+        audio_bpm?: number | null;
+        audio_key?: string | null;
+        license_options?: AssetLicenseOption[] | null;
         previews?: Array<{ id: string; preview_url: string }>;
-        files?: Array<{ id: string; file_type: string; file_size: number; original_name: string }>;
+        files?: Array<{ id: string; file_type: string; file_size: number; original_name: string; file_role?: AssetFileRole | null; sort_order?: number | null }>;
       }>;
+  delivery_files?:
+    | Array<{ id: string; file_type: string; file_size: number; original_name: string; file_role?: AssetFileRole | null; sort_order?: number | null }>
+    | null;
 };
 
 type OrderReceiptRow = {
@@ -403,6 +428,11 @@ function mapAsset(row: AssetRow): Asset {
     delivery_mode: row.delivery_mode ?? "file",
     external_delivery_url: row.external_delivery_url ?? null,
     pricing_model: row.pricing_model ?? (row.price_kobo > 0 ? "paid" : "free"),
+    audio_preview_url: row.audio_preview_url ?? null,
+    audio_genre: row.audio_genre?.trim() || null,
+    audio_bpm: typeof row.audio_bpm === "number" ? row.audio_bpm : null,
+    audio_key: row.audio_key?.trim() || null,
+    license_options: (row.license_options ?? []) as AssetLicenseOption[],
     sold_count: 0,
     status: row.status,
     created_at: row.created_at,
@@ -415,7 +445,14 @@ function mapAsset(row: AssetRow): Asset {
         }
       : null,
     previews: row.previews ?? [],
-    files: row.files ?? []
+    files: (row.files ?? []).map((file) => ({
+      id: file.id,
+      file_type: file.file_type,
+      file_size: file.file_size,
+      original_name: file.original_name,
+      file_role: file.file_role ?? "primary",
+      sort_order: file.sort_order ?? 0
+    }))
   };
 }
 
@@ -455,10 +492,30 @@ function mapOrder(row: OrderRow): Order {
           category: asset.category,
           delivery_mode: asset.delivery_mode ?? row.delivery_mode ?? "file",
           pricing_model: asset.pricing_model ?? "paid",
+          audio_preview_url: asset.audio_preview_url ?? null,
+          audio_genre: asset.audio_genre?.trim() || null,
+          audio_bpm: typeof asset.audio_bpm === "number" ? asset.audio_bpm : null,
+          audio_key: asset.audio_key?.trim() || null,
+          license_options: (asset.license_options ?? []) as AssetLicenseOption[],
           previews: asset.previews ?? [],
-          files: asset.files ?? []
+          files: (asset.files ?? []).map((file) => ({
+            id: file.id,
+            file_type: file.file_type,
+            file_size: file.file_size,
+            original_name: file.original_name,
+            file_role: file.file_role ?? "primary",
+            sort_order: file.sort_order ?? 0
+          }))
         }
-      : undefined
+      : undefined,
+    delivery_files: (row.delivery_files ?? []).map((file): OrderDeliveryFile => ({
+      id: file.id,
+      file_type: file.file_type,
+      file_size: file.file_size,
+      original_name: file.original_name,
+      file_role: file.file_role ?? "primary",
+      sort_order: file.sort_order ?? 0
+    }))
   };
 }
 
@@ -1666,11 +1723,16 @@ export async function getPublishedAssets(filters: MarketFilters = {}, viewerId?:
       delivery_mode,
       external_delivery_url,
       pricing_model,
+      audio_preview_url,
+      audio_genre,
+      audio_bpm,
+      audio_key,
+      license_options,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
       previews:asset_previews(id, preview_url),
-      files:asset_files(id, file_type, file_size, original_name)`
+      files:asset_files(id, file_type, file_size, original_name, file_role, sort_order)`
     )
     .eq("status", "published")
     .order("created_at", { ascending: false });
@@ -1743,11 +1805,16 @@ export async function getAssetById(assetId: string): Promise<Asset> {
       delivery_mode,
       external_delivery_url,
       pricing_model,
+      audio_preview_url,
+      audio_genre,
+      audio_bpm,
+      audio_key,
+      license_options,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
       previews:asset_previews(id, preview_url),
-      files:asset_files(id, file_type, file_size, original_name)`
+      files:asset_files(id, file_type, file_size, original_name, file_role, sort_order)`
     )
     .eq("id", assetId)
     .single();
@@ -1776,11 +1843,16 @@ export async function getCreatorAssets(userId: string): Promise<Asset[]> {
       delivery_mode,
       external_delivery_url,
       pricing_model,
+      audio_preview_url,
+      audio_genre,
+      audio_bpm,
+      audio_key,
+      license_options,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
       previews:asset_previews(id, preview_url),
-      files:asset_files(id, file_type, file_size, original_name)`
+      files:asset_files(id, file_type, file_size, original_name, file_role, sort_order)`
     )
     .eq("creator_id", userId)
     .order("created_at", { ascending: false });
@@ -1988,12 +2060,21 @@ export async function getWishlistAssets(userId: string): Promise<Asset[]> {
         category,
         tags,
         price_kobo,
+        minimum_price_kobo,
         currency,
+        delivery_mode,
+        external_delivery_url,
+        pricing_model,
+        audio_preview_url,
+        audio_genre,
+        audio_bpm,
+        audio_key,
+        license_options,
         status,
         created_at,
         profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
         previews:asset_previews(id, preview_url),
-        files:asset_files(id, file_type, file_size, original_name)
+        files:asset_files(id, file_type, file_size, original_name, file_role, sort_order)
       )`
     )
     .eq("user_id", userId)
@@ -2237,12 +2318,56 @@ export async function trackAnalyticsEvent(input: TrackAnalyticsEventInput): Prom
   }
 }
 
+export type CreateAssetListingFiles = {
+  mainFile: File | null;
+  previewFiles: File[];
+  audioPreviewFile?: File | null;
+  audioWavFile?: File | null;
+  audioBundleFile?: File | null;
+  audioExtraFiles?: File[];
+};
+
+type PendingAssetFileUpload = {
+  file: File;
+  role: AssetFileRole;
+  sortOrder: number;
+  maxBytes: number;
+};
+
+function inferAudioExtraFileRole(fileName: string): AssetFileRole {
+  const normalized = fileName.trim().toLowerCase();
+  if (normalized.endsWith(".mid") || normalized.endsWith(".midi")) {
+    return "midi";
+  }
+  if (
+    normalized.endsWith(".flp") ||
+    normalized.endsWith(".als") ||
+    normalized.endsWith(".logicx") ||
+    normalized.endsWith(".mus") ||
+    normalized.endsWith(".musx") ||
+    normalized.endsWith(".cpr") ||
+    normalized.endsWith(".rpp") ||
+    normalized.endsWith(".ptx") ||
+    normalized.endsWith(".song")
+  ) {
+    return "project_file";
+  }
+  return "supporting";
+}
+
 export async function createAssetListing(
   userId: string,
   input: UploadAssetInput,
-  mainFile: File | null,
-  previewFiles: File[]
+  files: CreateAssetListingFiles
 ): Promise<{ assetId: string }> {
+  const {
+    mainFile,
+    previewFiles,
+    audioPreviewFile = null,
+    audioWavFile = null,
+    audioBundleFile = null,
+    audioExtraFiles = []
+  } = files;
   const { data: moderationProfile, error: moderationProfileError } = await supabase
     .from("profiles")
     .select("seller_account_status, seller_account_note")
@@ -2265,6 +2390,40 @@ export async function createAssetListing(
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
+  const isAudioAsset = input.asset_type === "audio";
+  const generatedAssetId =
+    typeof window !== "undefined" && typeof window.crypto !== "undefined" && typeof window.crypto.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+          const random = Math.floor(Math.random() * 16);
+          const value = character === "x" ? random : (random & 0x3) | 0x8;
+          return value.toString(16);
+        });
+  const uploadedPaths: Array<{ bucket: "assets" | "previews"; path: string }> = [];
+
+  let audioPreviewUrl: string | null = null;
+  if (isAudioAsset) {
+    if (!audioPreviewFile) {
+      throw new Error("Audio listings need an MP3 preview before publishing.");
+    }
+
+    const audioPreviewPublicPath = `${userId}/${generatedAssetId}/audio-preview-${Date.now()}-${audioPreviewFile.name}`;
+    const { error: uploadPublicPreviewError } = await supabase.storage.from("previews").upload(audioPreviewPublicPath, audioPreviewFile, {
+      upsert: false,
+      contentType: audioPreviewFile.type || "audio/mpeg"
+    });
+
+    if (uploadPublicPreviewError) {
+      throw mapStorageUploadError(uploadPublicPreviewError, {
+        fileName: audioPreviewFile.name,
+        maxBytes: MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES
+      });
+    }
+
+    uploadedPaths.push({ bucket: "previews", path: audioPreviewPublicPath });
+    const { data: publicAudioPreviewUrl } = supabase.storage.from("previews").getPublicUrl(audioPreviewPublicPath);
+    audioPreviewUrl = publicAudioPreviewUrl.publicUrl;
+  }
 
   const normalizedPriceKobo = Math.round(input.price * 100);
   const normalizedMinimumPriceKobo = input.pricing_model === "paid" ? normalizedPriceKobo : Math.round(input.minimum_price * 100);
@@ -2273,6 +2432,7 @@ export async function createAssetListing(
   const { data: asset, error: assetError } = await supabase
     .from("assets")
     .insert({
+      id: generatedAssetId,
       creator_id: userId,
       title: input.title,
       description: input.description,
@@ -2284,19 +2444,82 @@ export async function createAssetListing(
       delivery_mode: input.delivery_mode,
       external_delivery_url: normalizedExternalDeliveryUrl,
       pricing_model: input.pricing_model,
+      audio_preview_url: audioPreviewUrl,
+      audio_genre: isAudioAsset ? input.audio_genre.trim() : null,
+      audio_bpm: isAudioAsset ? input.audio_bpm ?? null : null,
+      audio_key: isAudioAsset ? input.audio_key.trim() : null,
+      license_options: isAudioAsset ? input.license_options : [],
       status: input.status
     })
     .select("id")
     .single();
 
   if (assetError || !asset) {
+    await Promise.all(uploadedPaths.map((uploaded) => supabase.storage.from(uploaded.bucket).remove([uploaded.path])));
     throw new Error(assetError?.message ?? "Unable to create asset record");
   }
 
-  const uploadedPaths: Array<{ bucket: "assets" | "previews"; path: string }> = [];
-
   try {
-    if (input.delivery_mode === "file") {
+    if (isAudioAsset) {
+      if (!audioPreviewFile || !audioWavFile || !audioBundleFile) {
+        throw new Error("Audio listings need an MP3 preview, WAV file, and ZIP bundle.");
+      }
+
+      const assetFileUploads: PendingAssetFileUpload[] = [
+        { file: audioPreviewFile, role: "audio_preview", sortOrder: 0, maxBytes: MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES },
+        { file: audioWavFile, role: "source_wav", sortOrder: 1, maxBytes: MAX_AUDIO_WAV_FILE_SIZE_BYTES },
+        { file: audioBundleFile, role: "source_zip", sortOrder: 2, maxBytes: MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES },
+        ...audioExtraFiles.map((file, index) => ({
+          file,
+          role: inferAudioExtraFileRole(file.name),
+          sortOrder: index + 3,
+          maxBytes: MAX_AUDIO_EXTRA_FILE_SIZE_BYTES
+        }))
+      ];
+
+      const assetFileRows: Array<{
+        asset_id: string;
+        storage_path: string;
+        file_type: string;
+        file_size: number;
+        original_name: string;
+        file_role: AssetFileRole;
+        sort_order: number;
+      }> = [];
+
+      for (const entry of assetFileUploads) {
+        const safeName = slugify(entry.file.name.replace(/\.[^.]+$/, ""));
+        const assetPath = `${userId}/${asset.id}/${Date.now()}-${entry.sortOrder}-${safeName}-${entry.file.name}`;
+
+        const { error: uploadAssetFileError } = await supabase.storage.from("assets").upload(assetPath, entry.file, {
+          upsert: false,
+          contentType: entry.file.type || "application/octet-stream"
+        });
+
+        if (uploadAssetFileError) {
+          throw mapStorageUploadError(uploadAssetFileError, {
+            fileName: entry.file.name,
+            maxBytes: entry.maxBytes
+          });
+        }
+
+        uploadedPaths.push({ bucket: "assets", path: assetPath });
+        assetFileRows.push({
+          asset_id: asset.id,
+          storage_path: assetPath,
+          file_type: entry.file.type || "application/octet-stream",
+          file_size: entry.file.size,
+          original_name: entry.file.name,
+          file_role: entry.role,
+          sort_order: entry.sortOrder
+        });
+      }
+
+      const { error: assetFilesInsertError } = await supabase.from("asset_files").insert(assetFileRows);
+      if (assetFilesInsertError) {
+        throw new Error(assetFilesInsertError.message);
+      }
+    } else if (input.delivery_mode === "file") {
       if (!mainFile) {
         throw new Error("Attach the main file buyers should receive.");
       }
@@ -2323,7 +2546,9 @@ export async function createAssetListing(
         storage_path: mainPath,
         file_type: mainFile.type || "application/octet-stream",
         file_size: mainFile.size,
-        original_name: mainFile.name
+        original_name: mainFile.name,
+        file_role: "primary",
+        sort_order: 0
       });
 
       if (fileRowError) {
@@ -2374,8 +2599,8 @@ export async function createAssetListing(
     await supabase.from("assets").delete().eq("id", asset.id);
 
     throw mapStorageUploadError(error, {
-      fileName: mainFile?.name ?? `${slugify(input.title)}-listing`,
-      maxBytes: MAX_PRIMARY_ASSET_SIZE_BYTES
+      fileName: audioBundleFile?.name ?? audioWavFile?.name ?? audioPreviewFile?.name ?? mainFile?.name ?? `${slugify(input.title)}-listing`,
+      maxBytes: isAudioAsset ? MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES : MAX_PRIMARY_ASSET_SIZE_BYTES
     });
   }
 }
@@ -2434,7 +2659,7 @@ export async function createPayment(
   return payload;
 }
 
-export async function generateDownload(orderId: string) {
+export async function generateDownload(orderId: string, orderFileId?: string) {
   const accessToken = await requireAccessToken("Sign in to access your secure download.");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -2445,7 +2670,10 @@ export async function generateDownload(orderId: string) {
   const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/generate-download`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ order_id: orderId })
+    body: JSON.stringify({
+      order_id: orderId,
+      ...(orderFileId ? { order_file_id: orderFileId } : {})
+    })
   });
 
   if (!response.ok) {
@@ -2593,7 +2821,8 @@ export async function getBuyerOrders(options: {
       seller_moderation_action,
       refund_reference,
       refund_provider_status,
-      asset:assets(id, title, category, delivery_mode, pricing_model, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
+      delivery_files:order_delivery_files(id, file_type, file_size, original_name, file_role, sort_order),
+      asset:assets(id, title, category, delivery_mode, pricing_model, audio_preview_url, audio_genre, audio_bpm, audio_key, license_options, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name, file_role, sort_order))`
     )
     .order("created_at", { ascending: false });
 
@@ -2936,7 +3165,7 @@ export async function getCreatorDashboard(userId: string): Promise<CreatorDashbo
           seller_moderation_action,
           refund_reference,
           refund_provider_status,
-          asset:assets!inner(id, title, category, creator_id, delivery_mode, pricing_model, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name))`
+          asset:assets!inner(id, title, category, creator_id, delivery_mode, pricing_model, audio_preview_url, audio_genre, audio_bpm, audio_key, license_options, previews:asset_previews(id, preview_url), files:asset_files(id, file_type, file_size, original_name, file_role, sort_order))`
         )
         .eq("assets.creator_id", userId)
         .order("created_at", { ascending: false })
@@ -3700,11 +3929,16 @@ export async function getAdminAssets() {
       delivery_mode,
       external_delivery_url,
       pricing_model,
+      audio_preview_url,
+      audio_genre,
+      audio_bpm,
+      audio_key,
+      license_options,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
       previews:asset_previews(id, preview_url),
-      files:asset_files(id, file_type, file_size, original_name)`
+      files:asset_files(id, file_type, file_size, original_name, file_role, sort_order)`
     )
     .order("created_at", { ascending: false });
 
@@ -3733,11 +3967,16 @@ export async function updateAssetStatus(assetId: string, status: "draft" | "publ
       delivery_mode,
       external_delivery_url,
       pricing_model,
+      audio_preview_url,
+      audio_genre,
+      audio_bpm,
+      audio_key,
+      license_options,
       status,
       created_at,
       profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT}),
       previews:asset_previews(id, preview_url),
-      files:asset_files(id, file_type, file_size, original_name)`
+      files:asset_files(id, file_type, file_size, original_name, file_role, sort_order)`
     )
     .single();
 

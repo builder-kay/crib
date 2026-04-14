@@ -46,11 +46,25 @@ export type AssetPreview = {
   preview_url: string;
 };
 
+export type AssetLicenseOption = "personal_use" | "commercial_use" | "exclusive_rights";
+export type AssetFileRole = "primary" | "audio_preview" | "source_wav" | "source_zip" | "project_file" | "midi" | "supporting";
+
 export type AssetFile = {
   id: string;
   file_type: string;
   file_size: number;
   original_name: string;
+  file_role: AssetFileRole;
+  sort_order: number;
+};
+
+export type OrderDeliveryFile = {
+  id: string;
+  file_type: string;
+  file_size: number;
+  original_name: string;
+  file_role: AssetFileRole;
+  sort_order: number;
 };
 
 export type AssetDeliveryMode = "file" | "external_link";
@@ -69,6 +83,11 @@ export type Asset = {
   delivery_mode: AssetDeliveryMode;
   external_delivery_url: string | null;
   pricing_model: AssetPricingModel;
+  audio_preview_url: string | null;
+  audio_genre: string | null;
+  audio_bpm: number | null;
+  audio_key: string | null;
+  license_options: AssetLicenseOption[];
   sold_count: number;
   status: "draft" | "published" | "archived";
   created_at: string;
@@ -133,8 +152,14 @@ export type Order = {
   refund_reference: string | null;
   refund_provider_status: string | null;
   asset?: Pick<Asset, "id" | "title" | "category" | "files" | "delivery_mode" | "pricing_model"> & {
+    audio_preview_url?: string | null;
+    audio_genre?: string | null;
+    audio_bpm?: number | null;
+    audio_key?: string | null;
+    license_options?: AssetLicenseOption[];
     previews?: AssetPreview[];
   };
+  delivery_files?: OrderDeliveryFile[];
 };
 
 export type OrderReceipt = {

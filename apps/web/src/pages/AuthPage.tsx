@@ -158,7 +158,7 @@ export function AuthPage() {
     }
 
     if (mode === "register") {
-      return "Create your account, verify with a one-time code, and start selling templates, packs, and creative systems from one polished profile.";
+      return "Create your account, verify with a one-time code, and start selling editable assets, beat packs, and creative systems from one polished profile.";
     }
 
     if (mode === "reset") {

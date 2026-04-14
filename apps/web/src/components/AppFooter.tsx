@@ -134,7 +134,7 @@ export function AppFooter() {
               <img src="/crib-logo.png" alt="Crib logo" className="h-11 w-11 rounded-2xl object-cover" />
               <div>
                 <p className="text-xs font-semibold tracking-[0.18em] text-cobalt-700">Crib</p>
-                <h2 className="font-display text-2xl font-bold text-ink">Creative storefronts for templates that travel.</h2>
+                <h2 className="font-display text-2xl font-bold text-ink">Creative storefronts for editable assets that travel.</h2>
               </div>
             </div>
             <p className="max-w-xl text-sm text-sand-700">

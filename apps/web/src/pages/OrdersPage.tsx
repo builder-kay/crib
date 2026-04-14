@@ -17,7 +17,7 @@ import {
   upsertAssetReview,
   verifyPayment
 } from "@/lib/api";
-import { getAssetAppLabel, getAssetFormatLabel } from "@/lib/assetCatalog";
+import { getAssetAppLabel, getAssetFileRoleLabel, getAssetFormatLabel, isAudioAsset, sortAssetFiles } from "@/lib/assetCatalog";
 import { formatDate } from "@/lib/format";
 import type { Order } from "@/lib/types";
 import { useAuthStore } from "@/store/authStore";
@@ -105,7 +105,7 @@ export function OrdersPage() {
 
   const headline = useMemo(() => {
     if (reference) {
-      return "Open or download the template you just bought, inspect it, then confirm if it is genuine or report a scam within 24 hours.";
+      return "Open the delivery you just bought, inspect it, then confirm if it is genuine or report a scam within 24 hours.";
     }
     return "Your purchases, receipts, delivery links, downloads, and escrow confirmations live here.";
   }, [reference]);
@@ -439,12 +439,14 @@ export function OrdersPage() {
           const canViewReceipt = order.status === "paid" || order.status === "refunded";
           const appLabel = order.asset ? getAssetAppLabel(order.asset) : "Creative App";
           const formatLabel = order.asset ? getAssetFormatLabel(order.asset) : "Source files";
+          const deliveryFiles = sortAssetFiles(order.delivery_files ?? []);
           const awaitingReview = order.status === "paid" && order.escrow_status === "awaiting_review";
           const released = order.status === "paid" && order.escrow_status === "released";
           const reported = order.status === "paid" && order.escrow_status === "scam_reported";
           const isExternalLinkDelivery = order.delivery_mode === "external_link" || order.asset?.delivery_mode === "external_link";
-          const deliveryButtonLabel = isExternalLinkDelivery ? "Open link" : "Download";
-          const deliveryPromptLabel = isExternalLinkDelivery ? "template link" : "file";
+          const isAudioOrder = Boolean(order.asset && isAudioAsset(order.asset));
+          const deliveryButtonLabel = isExternalLinkDelivery ? "Open link" : deliveryFiles.length > 1 ? "Open delivery" : "Download";
+          const deliveryPromptLabel = isExternalLinkDelivery ? "access link" : "file";
           const escrowButtonsEnabled = awaitingReview && Boolean(order.buyer_opened_at);
 
           return (
@@ -492,7 +494,7 @@ export function OrdersPage() {
                       disabled={!canAccessDelivery}
                       onClick={async () => {
                         try {
-                          const payload = await generateDownload(order.id);
+                          const payload = await generateDownload(order.id, deliveryFiles.length > 0 ? deliveryFiles[0].id : undefined);
 
                           if (payload.delivery_type === "external_link") {
                             const link = document.createElement("a");
@@ -515,9 +517,9 @@ export function OrdersPage() {
                           pushToast(
                             awaitingReview
                               ? isExternalLinkDelivery
-                                ? "Template link opened. Inspect it, then confirm it is genuine or report a scam."
+                                ? "Access link opened. Inspect it, then confirm it is genuine or report a scam."
                                 : "Download opened. Inspect the file, then confirm it is genuine or report a scam."
-                              : payload.action_label ?? (isExternalLinkDelivery ? "Template link opened." : "Download link generated."),
+                              : payload.action_label ?? (isExternalLinkDelivery ? "Access link opened." : "Download link generated."),
                             "success"
                           );
                           await queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -542,6 +544,46 @@ export function OrdersPage() {
 
                     {!canAccessDelivery ? <p className="text-xs text-sand-600">Access unlocks after payment confirmation.</p> : null}
                   </div>
+
+                  {canAccessDelivery && !isExternalLinkDelivery && deliveryFiles.length > 1 ? (
+                    <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-600">
+                        {isAudioOrder ? "Downloaded files" : "Included downloads"}
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {deliveryFiles.map((file) => (
+                          <div key={file.id} className="flex flex-col gap-2 rounded-xl border border-white bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-ink">{getAssetFileRoleLabel(file)}</p>
+                              <p className="truncate text-xs text-sand-600">{file.original_name}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const payload = await generateDownload(order.id, file.id);
+                                  const link = document.createElement("a");
+                                  link.href = payload.url;
+                                  link.download = payload.filename || "crib-delivery-file";
+                                  link.rel = "noopener noreferrer";
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  link.remove();
+                                  pushToast(payload.action_label ?? "Download link generated.", "success");
+                                  await queryClient.invalidateQueries({ queryKey: ["orders"] });
+                                } catch (error) {
+                                  pushToast(error instanceof Error ? error.message : "Delivery access failed", "error");
+                                }
+                              }}
+                              className="rounded-full border border-cobalt-200 bg-cobalt-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-cobalt-700 transition hover:border-cobalt-300 hover:bg-cobalt-100"
+                            >
+                              Download
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {order.status === "paid" ? (
                     <div className="mt-4 rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
@@ -591,7 +633,7 @@ export function OrdersPage() {
                       {released ? (
                         <p className="mt-3 text-xs text-cobalt-900/80">
                           {order.escrow_release_reason === "free_access"
-                            ? "Access unlocked instantly because this template is free."
+                            ? "Access unlocked instantly because this listing is free."
                             : `Seller payout released${order.escrow_release_reason === "auto_timeout" ? " automatically after the 24-hour review window." : " after your confirmation."}`}
                         </p>
                       ) : null}
@@ -763,7 +805,7 @@ function isExternalLinkOrder(order: Order) {
 }
 
 function deliveryActionCopy(order: Order) {
-  return isExternalLinkOrder(order) ? "open the template link" : "download the file";
+  return isExternalLinkOrder(order) ? "open the access link" : "download the file";
 }
 
 function statusDescription(order: Order) {

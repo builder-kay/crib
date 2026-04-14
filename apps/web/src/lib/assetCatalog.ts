@@ -1,6 +1,7 @@
-import type { Asset } from "@/lib/types";
+import type { Asset, AssetFile, AssetFileRole } from "@/lib/types";
 
 type AssetCatalogInput = Pick<Asset, "category" | "files" | "delivery_mode">;
+type AssetCatalogFile = Pick<AssetFile, "file_role" | "sort_order" | "original_name" | "file_type">;
 
 const EXTENSION_LABELS: Record<string, string> = {
   fig: "FIG",
@@ -26,12 +27,33 @@ const EXTENSION_LABELS: Record<string, string> = {
   xd: "XD",
   svg: "SVG",
   zip: "ZIP",
-  pdf: "PDF"
+  pdf: "PDF",
+  mp3: "MP3",
+  wav: "WAV",
+  flp: "FLP",
+  als: "ALS",
+  logicx: "LOGICX",
+  mus: "MUS",
+  musx: "MUSX",
+  mid: "MIDI",
+  midi: "MIDI",
+  cpr: "CPR",
+  rpp: "RPP",
+  ptx: "PTX",
+  song: "SONG"
 };
 
-export function getAssetPrimaryFilename(asset: Pick<Asset, "files">) {
-  return asset.files?.[0]?.original_name ?? "";
-}
+const FILE_ROLE_PRIORITY: Record<AssetFileRole, number> = {
+  source_zip: 0,
+  primary: 1,
+  source_wav: 2,
+  audio_preview: 3,
+  project_file: 4,
+  midi: 5,
+  supporting: 6
+};
+
+const AUDIO_PROJECT_EXTENSIONS = ["flp", "als", "logicx", "mus", "musx", "cpr", "rpp", "ptx", "song"];
 
 export function getAssetFileExtension(filename: string) {
   const normalized = filename.trim().toLowerCase();
@@ -39,10 +61,54 @@ export function getAssetFileExtension(filename: string) {
   return match?.[1] ?? "";
 }
 
+export function isAudioAssetCategory(category: string) {
+  return category.trim().toLowerCase() === "audio / beats";
+}
+
+export function isAudioAsset(asset: Pick<Asset, "category">) {
+  return isAudioAssetCategory(asset.category);
+}
+
+export function sortAssetFiles<T extends { file_role?: AssetFileRole; sort_order?: number; original_name: string }>(files: readonly T[] = []) {
+  return [...files].sort((left, right) => {
+    const leftPriority = FILE_ROLE_PRIORITY[left.file_role ?? "primary"] ?? FILE_ROLE_PRIORITY.primary;
+    const rightPriority = FILE_ROLE_PRIORITY[right.file_role ?? "primary"] ?? FILE_ROLE_PRIORITY.primary;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    const leftOrder = left.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = right.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return left.original_name.localeCompare(right.original_name);
+  });
+}
+
+function getPrimaryAssetFile(asset: Pick<Asset, "files">) {
+  return sortAssetFiles(asset.files ?? [])[0];
+}
+
+export function getAssetPrimaryFilename(asset: Pick<Asset, "files">) {
+  return getPrimaryAssetFile(asset)?.original_name ?? "";
+}
+
 export function getAssetFormatKey(asset: AssetCatalogInput) {
   const category = asset.category.toLowerCase();
   const extension = getAssetFileExtension(getAssetPrimaryFilename(asset));
-  const fileType = asset.files?.[0]?.file_type?.toLowerCase() ?? "";
+  const fileType = getPrimaryAssetFile(asset)?.file_type?.toLowerCase() ?? "";
+
+  if (
+    isAudioAssetCategory(asset.category) ||
+    ["mp3", "wav", "mid", "midi"].includes(extension) ||
+    AUDIO_PROJECT_EXTENSIONS.includes(extension) ||
+    fileType.startsWith("audio/")
+  ) {
+    return "audio";
+  }
 
   if (["fig", "figjam"].includes(extension) || category.includes("figma")) {
     return "figma";
@@ -88,9 +154,13 @@ export function getAssetFilterFileType(asset: AssetCatalogInput) {
     return "link";
   }
 
+  if (isAudioAssetCategory(asset.category) || getAssetFormatKey(asset) === "audio") {
+    return "audio";
+  }
+
   const category = asset.category.toLowerCase();
   const extension = getAssetFileExtension(getAssetPrimaryFilename(asset));
-  const fileType = asset.files?.[0]?.file_type?.toLowerCase() ?? "";
+  const fileType = getPrimaryAssetFile(asset)?.file_type?.toLowerCase() ?? "";
 
   if (
     ["fig", "figjam", "psd", "psb", "psdt", "ai", "eps", "ait", "indd", "indt", "idml", "xmp", "lrtemplate", "lrcat", "sketch", "xd"].includes(
@@ -132,6 +202,10 @@ export function getAssetFilterFileType(asset: AssetCatalogInput) {
 export function getAssetAppLabel(asset: AssetCatalogInput) {
   const key = getAssetFormatKey(asset);
   const category = asset.category.toLowerCase();
+
+  if (key === "audio") {
+    return "FL Studio / Ableton / Logic";
+  }
 
   if (key === "figma") {
     return "Figma";
@@ -185,6 +259,10 @@ export function getAssetFormatLabel(asset: AssetCatalogInput) {
 
   const key = getAssetFormatKey(asset);
 
+  if (key === "audio") {
+    return "MP3 / WAV / STEMS";
+  }
+
   if (key === "figma") {
     return "FIG / FIGJAM";
   }
@@ -235,6 +313,14 @@ export function getAssetDeliveryLabel(asset: AssetCatalogInput) {
     return "Private access link";
   }
 
+  if (isAudioAssetCategory(asset.category)) {
+    const sortedFiles = sortAssetFiles(asset.files ?? []);
+    if (sortedFiles.some((file) => file.file_role === "source_zip")) {
+      return "Audio bundle + downloads";
+    }
+    return "Multi-file audio pack";
+  }
+
   const extension = getAssetFileExtension(getAssetPrimaryFilename(asset));
 
   if (extension === "zip") {
@@ -262,4 +348,49 @@ export function getAssetDeliveryLabel(asset: AssetCatalogInput) {
   }
 
   return "Instant download";
+}
+
+export function getAssetFileRoleLabel(file: AssetCatalogFile) {
+  const extension = getAssetFileExtension(file.original_name);
+
+  if (file.file_role === "audio_preview") {
+    return "MP3 Preview";
+  }
+
+  if (file.file_role === "source_wav") {
+    return "WAV File";
+  }
+
+  if (file.file_role === "source_zip") {
+    return "STEMS / Project ZIP";
+  }
+
+  if (file.file_role === "midi") {
+    return "MIDI File";
+  }
+
+  if (file.file_role === "project_file") {
+    if (extension === "flp") {
+      return "FL Studio Project";
+    }
+    if (extension === "als") {
+      return "Ableton Live Project";
+    }
+    if (extension === "logicx") {
+      return "Logic Pro Project";
+    }
+    if (extension === "mus" || extension === "musx") {
+      return "Finale Project";
+    }
+    if (extension && EXTENSION_LABELS[extension]) {
+      return `${EXTENSION_LABELS[extension]} Project`;
+    }
+    return "Project File";
+  }
+
+  if (extension && EXTENSION_LABELS[extension]) {
+    return EXTENSION_LABELS[extension];
+  }
+
+  return "Source File";
 }

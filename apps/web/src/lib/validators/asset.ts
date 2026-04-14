@@ -10,6 +10,7 @@ export const ASSET_CATEGORIES = [
   "Lightroom Presets",
   "Premiere Pro Templates",
   "After Effects Templates",
+  "Audio / Beats",
   "Creative Cloud Bundles",
   "Other Creative Cloud Assets"
 ] as const;
@@ -23,16 +24,31 @@ export const ADOBE_APP_CATEGORIES = [
   "After Effects Templates"
 ] as const;
 
-export const TEMPLATE_TYPES = ["canva", "figma", "adobe", "other"] as const;
+export const ASSET_TYPES = ["canva", "figma", "adobe", "audio", "other"] as const;
 export const CANVA_ASSET_CATEGORIES = ["Canva Templates"] as const;
 export const FIGMA_ASSET_CATEGORIES = ["Figma Templates"] as const;
+export const AUDIO_ASSET_CATEGORIES = ["Audio / Beats"] as const;
 export const OTHER_ASSET_CATEGORIES = ["Creative Cloud Bundles", "Other Creative Cloud Assets"] as const;
 export const PRICING_MODE_OPTIONS = ["free", "paid", "pay_what_you_want"] as const;
 export const DELIVERY_MODE_OPTIONS = ["file", "external_link"] as const;
+export const AUDIO_LICENSE_OPTIONS = ["personal_use", "commercial_use", "exclusive_rights"] as const;
+export const AUDIO_GENRE_OPTIONS = [
+  "Afrobeats",
+  "Amapiano",
+  "Drill",
+  "Gospel",
+  "Hip Hop",
+  "House",
+  "Lo-fi",
+  "Pop",
+  "R&B",
+  "Trap"
+] as const;
 
 export const MARKET_FILE_FILTERS = [
   { value: "all", label: "Any format" },
   { value: "editable", label: "Editable files" },
+  { value: "audio", label: "Audio / stems" },
   { value: "document", label: "Documents / PDF" },
   { value: "image", label: "Images / exports" },
   { value: "motion", label: "Motion / video" },
@@ -42,6 +58,10 @@ export const MARKET_FILE_FILTERS = [
 
 export const PRIMARY_ASSET_ACCEPT =
   ".zip,.pdf,.psd,.psb,.ai,.eps,.indd,.indt,.idml,.aep,.aet,.mogrt,.prproj,.prfpset,.xmp,.lrtemplate,.lrcat,.fig,.figjam,.sketch,.xd,.svg,.jpg,.jpeg,.png";
+export const AUDIO_PREVIEW_ACCEPT = ".mp3";
+export const AUDIO_WAV_ACCEPT = ".wav";
+export const AUDIO_BUNDLE_ACCEPT = ".zip";
+export const AUDIO_EXTRA_FILE_ACCEPT = ".zip,.flp,.als,.logicx,.mus,.musx,.mid,.midi,.cpr,.rpp,.ptx,.song";
 
 function normalizeExternalUrl(value: string) {
   return value.trim();
@@ -68,7 +88,7 @@ export const uploadAssetSchema = z
   .object({
     title: z.string().min(3).max(120),
     description: z.string().min(10).max(4000),
-    template_type: z.enum(TEMPLATE_TYPES),
+    asset_type: z.enum(ASSET_TYPES),
     category: z.enum(ASSET_CATEGORIES),
     tags: z.string().max(200).default(""),
     price: z.coerce.number().min(0),
@@ -77,12 +97,18 @@ export const uploadAssetSchema = z
     pricing_model: z.enum(PRICING_MODE_OPTIONS).default("paid"),
     delivery_mode: z.enum(DELIVERY_MODE_OPTIONS).default("file"),
     external_delivery_url: z.string().max(2000).default(""),
+    audio_genre: z.string().max(80).default(""),
+    audio_bpm: z.coerce.number().int().min(1).max(400).optional().nullable(),
+    audio_key: z.string().max(40).default(""),
+    license_options: z.array(z.enum(AUDIO_LICENSE_OPTIONS)).default([]),
     status: z.enum(["draft", "published"]).default("published")
   })
   .superRefine((value, context) => {
     const externalUrl = normalizeExternalUrl(value.external_delivery_url);
+    const audioGenre = value.audio_genre.trim();
+    const audioKey = value.audio_key.trim();
 
-    if (value.template_type === "canva") {
+    if (value.asset_type === "canva") {
       if (!(CANVA_ASSET_CATEGORIES as readonly string[]).includes(value.category)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -108,7 +134,7 @@ export const uploadAssetSchema = z
       }
     }
 
-    if (value.template_type === "figma" && !(FIGMA_ASSET_CATEGORIES as readonly string[]).includes(value.category)) {
+    if (value.asset_type === "figma" && !(FIGMA_ASSET_CATEGORIES as readonly string[]).includes(value.category)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["category"],
@@ -117,7 +143,7 @@ export const uploadAssetSchema = z
     }
 
     if (
-      value.template_type === "adobe" &&
+      value.asset_type === "adobe" &&
       !([...ADOBE_APP_CATEGORIES, "Creative Cloud Bundles"] as readonly string[]).includes(value.category)
     ) {
       context.addIssue({
@@ -127,7 +153,57 @@ export const uploadAssetSchema = z
       });
     }
 
-    if (value.template_type === "other" && !(OTHER_ASSET_CATEGORIES as readonly string[]).includes(value.category)) {
+    if (value.asset_type === "audio") {
+      if (!(AUDIO_ASSET_CATEGORIES as readonly string[]).includes(value.category)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["category"],
+          message: "Audio listings must stay in Audio / Beats."
+        });
+      }
+
+      if (value.delivery_mode !== "file") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["delivery_mode"],
+          message: "Audio / Beats listings are delivered as files."
+        });
+      }
+
+      if (!audioGenre) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["audio_genre"],
+          message: "Choose the beat genre."
+        });
+      }
+
+      if (typeof value.audio_bpm !== "number" || !Number.isFinite(value.audio_bpm)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["audio_bpm"],
+          message: "Add the BPM for this beat."
+        });
+      }
+
+      if (!audioKey) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["audio_key"],
+          message: "Add the musical key."
+        });
+      }
+
+      if (value.license_options.length === 0) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["license_options"],
+          message: "Choose at least one license type."
+        });
+      }
+    }
+
+    if (value.asset_type === "other" && !(OTHER_ASSET_CATEGORIES as readonly string[]).includes(value.category)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["category"],
@@ -150,7 +226,7 @@ export const uploadAssetSchema = z
         });
       }
 
-      if (value.template_type === "figma" && externalUrl && !hostIncludes(externalUrl, "figma.com")) {
+      if (value.asset_type === "figma" && externalUrl && !hostIncludes(externalUrl, "figma.com")) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["external_delivery_url"],

@@ -235,7 +235,7 @@ export function DashboardPage() {
           {dashboardQuery.isError ? <p className="mt-3 text-sm text-rose-700">Unable to load order data.</p> : null}
 
           {dashboardQuery.data && recentOrders.length === 0 ? (
-            <EmptyState title="No sales yet" body="Share your template listings and links to start collecting orders." />
+            <EmptyState title="No sales yet" body="Share your listings, previews, and delivery links to start collecting orders." />
           ) : null}
 
           {recentOrders.length > 0 ? (
@@ -317,7 +317,7 @@ export function DashboardPage() {
           {assetsQuery.isError ? <p className="mt-3 text-sm text-rose-700">Unable to load listings.</p> : null}
 
           {assetsQuery.data && assetList.length === 0 ? (
-            <EmptyState title="No uploads yet" body="Publish your first template listing from the upload page." />
+            <EmptyState title="No uploads yet" body="Publish your first asset listing from the upload page." />
           ) : null}
 
           {assetList.length > 0 ? (

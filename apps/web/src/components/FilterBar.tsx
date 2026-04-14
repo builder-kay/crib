@@ -33,14 +33,14 @@ export function FilterBar({
   return (
     <section className="surface-card discover-filter-panel p-3 md:p-4">
       <div className="grid gap-3 md:grid-cols-[2fr,1fr,1.2fr,1fr,auto]">
-        <SearchInput value={search} onChange={onSearchChange} placeholder="Search templates, creators, apps, or styles..." />
+        <SearchInput value={search} onChange={onSearchChange} placeholder="Search assets, beats, creators, apps, or styles..." />
 
         <select
           value={category}
           onChange={(event) => onCategoryChange(event.target.value)}
           className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
         >
-          <option value="all">All template categories</option>
+          <option value="all">All asset categories</option>
           {ASSET_CATEGORIES.map((item) => (
             <option key={item} value={item}>
               {item}

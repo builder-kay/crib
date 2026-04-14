@@ -1,9 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { ensureOrderDeliverySnapshot } from "../_shared/asset-delivery.ts";
+import { ensureOrderDeliveryFiles, ensureOrderDeliverySnapshot } from "../_shared/asset-delivery.ts";
 import { handleCors, jsonResponse } from "../_shared/cors.ts";
 
 type GenerateDownloadPayload = {
   order_id?: string;
+  order_file_id?: string;
   expires_in?: number;
 };
 
@@ -62,6 +63,7 @@ Deno.serve(async (request) => {
   }
 
   const orderId = typeof body.order_id === "string" ? body.order_id.trim() : "";
+  const orderFileId = typeof body.order_file_id === "string" ? body.order_file_id.trim() : "";
   const expiresIn = clampExpiry(body.expires_in);
 
   if (!orderId) {
@@ -147,10 +149,38 @@ Deno.serve(async (request) => {
     });
   }
 
+  let targetStoragePath = deliverySnapshot.storagePath;
+  let targetOriginalName = deliverySnapshot.originalName;
+  let targetActionLabel = deliverySnapshot.actionLabel;
+
+  if (orderFileId) {
+    const deliveryFiles = await ensureOrderDeliveryFiles(supabase, order.id);
+    const selectedFile = deliveryFiles.find((file) => file.id === orderFileId) ?? null;
+
+    if (!selectedFile) {
+      return jsonResponse({ error: "Requested delivery file not found for this order" }, 404);
+    }
+
+    targetStoragePath = selectedFile.storage_path;
+    targetOriginalName = selectedFile.original_name;
+    targetActionLabel =
+      selectedFile.file_role === "source_zip"
+        ? "Download ZIP bundle"
+        : selectedFile.file_role === "source_wav"
+          ? "Download WAV file"
+          : selectedFile.file_role === "audio_preview"
+            ? "Download MP3 preview"
+            : selectedFile.file_role === "project_file"
+              ? "Download project file"
+              : selectedFile.file_role === "midi"
+                ? "Download MIDI file"
+                : "Download file";
+  }
+
   const { data: signedData, error: signedError } = await supabase.storage
     .from("assets")
-    .createSignedUrl(deliverySnapshot.storagePath, expiresIn, {
-      download: deliverySnapshot.originalName
+    .createSignedUrl(targetStoragePath, expiresIn, {
+      download: targetOriginalName
     });
 
   if (signedError || !signedData) {
@@ -160,8 +190,8 @@ Deno.serve(async (request) => {
   return jsonResponse({
     url: signedData.signedUrl,
     expires_in: expiresIn,
-    filename: deliverySnapshot.originalName,
+    filename: targetOriginalName,
     delivery_type: "file",
-    action_label: deliverySnapshot.actionLabel
+    action_label: targetActionLabel
   });
 });

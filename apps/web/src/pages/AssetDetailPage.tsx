@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { AudioPreviewPlayer } from "@/components/AudioPreviewPlayer";
 import { ImageGalleryModal } from "@/components/ImageGalleryModal";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
@@ -23,10 +24,25 @@ import {
   unfollowCreator,
   upsertAssetReview
 } from "@/lib/api";
-import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFormatLabel, getAssetPrimaryFilename } from "@/lib/assetCatalog";
+import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFileRoleLabel, getAssetFormatLabel, getAssetPrimaryFilename, isAudioAsset, sortAssetFiles } from "@/lib/assetCatalog";
 import { formatDate, formatMajorCurrency } from "@/lib/format";
 import { startPaystackCheckout } from "@/lib/paystack";
 import { useAuthStore } from "@/store/authStore";
+
+const AUDIO_LICENSE_COPY = {
+  personal_use: {
+    label: "Personal Use",
+    terms: "For demos, practice sessions, and non-commercial personal projects."
+  },
+  commercial_use: {
+    label: "Commercial Use",
+    terms: "For monetized releases, client work, streaming, publishing, and performance."
+  },
+  exclusive_rights: {
+    label: "Exclusive Rights",
+    terms: "For buyers who want the beat removed from open licensing and reserved for their release."
+  }
+} as const;
 
 export function AssetDetailPage() {
   const { id = "" } = useParams();
@@ -181,7 +197,7 @@ export function AssetDetailPage() {
         const minimumAmountMajor = assetQuery.data.minimum_price_kobo / 100;
 
         if (!Number.isFinite(parsedAmount)) {
-          throw new Error("Enter the amount you want to pay for this template.");
+          throw new Error(`Enter the amount you want to pay for this ${productLabel}.`);
         }
 
         if (parsedAmount < minimumAmountMajor) {
@@ -373,12 +389,13 @@ export function AssetDetailPage() {
   }
 
   const asset = assetQuery.data;
+  const audioListing = isAudioAsset(asset);
   const isOwnAsset = Boolean(user?.id) && user?.id === asset.creator_id;
   const alreadyPurchased = existingPurchaseQuery.data === true;
   const isFreeAsset = asset.pricing_model === "free";
   const isPayWhatYouWant = asset.pricing_model === "pay_what_you_want";
   const isExternalLinkDelivery = asset.delivery_mode === "external_link";
-  const deliveryReviewLabel = isExternalLinkDelivery ? "template link" : "file";
+  const deliveryReviewLabel = isExternalLinkDelivery ? (audioListing ? "access link" : "template link") : "file";
   const deliveryPastAction = isExternalLinkDelivery ? "access it" : "download it";
   const purchaseAvailable = asset.status === "published" && !isOwnAsset && !alreadyPurchased;
   const canReview = Boolean(user?.id) && alreadyPurchased && !isOwnAsset;
@@ -409,7 +426,7 @@ export function AssetDetailPage() {
   const creatorSalesCount = Math.max(0, asset.profile?.sales_count ?? 0);
   const creatorSalesLabel = `${new Intl.NumberFormat("en-US").format(creatorSalesCount)} sales`;
   const creatorVerified = Boolean(asset.profile?.is_verified);
-  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Template Creator";
+  const creatorCategory = asset.profile?.creator_category || asset.profile?.niche || "Creative Seller";
   const assetSoldCount = Math.max(0, asset.sold_count ?? 0);
   const assetSoldLabel = `${new Intl.NumberFormat("en-US").format(assetSoldCount)} sold`;
   const creatorFollowerCount = followStatsQuery.data?.followerCount ?? 0;
@@ -425,6 +442,10 @@ export function AssetDetailPage() {
     ? `/profile/${asset.creator_id}`
     : `/auth?redirect=${encodeURIComponent(`/profile/${asset.creator_id}`)}`;
   const primaryPreview = galleryImages[0]?.src ?? "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
+  const includedFiles = sortAssetFiles(asset.files ?? []);
+  const audioLicenses = asset.license_options ?? [];
+  const productLabel = audioListing ? "audio pack" : "template";
+  const productLabelPlural = audioListing ? "audio packs" : "templates";
   const unavailableReason =
     asset.status !== "published"
       ? "Only published listings can be purchased."
@@ -486,6 +507,8 @@ export function AssetDetailPage() {
             </div>
           ) : null}
 
+          {audioListing && asset.audio_preview_url ? <AudioPreviewPlayer src={asset.audio_preview_url} title={asset.title} /> : null}
+
           <article className="surface-card p-5 md:p-6">
             <h2 className="font-display text-xl font-semibold text-ink">About This Listing</h2>
             <p className="mt-3 text-sm leading-relaxed text-sand-700">{asset.description}</p>
@@ -497,6 +520,31 @@ export function AssetDetailPage() {
                 </span>
               ))}
             </div>
+
+            {audioListing ? (
+              <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1fr)]">
+                <section className="rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">Beat Metadata</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <MetaItem label="Genre" value={asset.audio_genre ?? "Not set"} preserveCase />
+                    <MetaItem label="BPM" value={asset.audio_bpm ? `${asset.audio_bpm}` : "Not set"} preserveCase />
+                    <MetaItem label="Key" value={asset.audio_key ?? "Not set"} preserveCase />
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-forest-100 bg-forest-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-forest-700">Editable Files Included</p>
+                  <div className="mt-3 space-y-2">
+                    {includedFiles.map((file) => (
+                      <div key={file.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-sm">
+                        <span className="font-medium text-ink">{getAssetFileRoleLabel(file)}</span>
+                        <span className="truncate text-xs text-sand-600">{file.original_name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ) : null}
 
             <div className="mt-5 grid gap-3 rounded-xl border border-sand-200 bg-sand-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
@@ -523,6 +571,31 @@ export function AssetDetailPage() {
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-sand-500">Primary file</p>
                 <p className="mt-1 break-all font-mono text-xs text-sand-700">{primaryFileName}</p>
               </div>
+            ) : null}
+
+            {audioListing && audioLicenses.length > 0 ? (
+              <section className="mt-4 space-y-3 rounded-xl border border-sand-200 bg-white p-4">
+                <div>
+                  <h3 className="font-display text-lg font-semibold text-ink">Licensing Options</h3>
+                  <p className="mt-1 text-sm text-sand-600">License terms are visible before purchase so buyers can choose the usage rights they need.</p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  {audioLicenses.map((license) => {
+                    const copy = AUDIO_LICENSE_COPY[license];
+                    if (!copy) {
+                      return null;
+                    }
+
+                    return (
+                      <article key={license} className="rounded-xl border border-sand-200 bg-sand-50 p-3">
+                        <p className="font-semibold text-ink">{copy.label}</p>
+                        <p className="mt-2 text-sm text-sand-700">{copy.terms}</p>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
             ) : null}
 
             <section className="mt-6 space-y-4 rounded-xl border border-sand-200 bg-white p-4">
@@ -633,6 +706,26 @@ export function AssetDetailPage() {
             Compatible with {appLabel}. Delivered as {deliveryLabel.toLowerCase()}.
           </p>
 
+          {audioListing ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {asset.audio_genre ? (
+                <span className="rounded-full border border-cobalt-100 bg-cobalt-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cobalt-700">
+                  {asset.audio_genre}
+                </span>
+              ) : null}
+              {asset.audio_bpm ? (
+                <span className="rounded-full border border-sand-200 bg-sand-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sand-700">
+                  {asset.audio_bpm} BPM
+                </span>
+              ) : null}
+              {asset.audio_key ? (
+                <span className="rounded-full border border-forest-100 bg-forest-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-forest-700">
+                  {asset.audio_key}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-3 flex items-center gap-2 text-sm text-sand-700">
             <StarRating value={averageRating} size="sm" />
             <span>{reviewCount > 0 ? `${averageRating.toFixed(1)}/5 (${reviewCount})` : "No reviews yet"}</span>
@@ -677,7 +770,7 @@ export function AssetDetailPage() {
             </div>
           ) : isFreeAsset ? (
             <div className="mt-3 rounded-2xl border border-forest-100 bg-forest-50 p-4 text-sm text-forest-900">
-              This template is free to claim. We still create an order record and receipt so you can reopen it later from Orders.
+              This {productLabel} is free to claim. We still create an order record and receipt so you can reopen it later from Orders.
             </div>
           ) : null}
 
@@ -685,8 +778,8 @@ export function AssetDetailPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cobalt-700">{isFreeAsset ? "Instant Access" : "Escrow Checkout"}</p>
             <p className="mt-2 text-sm text-cobalt-900">
               {isFreeAsset
-                ? `Claiming this template adds it to your orders instantly so you can open the ${deliveryReviewLabel} and keep the receipt for later.`
-                : `Payment unlocks your ${isExternalLinkDelivery ? "private template link" : "secure download"}, but the seller payout stays in escrow first. Open the ${deliveryReviewLabel}, make sure it matches the listing, then confirm it is genuine or report a scam from Orders.`}
+                ? `Claiming this ${productLabel} adds it to your orders instantly so you can open the ${deliveryReviewLabel} and keep the receipt for later.`
+                : `Payment unlocks your ${isExternalLinkDelivery ? "private access link" : "secure download"}, but the seller payout stays in escrow first. Open the ${deliveryReviewLabel}, make sure it matches the listing, then confirm it is genuine or report a scam from Orders.`}
             </p>
             {!isFreeAsset ? (
               <p className="mt-2 text-xs text-cobalt-900/80">
@@ -712,7 +805,10 @@ export function AssetDetailPage() {
                 return;
               }
               if (!user) {
-                pushToast(isFreeAsset ? "Sign in to claim templates and access your orders." : "Sign in to buy templates and access your downloads.", "info");
+                pushToast(
+                  isFreeAsset ? `Sign in to claim ${productLabelPlural} and access your orders.` : `Sign in to buy ${productLabelPlural} and access your downloads.`,
+                  "info"
+                );
                 navigate(`/auth?redirect=${encodeURIComponent(`/asset/${asset.id}`)}`);
                 return;
               }
@@ -787,7 +883,9 @@ export function AssetDetailPage() {
 
           {purchaseAvailable && !user ? (
             <div className="mt-3 rounded-xl border border-sand-200 bg-sand-50 px-3 py-2.5 text-xs text-sand-700">
-              {isFreeAsset ? "Sign in to claim this template and keep it in your orders." : "Sign in to buy this template, verify payment, and access creator profiles."}
+              {isFreeAsset
+                ? `Sign in to claim this ${productLabel} and keep it in your orders.`
+                : `Sign in to buy this ${productLabel}, verify payment, and access creator profiles.`}
             </div>
           ) : null}
 

@@ -5,14 +5,30 @@ import { UploadDropzone } from "@/components/UploadDropzone";
 import { useToast } from "@/components/Toast";
 import { createAssetListing } from "@/lib/api";
 import { formatMajorCurrency } from "@/lib/format";
-import { formatFileSize, MAX_PREVIEW_FILES, MAX_PREVIEW_FILE_SIZE_BYTES, MAX_PRIMARY_ASSET_SIZE_BYTES } from "@/lib/uploadLimits";
+import {
+  formatFileSize,
+  MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES,
+  MAX_AUDIO_EXTRA_FILE_SIZE_BYTES,
+  MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES,
+  MAX_AUDIO_WAV_FILE_SIZE_BYTES,
+  MAX_PREVIEW_FILES,
+  MAX_PREVIEW_FILE_SIZE_BYTES,
+  MAX_PRIMARY_ASSET_SIZE_BYTES
+} from "@/lib/uploadLimits";
 import {
   ADOBE_APP_CATEGORIES,
+  ASSET_TYPES,
+  AUDIO_ASSET_CATEGORIES,
+  AUDIO_BUNDLE_ACCEPT,
+  AUDIO_EXTRA_FILE_ACCEPT,
+  AUDIO_GENRE_OPTIONS,
+  AUDIO_LICENSE_OPTIONS,
+  AUDIO_PREVIEW_ACCEPT,
+  AUDIO_WAV_ACCEPT,
   CANVA_ASSET_CATEGORIES,
   FIGMA_ASSET_CATEGORIES,
   OTHER_ASSET_CATEGORIES,
   PRIMARY_ASSET_ACCEPT,
-  TEMPLATE_TYPES,
   uploadAssetSchema
 } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
@@ -89,6 +105,14 @@ const TEMPLATE_TYPE_CONTENT = {
     deliverySummary: "File-based delivery is ideal for PSD, AI, INDD, preset packs, and bundled Adobe assets.",
     categories: [...ADOBE_APP_CATEGORIES, "Creative Cloud Bundles"] as const
   },
+  audio: {
+    label: "Audio / Beats",
+    description: "Sell editable beats, stems, DAW sessions, MIDI, and production-ready source files.",
+    contentLabel: "Upload the preview and editable audio package",
+    contentHint: "MP3 preview is required for playback, while WAV, ZIP, project files, and MIDI power the paid delivery.",
+    deliverySummary: "Crib prioritizes editable audio assets, so sellers should package stems, project files, and MIDI wherever possible.",
+    categories: AUDIO_ASSET_CATEGORIES
+  },
   other: {
     label: "Other",
     description: "Use this for PDF layouts, print-ready templates, poster packs, or generic editable design assets.",
@@ -97,18 +121,36 @@ const TEMPLATE_TYPE_CONTENT = {
     deliverySummary: "Use file delivery for universal template packs, posters, envelopes, and ready-made design kits.",
     categories: OTHER_ASSET_CATEGORIES
   }
-} satisfies Record<(typeof TEMPLATE_TYPES)[number], { label: string; description: string; contentLabel: string; contentHint: string; deliverySummary: string; categories: readonly string[] }>;
+} satisfies Record<(typeof ASSET_TYPES)[number], { label: string; description: string; contentLabel: string; contentHint: string; deliverySummary: string; categories: readonly string[] }>;
+
+const AUDIO_LICENSE_CARD_CONTENT = [
+  {
+    value: "personal_use",
+    label: "Personal Use",
+    description: "For demos, practice sessions, and non-commercial releases."
+  },
+  {
+    value: "commercial_use",
+    label: "Commercial Use",
+    description: "For monetized releases, client work, streaming, and performance."
+  },
+  {
+    value: "exclusive_rights",
+    label: "Exclusive Rights",
+    description: "For buyers who want the beat taken off the open marketplace."
+  }
+] as const satisfies ReadonlyArray<{ value: (typeof AUDIO_LICENSE_OPTIONS)[number]; label: string; description: string }>;
 
 const PRICING_OPTIONS = [
   {
     value: "free",
     label: "Free",
-    description: "Let buyers claim the template at no cost. Great for audience growth and lead generation."
+    description: "Let buyers claim the asset at no cost. Great for audience growth and lead generation."
   },
   {
     value: "paid",
     label: "Paid",
-    description: "Use one fixed price for every buyer. Best for premium templates and bundles."
+    description: "Use one fixed price for every buyer. Best for premium assets and bundles."
   },
   {
     value: "pay_what_you_want",
@@ -118,7 +160,7 @@ const PRICING_OPTIONS = [
 ] as const;
 
 type UploadStepId = "template" | "content" | "details" | "thumbnail";
-type TemplateType = (typeof TEMPLATE_TYPES)[number];
+type TemplateType = (typeof ASSET_TYPES)[number];
 
 function getDefaultCategory(templateType: TemplateType) {
   return TEMPLATE_TYPE_CONTENT[templateType].categories[0];
@@ -126,6 +168,11 @@ function getDefaultCategory(templateType: TemplateType) {
 
 function getDefaultDeliveryMode(templateType: TemplateType) {
   return templateType === "canva" ? "external_link" : templateType === "figma" ? "external_link" : "file";
+}
+
+function hasAllowedExtension(file: File, allowedExtensions: readonly string[]) {
+  const normalized = file.name.trim().toLowerCase();
+  return allowedExtensions.some((extension) => normalized.endsWith(extension));
 }
 
 export function UploadPage() {
@@ -138,6 +185,10 @@ export function UploadPage() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string>(getDefaultCategory("canva"));
   const [tags, setTags] = useState("");
+  const [audioGenre, setAudioGenre] = useState<string>(AUDIO_GENRE_OPTIONS[0]);
+  const [audioBpm, setAudioBpm] = useState("");
+  const [audioKey, setAudioKey] = useState("");
+  const [licenseOptions, setLicenseOptions] = useState<Array<(typeof AUDIO_LICENSE_OPTIONS)[number]>>([]);
   const [price, setPrice] = useState("5");
   const [minimumPrice, setMinimumPrice] = useState("0");
   const [currency, setCurrency] = useState("GHS");
@@ -146,11 +197,16 @@ export function UploadPage() {
   const [externalDeliveryUrl, setExternalDeliveryUrl] = useState("");
   const status: "published" = "published";
   const [mainFile, setMainFile] = useState<File[]>([]);
+  const [audioPreviewFile, setAudioPreviewFile] = useState<File[]>([]);
+  const [audioWavFile, setAudioWavFile] = useState<File[]>([]);
+  const [audioBundleFile, setAudioBundleFile] = useState<File[]>([]);
+  const [audioExtraFiles, setAudioExtraFiles] = useState<File[]>([]);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [activeStepId, setActiveStepId] = useState<UploadStepId>("template");
 
   const activeTemplate = TEMPLATE_TYPE_CONTENT[templateType];
   const categoryOptions = activeTemplate.categories as readonly string[];
+  const isAudioAsset = templateType === "audio";
 
   useEffect(() => {
     if (!categoryOptions.includes(category)) {
@@ -172,6 +228,12 @@ export function UploadPage() {
     if (nextDeliveryMode === "file") {
       setExternalDeliveryUrl("");
     }
+    if (templateType !== "audio") {
+      setAudioPreviewFile([]);
+      setAudioWavFile([]);
+      setAudioBundleFile([]);
+      setAudioExtraFiles([]);
+    }
   }, [category, categoryOptions, deliveryMode, templateType]);
 
   const numericPrice = Number(price);
@@ -183,35 +245,69 @@ export function UploadPage() {
   const estimatedSellerNet = Math.max(estimatedBuyerSpend - estimatedCommission, 0);
   const requiresFile = deliveryMode === "file";
   const requiresLink = deliveryMode === "external_link";
+  const hasRequiredAudioFiles = audioPreviewFile.length === 1 && audioWavFile.length === 1 && audioBundleFile.length === 1;
 
   const steps = useMemo(
     () => [
       {
         id: "template" as const,
-        title: "Template type",
-        description: "Choose the design tool and delivery style for this listing.",
+        title: "Asset type",
+        description: "Choose the creative tool and delivery setup for this listing.",
         done: Boolean(templateType && category && deliveryMode)
       },
       {
         id: "content" as const,
-        title: "Content",
-        description: "Paste the access link or upload the source file buyers should receive.",
-        done: requiresLink ? Boolean(externalDeliveryUrl.trim()) : mainFile.length === 1
+        title: isAudioAsset ? "Audio files" : "Content",
+        description: isAudioAsset
+          ? "Upload the public MP3 preview plus the editable files buyers unlock after purchase."
+          : "Paste the access link or upload the source file buyers should receive.",
+        done: isAudioAsset ? hasRequiredAudioFiles : requiresLink ? Boolean(externalDeliveryUrl.trim()) : mainFile.length === 1
       },
       {
         id: "details" as const,
         title: "Metadata & pricing",
-        description: "Add the title, story, pricing, and tags that sell the template.",
-        done: Boolean(title.trim() && description.trim().length >= 10 && currency.trim())
+        description: isAudioAsset
+          ? "Add beat metadata, license options, pricing, and tags that explain what buyers can edit."
+          : "Add the title, story, pricing, and tags that sell the asset.",
+        done: isAudioAsset
+          ? Boolean(
+              title.trim() &&
+                description.trim().length >= 10 &&
+                currency.trim() &&
+                audioGenre.trim() &&
+                audioBpm.trim() &&
+                audioKey.trim() &&
+                licenseOptions.length > 0
+            )
+          : Boolean(title.trim() && description.trim().length >= 10 && currency.trim())
       },
       {
         id: "thumbnail" as const,
-        title: "Thumbnail",
-        description: "Upload preview images so the listing looks strong in the marketplace.",
+        title: isAudioAsset ? "Cover art" : "Thumbnail",
+        description: isAudioAsset
+          ? "Upload cover art or promo stills so the beat stands out in the marketplace."
+          : "Upload preview images so the listing looks strong in the marketplace.",
         done: previewFiles.length > 0
       }
     ],
-    [category, currency, deliveryMode, description, externalDeliveryUrl, mainFile.length, previewFiles.length, templateType, title, requiresLink]
+    [
+      audioBpm,
+      audioGenre,
+      audioKey,
+      category,
+      currency,
+      deliveryMode,
+      description,
+      externalDeliveryUrl,
+      hasRequiredAudioFiles,
+      isAudioAsset,
+      licenseOptions.length,
+      mainFile.length,
+      previewFiles.length,
+      templateType,
+      title,
+      requiresLink
+    ]
   );
 
   const activeStepIndex = steps.findIndex((step) => step.id === activeStepId);
@@ -234,14 +330,68 @@ export function UploadPage() {
         throw new Error("You must be signed in");
       }
 
-      if (requiresFile && mainFile.length !== 1) {
-        throw new Error("Upload exactly one main template file for file-based delivery.");
+      if (!isAudioAsset && requiresFile && mainFile.length !== 1) {
+        throw new Error("Upload exactly one main asset file for file-based delivery.");
       }
 
-      if (requiresFile && mainFile[0].size > MAX_PRIMARY_ASSET_SIZE_BYTES) {
+      if (!isAudioAsset && requiresFile && mainFile[0].size > MAX_PRIMARY_ASSET_SIZE_BYTES) {
         throw new Error(
           `Primary file is too large (${formatFileSize(mainFile[0].size)}). Limit is ${formatFileSize(MAX_PRIMARY_ASSET_SIZE_BYTES)}.`
         );
+      }
+
+      if (isAudioAsset) {
+        if (!hasRequiredAudioFiles) {
+          throw new Error("Audio listings require an MP3 preview, WAV file, and ZIP bundle.");
+        }
+
+        const previewAudio = audioPreviewFile[0];
+        const wavAudio = audioWavFile[0];
+        const bundleAudio = audioBundleFile[0];
+        if (!previewAudio || !wavAudio || !bundleAudio) {
+          throw new Error("Audio listings require an MP3 preview, WAV file, and ZIP bundle.");
+        }
+
+        if (!hasAllowedExtension(previewAudio, [".mp3"])) {
+          throw new Error("Audio preview must be an MP3 file.");
+        }
+        if (!hasAllowedExtension(wavAudio, [".wav"])) {
+          throw new Error("High-quality audio delivery must be a WAV file.");
+        }
+        if (!hasAllowedExtension(bundleAudio, [".zip"])) {
+          throw new Error("Stem and project delivery must be uploaded as a ZIP file.");
+        }
+
+        if (previewAudio.size > MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES) {
+          throw new Error(
+            `MP3 preview is too large (${formatFileSize(previewAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES)}.`
+          );
+        }
+        if (wavAudio.size > MAX_AUDIO_WAV_FILE_SIZE_BYTES) {
+          throw new Error(
+            `WAV file is too large (${formatFileSize(wavAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_WAV_FILE_SIZE_BYTES)}.`
+          );
+        }
+        if (bundleAudio.size > MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES) {
+          throw new Error(
+            `ZIP bundle is too large (${formatFileSize(bundleAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES)}.`
+          );
+        }
+
+        const invalidExtraFile = audioExtraFiles.find(
+          (file) =>
+            !hasAllowedExtension(file, [".zip", ".flp", ".als", ".logicx", ".mus", ".musx", ".mid", ".midi", ".cpr", ".rpp", ".ptx", ".song"])
+        );
+        if (invalidExtraFile) {
+          throw new Error(`"${invalidExtraFile.name}" is not a supported project or MIDI format.`);
+        }
+
+        const oversizedExtraFile = audioExtraFiles.find((file) => file.size > MAX_AUDIO_EXTRA_FILE_SIZE_BYTES);
+        if (oversizedExtraFile) {
+          throw new Error(
+            `"${oversizedExtraFile.name}" is too large (${formatFileSize(oversizedExtraFile.size)}). Limit is ${formatFileSize(MAX_AUDIO_EXTRA_FILE_SIZE_BYTES)}.`
+          );
+        }
       }
 
       if (previewFiles.length === 0) {
@@ -262,7 +412,7 @@ export function UploadPage() {
       const parsed = uploadAssetSchema.safeParse({
         title,
         description,
-        template_type: templateType,
+        asset_type: templateType,
         category,
         tags,
         price,
@@ -271,6 +421,10 @@ export function UploadPage() {
         pricing_model: pricingModel,
         delivery_mode: deliveryMode,
         external_delivery_url: externalDeliveryUrl,
+        audio_genre: isAudioAsset ? audioGenre : "",
+        audio_bpm: isAudioAsset && audioBpm.trim() ? audioBpm : undefined,
+        audio_key: isAudioAsset ? audioKey : "",
+        license_options: isAudioAsset ? licenseOptions : [],
         status
       });
 
@@ -278,10 +432,17 @@ export function UploadPage() {
         throw new Error(parsed.error.issues[0]?.message ?? "Invalid upload form");
       }
 
-      return createAssetListing(user.id, parsed.data, requiresFile ? (mainFile[0] ?? null) : null, previewFiles);
+      return createAssetListing(user.id, parsed.data, {
+        mainFile: !isAudioAsset && requiresFile ? (mainFile[0] ?? null) : null,
+        previewFiles,
+        audioPreviewFile: isAudioAsset ? (audioPreviewFile[0] ?? null) : null,
+        audioWavFile: isAudioAsset ? (audioWavFile[0] ?? null) : null,
+        audioBundleFile: isAudioAsset ? (audioBundleFile[0] ?? null) : null,
+        audioExtraFiles: isAudioAsset ? audioExtraFiles : []
+      });
     },
     onSuccess: ({ assetId }) => {
-      pushToast("Template listing uploaded successfully", "success");
+      pushToast(isAudioAsset ? "Audio pack uploaded successfully" : "Template listing uploaded successfully", "success");
       navigate(`/asset/${assetId}`);
     },
     onError: (error) => {
@@ -307,9 +468,9 @@ export function UploadPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-600">Creator Studio</p>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="font-display text-3xl font-bold text-ink md:text-4xl">Upload Design Template</h1>
+            <h1 className="font-display text-3xl font-bold text-ink md:text-4xl">Upload Creative Asset</h1>
             <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
-              Start with the template type, choose how buyers receive it, then finish the metadata and thumbnail before you publish.
+              Start with the asset type, choose how buyers receive it, then finish the metadata and cover visuals before you publish.
             </p>
           </div>
 
@@ -363,8 +524,8 @@ export function UploadPage() {
           <div className="mt-5 space-y-5">
             {activeStep.id === "template" ? (
               <>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {TEMPLATE_TYPES.map((option) => {
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {ASSET_TYPES.map((option) => {
                     const config = TEMPLATE_TYPE_CONTENT[option];
                     return (
                       <ChoiceCard
@@ -382,7 +543,7 @@ export function UploadPage() {
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),280px]">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Selected flow</p>
-                      <h3 className="mt-2 font-display text-xl font-semibold text-ink">{activeTemplate.label} template setup</h3>
+                      <h3 className="mt-2 font-display text-xl font-semibold text-ink">{activeTemplate.label} asset setup</h3>
                       <p className="mt-2 text-sm text-sand-700">{activeTemplate.deliverySummary}</p>
                     </div>
 
@@ -428,7 +589,7 @@ export function UploadPage() {
                         </div>
                       ) : (
                         <div className="rounded-xl border border-sand-200 bg-sand-50 px-3 py-2 text-xs text-sand-600">
-                          Delivery is fixed to <span className="font-semibold text-ink">{deliveryMode === "external_link" ? "access link" : "file upload"}</span> for this template type.
+                          Delivery is fixed to <span className="font-semibold text-ink">{deliveryMode === "external_link" ? "access link" : "file upload"}</span> for this asset type.
                         </div>
                       )}
                     </div>
@@ -445,7 +606,71 @@ export function UploadPage() {
                   <p className="mt-2 text-sm text-sand-700">{activeTemplate.contentHint}</p>
                 </div>
 
-                {requiresLink ? (
+                {isAudioAsset ? (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-forest-100 bg-forest-50 p-4 text-sm text-forest-900">
+                      <p className="font-semibold text-forest-950">Editable audio first</p>
+                      <p className="mt-2">
+                        Sellers should include STEMS, project files, and MIDI whenever possible so buyers can open, edit, and reuse the beat in their own production workflow.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
+                        <UploadDropzone
+                          label="MP3 preview file"
+                          accept={AUDIO_PREVIEW_ACCEPT}
+                          files={audioPreviewFile}
+                          onFilesChange={(files) => setAudioPreviewFile(files.slice(0, 1))}
+                          helperText={`Required for playback on the product page. Max ${formatFileSize(MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES)}.`}
+                          badge="Required"
+                          emptyStateHint="Upload the MP3 preview buyers can audition before purchase."
+                          tone="cobalt"
+                        />
+                      </div>
+
+                      <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
+                        <UploadDropzone
+                          label="WAV file"
+                          accept={AUDIO_WAV_ACCEPT}
+                          files={audioWavFile}
+                          onFilesChange={(files) => setAudioWavFile(files.slice(0, 1))}
+                          helperText={`Required high-quality version. Max ${formatFileSize(MAX_AUDIO_WAV_FILE_SIZE_BYTES)}.`}
+                          badge="Required"
+                          emptyStateHint="Upload the full-resolution WAV buyers receive after purchase."
+                          tone="cobalt"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
+                      <UploadDropzone
+                        label="STEMS / project ZIP"
+                        accept={AUDIO_BUNDLE_ACCEPT}
+                        files={audioBundleFile}
+                        onFilesChange={(files) => setAudioBundleFile(files.slice(0, 1))}
+                        helperText={`Required bundle for stems, DAW sessions, and optional MIDI. Max ${formatFileSize(MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES)}.`}
+                        badge="Required"
+                        emptyStateHint="Bundle drums, bass, melody, project files, and extras into one ZIP package."
+                        tone="cobalt"
+                      />
+                    </div>
+
+                    <div className="upload-files-dropzone-card upload-files-dropzone-card-lagoon">
+                      <UploadDropzone
+                        label="Optional project files and MIDI"
+                        accept={AUDIO_EXTRA_FILE_ACCEPT}
+                        files={audioExtraFiles}
+                        onFilesChange={setAudioExtraFiles}
+                        multiple
+                        helperText={`Optional extras like .flp, .als, .logicx, .musx, .mid, or extra ZIPs. Max ${formatFileSize(MAX_AUDIO_EXTRA_FILE_SIZE_BYTES)} each.`}
+                        badge="Optional"
+                        emptyStateHint="Attach individual DAW project files or MIDI if you want buyers to download them separately."
+                        tone="lagoon"
+                      />
+                    </div>
+                  </div>
+                ) : requiresLink ? (
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),260px]">
                     <Field
                       label={templateType === "canva" ? "Canva template link" : templateType === "figma" ? "Figma file link" : "Access link"}
@@ -463,7 +688,7 @@ export function UploadPage() {
                 ) : (
                   <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
                     <UploadDropzone
-                      label="Primary template file"
+                      label="Primary asset file"
                       accept={PRIMARY_ASSET_ACCEPT}
                       files={mainFile}
                       onFilesChange={(files) => setMainFile(files.slice(0, 1))}
@@ -480,22 +705,109 @@ export function UploadPage() {
             {activeStep.id === "details" ? (
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Title" value={title} onChange={setTitle} required emphasizedLabel controlClassName={controlToneClass} />
+                  <Field
+                    label={isAudioAsset ? "Beat Title" : "Title"}
+                    value={title}
+                    onChange={setTitle}
+                    required
+                    emphasizedLabel
+                    controlClassName={controlToneClass}
+                  />
                   <Field
                     label="Tags / use cases"
                     value={tags}
                     onChange={setTags}
                     controlClassName={controlToneClass}
-                    helperText="Examples: flyer, church event, social media, business, wedding, fashion."
+                    helperText={
+                      isAudioAsset
+                        ? "Examples: afrobeats, warm keys, worship, club, cinematic, female vocal sample."
+                        : "Examples: flyer, church event, social media, business, wedding, fashion."
+                    }
                   />
                 </div>
 
                 <Field label="Description" value={description} onChange={setDescription} multiline required controlClassName={controlToneClass} />
 
+                {isAudioAsset ? (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium text-sand-800">Genre</span>
+                        <select
+                          value={audioGenre}
+                          onChange={(event) => setAudioGenre(event.target.value)}
+                          className={`w-full rounded-xl px-3 py-2 outline-none transition ${controlToneClass}`}
+                        >
+                          {AUDIO_GENRE_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <Field
+                        label="BPM"
+                        type="number"
+                        value={audioBpm}
+                        onChange={setAudioBpm}
+                        required
+                        controlClassName={controlToneClass}
+                        helperText="Tempo buyers will load into their DAW session."
+                      />
+
+                      <Field
+                        label="Key"
+                        value={audioKey}
+                        onChange={setAudioKey}
+                        required
+                        controlClassName={controlToneClass}
+                        helperText="Example: C Major, A Minor, F# Minor."
+                      />
+                    </div>
+
+                    <div className="space-y-3 rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                      <div>
+                        <p className="text-sm font-medium text-sand-800">Licensing</p>
+                        <p className="mt-1 text-xs text-sand-600">
+                          Choose at least one license so buyers can understand what usage rights are available before purchase.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        {AUDIO_LICENSE_CARD_CONTENT.map((option) => {
+                          const selected = licenseOptions.includes(option.value);
+                          return (
+                            <ChoiceCard
+                              key={option.value}
+                              active={selected}
+                              label={option.label}
+                              description={option.description}
+                              onClick={() =>
+                                setLicenseOptions((current) =>
+                                  current.includes(option.value)
+                                    ? current.filter((value) => value !== option.value)
+                                    : [...current, option.value]
+                                )
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+
+                      <p className="text-xs text-sand-600">Pricing should reflect the full editable package: WAV, stems, project files, and any included MIDI.</p>
+                    </div>
+                  </>
+                ) : null}
+
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm font-medium text-sand-800">Monetization</p>
-                    <p className="mt-1 text-xs text-sand-600">Choose whether this template is free, fixed-price, or pay-what-you-want.</p>
+                    <p className="mt-1 text-xs text-sand-600">
+                      {isAudioAsset
+                        ? "Choose whether this editable audio pack is free, fixed-price, or pay-what-you-want."
+                        : "Choose whether this asset is free, fixed-price, or pay-what-you-want."}
+                    </p>
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-3">
@@ -571,7 +883,7 @@ export function UploadPage() {
                 <div className="upload-profit-panel">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sunset-700">Earnings estimate</p>
                   <p className="mt-2 text-sm text-sand-700">
-                    At the current template price, Crib keeps a 10% marketplace commission on successful paid sales.
+                    At the current listing price, Crib keeps a 10% marketplace commission on successful paid sales.
                   </p>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -587,9 +899,13 @@ export function UploadPage() {
               <div className="space-y-4">
                 <div className="rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Thumbnail first</p>
-                  <h3 className="mt-1 font-display text-xl font-semibold text-ink">Upload the visuals that sell the template</h3>
+                  <h3 className="mt-1 font-display text-xl font-semibold text-ink">
+                    {isAudioAsset ? "Upload the visuals that sell the beat" : "Upload the visuals that sell the asset"}
+                  </h3>
                   <p className="mt-2 text-sm text-sand-700">
-                    Your first preview becomes the lead thumbnail buyers notice in the marketplace, so use your strongest mockup or cleanest cover image.
+                    {isAudioAsset
+                      ? "Your first preview becomes the lead cover image beside the audio player, so use your strongest beat artwork or promo still."
+                      : "Your first preview becomes the lead thumbnail buyers notice in the marketplace, so use your strongest mockup or cleanest cover image."}
                   </p>
                 </div>
 
@@ -602,7 +918,11 @@ export function UploadPage() {
                     multiple
                     helperText={`Required. Up to ${MAX_PREVIEW_FILES} images, ${formatFileSize(MAX_PREVIEW_FILE_SIZE_BYTES)} each.`}
                     badge="Required"
-                    emptyStateHint="Upload the thumbnail buyers see first, then any extra previews that show pages, screens, or layers."
+                    emptyStateHint={
+                      isAudioAsset
+                        ? "Upload cover art first, then any extra visuals that show the vibe, session layout, or licensing artwork."
+                        : "Upload the thumbnail buyers see first, then any extra previews that show pages, screens, or layers."
+                    }
                     tone="lagoon"
                   />
                 </div>
@@ -626,7 +946,7 @@ export function UploadPage() {
                   disabled={uploadMutation.isPending}
                   className="upload-nav-button upload-nav-button-primary upload-nav-button-primary-template disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {uploadMutation.isPending ? "Saving..." : "Publish template"}
+                  {uploadMutation.isPending ? "Saving..." : isAudioAsset ? "Publish audio pack" : "Publish asset"}
                 </button>
               )}
             </div>

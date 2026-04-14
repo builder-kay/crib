@@ -3,7 +3,7 @@ import { routePreloaders } from "@/routes/pageLoaders";
 
 const metrics = [
   { label: "Active sellers", value: "620+" },
-  { label: "Template packs", value: "4.8k+" },
+  { label: "Creative assets", value: "4.8k+" },
   { label: "African cities", value: "26" },
   { label: "Creative tools", value: "10+" }
 ];
@@ -18,7 +18,8 @@ const citySignals = [
   "Johannesburg creator media kits",
   "Abidjan packaging layouts",
   "Cape Town presentation systems",
-  "Kampala wedding album spreads"
+  "Kampala wedding album spreads",
+  "Lusaka Afrobeat stem bundles"
 ];
 
 const spotlightTiles = [
@@ -62,11 +63,11 @@ export function LandingPage() {
           <div className="space-y-4 md:space-y-5">
             <p className="chip-spectrum w-fit landing-reveal">Creative marketplace</p>
             <h1 className="headline text-[2.1rem] leading-tight sm:text-[2.4rem] md:text-5xl lg:text-6xl">
-              Buy and sell creative templates from local creators.
+              Buy and sell editable creative assets from local creators.
             </h1>
             <p className="max-w-2xl text-sm text-sand-700 md:text-base">
-              Crib starts with one clear product type: editable templates, source files, presets, and digital packs. Buyers discover
-              high-fit work from local creators across African cities, then purchase with confidence from profile-rich storefronts.
+              Crib is built for editable creative assets: templates, source files, beat packs, stems, presets, and digital production kits.
+              Buyers discover high-fit work from local creators across African cities, then purchase with confidence from profile-rich storefronts.
             </p>
 
             <div className="flex flex-wrap gap-3 pt-1">
@@ -101,7 +102,7 @@ export function LandingPage() {
               <SignalChip label="Figma UI kits" />
               <SignalChip label="Canva launch packs" />
               <SignalChip label="Brand deck systems" />
-              <SignalChip label="Social media templates" />
+              <SignalChip label="Beat stems and MIDI" />
               <SignalChip label="Motion promo scenes" />
             </div>
           </div>
@@ -172,7 +173,7 @@ export function LandingPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/80">Launch your creative storefront</p>
             <h2 className="mt-2 font-display text-2xl font-bold leading-tight md:text-4xl">
-              Turn your creative workflow into income with a storefront built for templates.
+              Turn your creative workflow into income with a storefront built for editable assets.
             </h2>
             <p className="mt-3 max-w-2xl text-sm text-white/80 md:text-base">
               Publish editable files, show polished previews, and grow through focused discovery instead of competing with every digital product at once.

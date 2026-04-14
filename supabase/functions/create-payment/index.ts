@@ -263,8 +263,8 @@ Deno.serve(async (request) => {
   const externalDeliveryUrl = deliveryMode === "external_link" ? normalizeUrl(asset.external_delivery_url) : null;
   if (deliveryMode === "external_link" && !externalDeliveryUrl) {
     return jsonResponse(
-      {
-        error: "This template is missing its delivery link. Ask the creator to update the listing.",
+        {
+        error: "This listing is missing its delivery link. Ask the creator to update it.",
         code: "invalid_delivery_config"
       },
       422
@@ -295,7 +295,7 @@ Deno.serve(async (request) => {
     if (checkoutAmountKobo < minimumPriceKobo) {
       return jsonResponse(
         {
-          error: "Amount is below the minimum for this template.",
+          error: "Amount is below the minimum for this listing.",
           code: "invalid_amount"
         },
         400
@@ -417,7 +417,7 @@ Deno.serve(async (request) => {
     } catch (error) {
       return jsonResponse(
         {
-          error: "Unable to unlock this template instantly",
+          error: "Unable to unlock this listing instantly",
           details: error instanceof Error ? error.message : "Unknown error"
         },
         500
