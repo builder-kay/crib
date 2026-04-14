@@ -354,7 +354,7 @@ export function getAssetFileRoleLabel(file: AssetCatalogFile) {
   const extension = getAssetFileExtension(file.original_name);
 
   if (file.file_role === "audio_preview") {
-    return "MP3 Preview";
+    return "Audio Preview";
   }
 
   if (file.file_role === "source_wav") {

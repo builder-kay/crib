@@ -445,9 +445,11 @@ export function OrdersPage() {
           const reported = order.status === "paid" && order.escrow_status === "scam_reported";
           const isExternalLinkDelivery = order.delivery_mode === "external_link" || order.asset?.delivery_mode === "external_link";
           const isAudioOrder = Boolean(order.asset && isAudioAsset(order.asset));
-          const deliveryButtonLabel = isExternalLinkDelivery ? "Open link" : deliveryFiles.length > 1 ? "Open delivery" : "Download";
-          const deliveryPromptLabel = isExternalLinkDelivery ? "access link" : "file";
+          const primaryDeliveryFile = deliveryFiles[0] ?? null;
+          const deliveryButtonLabel = isExternalLinkDelivery ? "Open link" : isAudioOrder ? "Download ZIP" : deliveryFiles.length > 1 ? "Open delivery" : "Download";
+          const deliveryPromptLabel = isExternalLinkDelivery ? "access link" : isAudioOrder ? "ZIP bundle" : "file";
           const escrowButtonsEnabled = awaitingReview && Boolean(order.buyer_opened_at);
+          const showIndividualDownloads = canAccessDelivery && !isExternalLinkDelivery && !isAudioOrder && deliveryFiles.length > 1;
 
           return (
             <article key={order.id} className="surface-card overflow-hidden">
@@ -494,7 +496,7 @@ export function OrdersPage() {
                       disabled={!canAccessDelivery}
                       onClick={async () => {
                         try {
-                          const payload = await generateDownload(order.id, deliveryFiles.length > 0 ? deliveryFiles[0].id : undefined);
+                          const payload = await generateDownload(order.id, primaryDeliveryFile?.id);
 
                           if (payload.delivery_type === "external_link") {
                             const link = document.createElement("a");
@@ -545,10 +547,10 @@ export function OrdersPage() {
                     {!canAccessDelivery ? <p className="text-xs text-sand-600">Access unlocks after payment confirmation.</p> : null}
                   </div>
 
-                  {canAccessDelivery && !isExternalLinkDelivery && deliveryFiles.length > 1 ? (
+                  {showIndividualDownloads ? (
                     <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50 p-4">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-600">
-                        {isAudioOrder ? "Downloaded files" : "Included downloads"}
+                        Included downloads
                       </p>
                       <div className="mt-3 space-y-2">
                         {deliveryFiles.map((file) => (

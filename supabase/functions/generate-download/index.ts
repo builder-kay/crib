@@ -187,7 +187,7 @@ Deno.serve(async (request) => {
         : selectedFile.file_role === "source_wav"
           ? "Download WAV file"
           : selectedFile.file_role === "audio_preview"
-            ? "Download MP3 preview"
+            ? "Download audio preview"
             : selectedFile.file_role === "project_file"
               ? "Download project file"
               : selectedFile.file_role === "midi"

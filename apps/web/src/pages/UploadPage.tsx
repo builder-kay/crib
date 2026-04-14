@@ -8,9 +8,7 @@ import { formatMajorCurrency } from "@/lib/format";
 import {
   formatFileSize,
   MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES,
-  MAX_AUDIO_EXTRA_FILE_SIZE_BYTES,
   MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES,
-  MAX_AUDIO_WAV_FILE_SIZE_BYTES,
   MAX_PREVIEW_FILES,
   MAX_PREVIEW_FILE_SIZE_BYTES,
   MAX_PRIMARY_ASSET_SIZE_BYTES
@@ -20,11 +18,9 @@ import {
   ASSET_TYPES,
   AUDIO_ASSET_CATEGORIES,
   AUDIO_BUNDLE_ACCEPT,
-  AUDIO_EXTRA_FILE_ACCEPT,
   AUDIO_GENRE_OPTIONS,
   AUDIO_LICENSE_OPTIONS,
   AUDIO_PREVIEW_ACCEPT,
-  AUDIO_WAV_ACCEPT,
   CANVA_ASSET_CATEGORIES,
   FIGMA_ASSET_CATEGORIES,
   OTHER_ASSET_CATEGORIES,
@@ -107,10 +103,10 @@ const TEMPLATE_TYPE_CONTENT = {
   },
   audio: {
     label: "Audio / Beats",
-    description: "Sell editable beats, stems, DAW sessions, MIDI, and production-ready source files.",
-    contentLabel: "Upload the preview and editable audio package",
-    contentHint: "MP3 preview is required for playback, while WAV, ZIP, project files, and MIDI power the paid delivery.",
-    deliverySummary: "Crib prioritizes editable audio assets, so sellers should package stems, project files, and MIDI wherever possible.",
+    description: "Sell editable beats and source bundles buyers can open, tweak, and reuse in their own sessions.",
+    contentLabel: "Upload the preview and buyer ZIP bundle",
+    contentHint: "Upload a public MP3 or WAV preview for playback, then bundle everything buyers receive into one ZIP.",
+    deliverySummary: "Buyers receive one ZIP bundle after checkout, so use the description to explain the stems, project files, MIDI, and extras inside.",
     categories: AUDIO_ASSET_CATEGORIES
   },
   other: {
@@ -198,9 +194,7 @@ export function UploadPage() {
   const status: "published" = "published";
   const [mainFile, setMainFile] = useState<File[]>([]);
   const [audioPreviewFile, setAudioPreviewFile] = useState<File[]>([]);
-  const [audioWavFile, setAudioWavFile] = useState<File[]>([]);
   const [audioBundleFile, setAudioBundleFile] = useState<File[]>([]);
-  const [audioExtraFiles, setAudioExtraFiles] = useState<File[]>([]);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [activeStepId, setActiveStepId] = useState<UploadStepId>("template");
 
@@ -230,9 +224,7 @@ export function UploadPage() {
     }
     if (templateType !== "audio") {
       setAudioPreviewFile([]);
-      setAudioWavFile([]);
       setAudioBundleFile([]);
-      setAudioExtraFiles([]);
     }
   }, [category, categoryOptions, deliveryMode, templateType]);
 
@@ -245,7 +237,7 @@ export function UploadPage() {
   const estimatedSellerNet = Math.max(estimatedBuyerSpend - estimatedCommission, 0);
   const requiresFile = deliveryMode === "file";
   const requiresLink = deliveryMode === "external_link";
-  const hasRequiredAudioFiles = audioPreviewFile.length === 1 && audioWavFile.length === 1 && audioBundleFile.length === 1;
+  const hasRequiredAudioFiles = audioPreviewFile.length === 1 && audioBundleFile.length === 1;
 
   const steps = useMemo(
     () => [
@@ -259,7 +251,7 @@ export function UploadPage() {
         id: "content" as const,
         title: isAudioAsset ? "Audio files" : "Content",
         description: isAudioAsset
-          ? "Upload the public MP3 preview plus the editable files buyers unlock after purchase."
+          ? "Upload the public audio preview plus the ZIP bundle buyers unlock after purchase."
           : "Paste the access link or upload the source file buyers should receive.",
         done: isAudioAsset ? hasRequiredAudioFiles : requiresLink ? Boolean(externalDeliveryUrl.trim()) : mainFile.length === 1
       },
@@ -342,54 +334,30 @@ export function UploadPage() {
 
       if (isAudioAsset) {
         if (!hasRequiredAudioFiles) {
-          throw new Error("Audio listings require an MP3 preview, WAV file, and ZIP bundle.");
+          throw new Error("Audio listings require one preview file and one ZIP bundle.");
         }
 
         const previewAudio = audioPreviewFile[0];
-        const wavAudio = audioWavFile[0];
         const bundleAudio = audioBundleFile[0];
-        if (!previewAudio || !wavAudio || !bundleAudio) {
-          throw new Error("Audio listings require an MP3 preview, WAV file, and ZIP bundle.");
+        if (!previewAudio || !bundleAudio) {
+          throw new Error("Audio listings require one preview file and one ZIP bundle.");
         }
 
-        if (!hasAllowedExtension(previewAudio, [".mp3"])) {
-          throw new Error("Audio preview must be an MP3 file.");
-        }
-        if (!hasAllowedExtension(wavAudio, [".wav"])) {
-          throw new Error("High-quality audio delivery must be a WAV file.");
+        if (!hasAllowedExtension(previewAudio, [".mp3", ".wav"])) {
+          throw new Error("Audio preview must be an MP3 or WAV file.");
         }
         if (!hasAllowedExtension(bundleAudio, [".zip"])) {
-          throw new Error("Stem and project delivery must be uploaded as a ZIP file.");
+          throw new Error("Buyer delivery must be uploaded as a ZIP file.");
         }
 
         if (previewAudio.size > MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES) {
           throw new Error(
-            `MP3 preview is too large (${formatFileSize(previewAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES)}.`
-          );
-        }
-        if (wavAudio.size > MAX_AUDIO_WAV_FILE_SIZE_BYTES) {
-          throw new Error(
-            `WAV file is too large (${formatFileSize(wavAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_WAV_FILE_SIZE_BYTES)}.`
+            `Audio preview is too large (${formatFileSize(previewAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES)}.`
           );
         }
         if (bundleAudio.size > MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES) {
           throw new Error(
             `ZIP bundle is too large (${formatFileSize(bundleAudio.size)}). Limit is ${formatFileSize(MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES)}.`
-          );
-        }
-
-        const invalidExtraFile = audioExtraFiles.find(
-          (file) =>
-            !hasAllowedExtension(file, [".zip", ".flp", ".als", ".logicx", ".mus", ".musx", ".mid", ".midi", ".cpr", ".rpp", ".ptx", ".song"])
-        );
-        if (invalidExtraFile) {
-          throw new Error(`"${invalidExtraFile.name}" is not a supported project or MIDI format.`);
-        }
-
-        const oversizedExtraFile = audioExtraFiles.find((file) => file.size > MAX_AUDIO_EXTRA_FILE_SIZE_BYTES);
-        if (oversizedExtraFile) {
-          throw new Error(
-            `"${oversizedExtraFile.name}" is too large (${formatFileSize(oversizedExtraFile.size)}). Limit is ${formatFileSize(MAX_AUDIO_EXTRA_FILE_SIZE_BYTES)}.`
           );
         }
       }
@@ -436,9 +404,7 @@ export function UploadPage() {
         mainFile: !isAudioAsset && requiresFile ? (mainFile[0] ?? null) : null,
         previewFiles,
         audioPreviewFile: isAudioAsset ? (audioPreviewFile[0] ?? null) : null,
-        audioWavFile: isAudioAsset ? (audioWavFile[0] ?? null) : null,
-        audioBundleFile: isAudioAsset ? (audioBundleFile[0] ?? null) : null,
-        audioExtraFiles: isAudioAsset ? audioExtraFiles : []
+        audioBundleFile: isAudioAsset ? (audioBundleFile[0] ?? null) : null
       });
     },
     onSuccess: ({ assetId }) => {
@@ -611,63 +577,36 @@ export function UploadPage() {
                     <div className="rounded-2xl border border-forest-100 bg-forest-50 p-4 text-sm text-forest-900">
                       <p className="font-semibold text-forest-950">Editable audio first</p>
                       <p className="mt-2">
-                        Sellers should include STEMS, project files, and MIDI whenever possible so buyers can open, edit, and reuse the beat in their own production workflow.
+                        Bundle stems, project files, MIDI, and any bonus assets into the ZIP so buyers get one clean download. Use the description and tags to explain everything packed inside.
                       </p>
                     </div>
 
                     <div className="grid gap-4 xl:grid-cols-2">
                       <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
                         <UploadDropzone
-                          label="MP3 preview file"
+                          label="Audio preview file"
                           accept={AUDIO_PREVIEW_ACCEPT}
                           files={audioPreviewFile}
                           onFilesChange={(files) => setAudioPreviewFile(files.slice(0, 1))}
-                          helperText={`Required for playback on the product page. Max ${formatFileSize(MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES)}.`}
+                          helperText={`Required for playback on the product page. MP3 or WAV. Max ${formatFileSize(MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES)}.`}
                           badge="Required"
-                          emptyStateHint="Upload the MP3 preview buyers can audition before purchase."
+                          emptyStateHint="Upload the preview buyers can audition before purchase."
                           tone="cobalt"
                         />
                       </div>
 
                       <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
                         <UploadDropzone
-                          label="WAV file"
-                          accept={AUDIO_WAV_ACCEPT}
-                          files={audioWavFile}
-                          onFilesChange={(files) => setAudioWavFile(files.slice(0, 1))}
-                          helperText={`Required high-quality version. Max ${formatFileSize(MAX_AUDIO_WAV_FILE_SIZE_BYTES)}.`}
+                          label="Buyer ZIP bundle"
+                          accept={AUDIO_BUNDLE_ACCEPT}
+                          files={audioBundleFile}
+                          onFilesChange={(files) => setAudioBundleFile(files.slice(0, 1))}
+                          helperText={`Required delivery ZIP for stems, project files, MIDI, and extras. Max ${formatFileSize(MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES)}.`}
                           badge="Required"
-                          emptyStateHint="Upload the full-resolution WAV buyers receive after purchase."
+                          emptyStateHint="Bundle everything buyers receive into one ZIP package."
                           tone="cobalt"
                         />
                       </div>
-                    </div>
-
-                    <div className="upload-files-dropzone-card upload-files-dropzone-card-cobalt">
-                      <UploadDropzone
-                        label="STEMS / project ZIP"
-                        accept={AUDIO_BUNDLE_ACCEPT}
-                        files={audioBundleFile}
-                        onFilesChange={(files) => setAudioBundleFile(files.slice(0, 1))}
-                        helperText={`Required bundle for stems, DAW sessions, and optional MIDI. Max ${formatFileSize(MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES)}.`}
-                        badge="Required"
-                        emptyStateHint="Bundle drums, bass, melody, project files, and extras into one ZIP package."
-                        tone="cobalt"
-                      />
-                    </div>
-
-                    <div className="upload-files-dropzone-card upload-files-dropzone-card-lagoon">
-                      <UploadDropzone
-                        label="Optional project files and MIDI"
-                        accept={AUDIO_EXTRA_FILE_ACCEPT}
-                        files={audioExtraFiles}
-                        onFilesChange={setAudioExtraFiles}
-                        multiple
-                        helperText={`Optional extras like .flp, .als, .logicx, .musx, .mid, or extra ZIPs. Max ${formatFileSize(MAX_AUDIO_EXTRA_FILE_SIZE_BYTES)} each.`}
-                        badge="Optional"
-                        emptyStateHint="Attach individual DAW project files or MIDI if you want buyers to download them separately."
-                        tone="lagoon"
-                      />
                     </div>
                   </div>
                 ) : requiresLink ? (

@@ -12,9 +12,7 @@ import {
 } from "@/lib/platform";
 import {
   MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES,
-  MAX_AUDIO_EXTRA_FILE_SIZE_BYTES,
   MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES,
-  MAX_AUDIO_WAV_FILE_SIZE_BYTES,
   formatFileSize,
   looksLikeUploadSizeError,
   MAX_PROFILE_AVATAR_SIZE_BYTES,
@@ -2322,9 +2320,7 @@ export type CreateAssetListingFiles = {
   mainFile: File | null;
   previewFiles: File[];
   audioPreviewFile?: File | null;
-  audioWavFile?: File | null;
   audioBundleFile?: File | null;
-  audioExtraFiles?: File[];
 };
 
 type PendingAssetFileUpload = {
@@ -2333,27 +2329,6 @@ type PendingAssetFileUpload = {
   sortOrder: number;
   maxBytes: number;
 };
-
-function inferAudioExtraFileRole(fileName: string): AssetFileRole {
-  const normalized = fileName.trim().toLowerCase();
-  if (normalized.endsWith(".mid") || normalized.endsWith(".midi")) {
-    return "midi";
-  }
-  if (
-    normalized.endsWith(".flp") ||
-    normalized.endsWith(".als") ||
-    normalized.endsWith(".logicx") ||
-    normalized.endsWith(".mus") ||
-    normalized.endsWith(".musx") ||
-    normalized.endsWith(".cpr") ||
-    normalized.endsWith(".rpp") ||
-    normalized.endsWith(".ptx") ||
-    normalized.endsWith(".song")
-  ) {
-    return "project_file";
-  }
-  return "supporting";
-}
 
 export async function createAssetListing(
   userId: string,
@@ -2364,9 +2339,7 @@ export async function createAssetListing(
     mainFile,
     previewFiles,
     audioPreviewFile = null,
-    audioWavFile = null,
-    audioBundleFile = null,
-    audioExtraFiles = []
+    audioBundleFile = null
   } = files;
   const { data: moderationProfile, error: moderationProfileError } = await supabase
     .from("profiles")
@@ -2404,7 +2377,7 @@ export async function createAssetListing(
   let audioPreviewUrl: string | null = null;
   if (isAudioAsset) {
     if (!audioPreviewFile) {
-      throw new Error("Audio listings need an MP3 preview before publishing.");
+      throw new Error("Audio listings need an MP3 or WAV preview before publishing.");
     }
 
     const audioPreviewPublicPath = `${userId}/${generatedAssetId}/audio-preview-${Date.now()}-${audioPreviewFile.name}`;
@@ -2461,20 +2434,12 @@ export async function createAssetListing(
 
   try {
     if (isAudioAsset) {
-      if (!audioPreviewFile || !audioWavFile || !audioBundleFile) {
-        throw new Error("Audio listings need an MP3 preview, WAV file, and ZIP bundle.");
+      if (!audioBundleFile) {
+        throw new Error("Audio listings need a ZIP bundle for buyer delivery.");
       }
 
       const assetFileUploads: PendingAssetFileUpload[] = [
-        { file: audioPreviewFile, role: "audio_preview", sortOrder: 0, maxBytes: MAX_AUDIO_PREVIEW_FILE_SIZE_BYTES },
-        { file: audioWavFile, role: "source_wav", sortOrder: 1, maxBytes: MAX_AUDIO_WAV_FILE_SIZE_BYTES },
-        { file: audioBundleFile, role: "source_zip", sortOrder: 2, maxBytes: MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES },
-        ...audioExtraFiles.map((file, index) => ({
-          file,
-          role: inferAudioExtraFileRole(file.name),
-          sortOrder: index + 3,
-          maxBytes: MAX_AUDIO_EXTRA_FILE_SIZE_BYTES
-        }))
+        { file: audioBundleFile, role: "source_zip", sortOrder: 0, maxBytes: MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES }
       ];
 
       const assetFileRows: Array<{
@@ -2599,7 +2564,7 @@ export async function createAssetListing(
     await supabase.from("assets").delete().eq("id", asset.id);
 
     throw mapStorageUploadError(error, {
-      fileName: audioBundleFile?.name ?? audioWavFile?.name ?? audioPreviewFile?.name ?? mainFile?.name ?? `${slugify(input.title)}-listing`,
+      fileName: audioBundleFile?.name ?? audioPreviewFile?.name ?? mainFile?.name ?? `${slugify(input.title)}-listing`,
       maxBytes: isAudioAsset ? MAX_AUDIO_BUNDLE_FILE_SIZE_BYTES : MAX_PRIMARY_ASSET_SIZE_BYTES
     });
   }

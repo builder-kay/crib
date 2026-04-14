@@ -6,7 +6,7 @@
 --
 -- Notes:
 -- - `asset_files.storage_path` values are placeholders for demo catalog data.
--- - Audio listings include public MP3 preview URLs so the on-page player works immediately.
+-- - Audio listings include public preview URLs so the on-page player works immediately.
 -- - Upload matching files into the `assets` bucket if you want download links to resolve to real files.
 
 insert into auth.users (
@@ -351,7 +351,7 @@ values
     'eeee1111-1111-4111-8111-111111111111'::uuid,
     '77777777-7777-4777-8777-777777777777'::uuid,
     'Lagos Night Drive Beat Pack',
-    'An editable afrobeats production pack with bounced stems, dry and wet WAVs, MIDI chords, and an Ableton session for fast remixing or topline work.',
+    'An editable afrobeats production pack with bounced stems, MIDI chords, and an Ableton session bundled into one ZIP for fast remixing or topline work.',
     'Audio / Beats',
     array['afrobeats', 'stems', 'ableton', 'midi', 'editable audio'],
     22000,
@@ -372,7 +372,7 @@ values
     'eeee2222-2222-4222-8222-222222222222'::uuid,
     '77777777-7777-4777-8777-777777777777'::uuid,
     'Sunday Lift Gospel Stems',
-    'A gospel-first beat suite with organ, choir, bass, and drum stems alongside FL Studio project files and MIDI for easy rearrangement or custom production work.',
+    'A gospel-first beat suite with organ, choir, bass, and drum stems bundled with FL Studio project files and MIDI in one ZIP for easy rearrangement or custom production work.',
     'Audio / Beats',
     array['gospel', 'fl studio', 'stems', 'midi', 'choir'],
     30000,
@@ -432,6 +432,12 @@ set
   file_size = excluded.file_size,
   original_name = excluded.original_name;
 
+delete from public.asset_files
+where asset_id in (
+  'eeee1111-1111-4111-8111-111111111111'::uuid,
+  'eeee2222-2222-4222-8222-222222222222'::uuid
+);
+
 insert into public.asset_files (
   id,
   asset_id,
@@ -444,16 +450,8 @@ insert into public.asset_files (
   created_at
 )
 values
-  ('feee1111-1111-4111-8111-111111111111'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-preview.mp3', 'audio/mpeg', 5242880, 'lagos-night-drive-preview.mp3', 'audio_preview', 0, now() - interval '4 days'),
-  ('feee1112-1111-4111-8111-111111111112'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-master.wav', 'audio/wav', 73400320, 'lagos-night-drive-master.wav', 'source_wav', 1, now() - interval '4 days'),
-  ('feee1113-1111-4111-8111-111111111113'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-stems-and-project.zip', 'application/zip', 157286400, 'lagos-night-drive-stems-and-project.zip', 'source_zip', 2, now() - interval '4 days'),
-  ('feee1114-1111-4111-8111-111111111114'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-session.als', 'application/octet-stream', 18874368, 'lagos-night-drive-session.als', 'project_file', 3, now() - interval '4 days'),
-  ('feee1115-1111-4111-8111-111111111115'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-chords.mid', 'application/octet-stream', 32768, 'lagos-night-drive-chords.mid', 'midi', 4, now() - interval '4 days'),
-  ('feee2221-2222-4222-8222-222222222221'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-preview.mp3', 'audio/mpeg', 4194304, 'sunday-lift-preview.mp3', 'audio_preview', 0, now() - interval '2 days'),
-  ('feee2222-2222-4222-8222-222222222222'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-master.wav', 'audio/wav', 62914560, 'sunday-lift-master.wav', 'source_wav', 1, now() - interval '2 days'),
-  ('feee2223-2222-4222-8222-222222222223'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-stems-and-project.zip', 'application/zip', 146800640, 'sunday-lift-stems-and-project.zip', 'source_zip', 2, now() - interval '2 days'),
-  ('feee2224-2222-4222-8222-222222222224'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-session.flp', 'application/octet-stream', 20971520, 'sunday-lift-session.flp', 'project_file', 3, now() - interval '2 days'),
-  ('feee2225-2222-4222-8222-222222222225'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-topline.mid', 'application/octet-stream', 24576, 'sunday-lift-topline.mid', 'midi', 4, now() - interval '2 days')
+  ('feee1113-1111-4111-8111-111111111113'::uuid, 'eeee1111-1111-4111-8111-111111111111'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee1111-1111-4111-8111-111111111111/lagos-night-drive-stems-and-project.zip', 'application/zip', 157286400, 'lagos-night-drive-stems-and-project.zip', 'source_zip', 0, now() - interval '4 days'),
+  ('feee2223-2222-4222-8222-222222222223'::uuid, 'eeee2222-2222-4222-8222-222222222222'::uuid, 'seed/77777777-7777-4777-8777-777777777777/eeee2222-2222-4222-8222-222222222222/sunday-lift-stems-and-project.zip', 'application/zip', 146800640, 'sunday-lift-stems-and-project.zip', 'source_zip', 0, now() - interval '2 days')
 on conflict (id) do update
 set
   storage_path = excluded.storage_path,

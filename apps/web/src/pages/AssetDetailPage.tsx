@@ -24,7 +24,7 @@ import {
   unfollowCreator,
   upsertAssetReview
 } from "@/lib/api";
-import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFileRoleLabel, getAssetFormatLabel, getAssetPrimaryFilename, isAudioAsset, sortAssetFiles } from "@/lib/assetCatalog";
+import { getAssetAppLabel, getAssetDeliveryLabel, getAssetFormatLabel, getAssetPrimaryFilename, isAudioAsset } from "@/lib/assetCatalog";
 import { formatDate, formatMajorCurrency } from "@/lib/format";
 import { startPaystackCheckout } from "@/lib/paystack";
 import { useAuthStore } from "@/store/authStore";
@@ -442,7 +442,6 @@ export function AssetDetailPage() {
     ? `/profile/${asset.creator_id}`
     : `/auth?redirect=${encodeURIComponent(`/profile/${asset.creator_id}`)}`;
   const primaryPreview = galleryImages[0]?.src ?? "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
-  const includedFiles = sortAssetFiles(asset.files ?? []);
   const audioLicenses = asset.license_options ?? [];
   const productLabel = audioListing ? "audio pack" : "template";
   const productLabelPlural = audioListing ? "audio packs" : "templates";
@@ -533,15 +532,10 @@ export function AssetDetailPage() {
                 </section>
 
                 <section className="rounded-2xl border border-forest-100 bg-forest-50 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-forest-700">Editable Files Included</p>
-                  <div className="mt-3 space-y-2">
-                    {includedFiles.map((file) => (
-                      <div key={file.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-sm">
-                        <span className="font-medium text-ink">{getAssetFileRoleLabel(file)}</span>
-                        <span className="truncate text-xs text-sand-600">{file.original_name}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-forest-700">Buyer Delivery</p>
+                  <p className="mt-3 text-sm leading-relaxed text-forest-900">
+                    Buyers receive one ZIP bundle after purchase. Use the listing description above for the full breakdown of stems, project files, MIDI, and any extras packed inside.
+                  </p>
                 </section>
               </div>
             ) : null}

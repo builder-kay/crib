@@ -58,10 +58,8 @@ export const MARKET_FILE_FILTERS = [
 
 export const PRIMARY_ASSET_ACCEPT =
   ".zip,.pdf,.psd,.psb,.ai,.eps,.indd,.indt,.idml,.aep,.aet,.mogrt,.prproj,.prfpset,.xmp,.lrtemplate,.lrcat,.fig,.figjam,.sketch,.xd,.svg,.jpg,.jpeg,.png";
-export const AUDIO_PREVIEW_ACCEPT = ".mp3";
-export const AUDIO_WAV_ACCEPT = ".wav";
+export const AUDIO_PREVIEW_ACCEPT = ".mp3,.wav";
 export const AUDIO_BUNDLE_ACCEPT = ".zip";
-export const AUDIO_EXTRA_FILE_ACCEPT = ".zip,.flp,.als,.logicx,.mus,.musx,.mid,.midi,.cpr,.rpp,.ptx,.song";
 
 function normalizeExternalUrl(value: string) {
   return value.trim();

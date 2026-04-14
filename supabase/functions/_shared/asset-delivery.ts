@@ -211,6 +211,23 @@ function sortDeliveryFiles<T extends { file_role?: AssetFileRole | null; sort_or
   });
 }
 
+function getDeliverableAssetFiles(assetFiles: readonly AssetFileRow[]) {
+  const zipFiles = assetFiles.filter((file) => file.file_role === "source_zip");
+  const hasLegacyAudioDeliveryFiles = assetFiles.some(
+    (file) =>
+      file.file_role === "audio_preview" ||
+      file.file_role === "source_wav" ||
+      file.file_role === "project_file" ||
+      file.file_role === "midi"
+  );
+
+  if (zipFiles.length > 0 && hasLegacyAudioDeliveryFiles) {
+    return zipFiles;
+  }
+
+  return assetFiles.filter((file) => file.file_role !== "audio_preview");
+}
+
 async function ensureImmutableAssetFile(supabase: ServiceClient, file: AssetFileRow): Promise<ImmutableAssetFile> {
   if (isSeedStoragePath(file.storage_path)) {
     const immutableStoragePath = file.immutable_storage_path || file.storage_path;
@@ -335,12 +352,18 @@ async function ensureOrderDeliveryFileRows(
   }
 
   const assetFiles = (assetFilesData ?? []) as AssetFileRow[];
-  if (assetFiles.length === 0) {
+  const deliverableAssetFiles = getDeliverableAssetFiles(assetFiles);
+  if (deliverableAssetFiles.length === 0) {
     throw new Error("Asset file not found");
   }
 
   const existingRows = (existingRowsData ?? []) as OrderDeliveryFileRow[];
-  const existingByAssetFileId = new Map(existingRows.filter((row) => row.asset_file_id).map((row) => [row.asset_file_id as string, row]));
+  const deliverableAssetFileIds = new Set(deliverableAssetFiles.map((file) => file.id));
+  const existingByAssetFileId = new Map(
+    existingRows
+      .filter((row) => row.asset_file_id && deliverableAssetFileIds.has(row.asset_file_id))
+      .map((row) => [row.asset_file_id as string, row])
+  );
   const upsertRows: Array<{
     order_id: string;
     asset_file_id: string;
@@ -354,7 +377,18 @@ async function ensureOrderDeliveryFileRows(
     locked_at: string;
   }> = [];
 
-  for (const assetFile of sortDeliveryFiles(assetFiles)) {
+  const staleRowIds = existingRows
+    .filter((row) => !row.asset_file_id || !deliverableAssetFileIds.has(row.asset_file_id))
+    .map((row) => row.id);
+
+  if (staleRowIds.length > 0) {
+    const { error: deleteError } = await supabase.from("order_delivery_files").delete().in("id", staleRowIds);
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+  }
+
+  for (const assetFile of sortDeliveryFiles(deliverableAssetFiles)) {
     const immutableFile = await ensureImmutableAssetFile(supabase, assetFile);
     const existing = existingByAssetFileId.get(assetFile.id);
 
@@ -415,7 +449,7 @@ function buildFileActionLabel(file: OrderDeliveryFileRow, fileCount: number) {
     return "Download WAV file";
   }
   if (file.file_role === "audio_preview") {
-    return "Download MP3 preview";
+    return "Download audio preview";
   }
   if (file.file_role === "project_file") {
     return "Download project file";
