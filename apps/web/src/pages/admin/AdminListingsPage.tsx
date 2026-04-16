@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
-import { PriceTag } from "@/components/PriceTag";
+import { formatCurrency, formatDate } from "@/lib/format";
 import type { Asset } from "@/lib/types";
 import { SectionHeader, assetStatusChip, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
 
@@ -77,17 +77,17 @@ export function AdminListingsPage() {
           <div className="admin-toolbar-layout">
             <div className="admin-toolbar-fields">
               <label className="admin-input-group">
-              <span>Search listings</span>
-              <input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Title, creator, category, or tag" className="admin-input" />
+                <span>Search listings</span>
+                <input value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Title, creator, category, or tag" className="admin-input" />
               </label>
               <label className="admin-input-group">
-              <span>Status</span>
-              <select value={assetStatusFilter} onChange={(event) => setAssetStatusFilter(event.target.value as Asset["status"] | "all")} className="admin-input">
-                <option value="all">All statuses</option>
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
-                <option value="archived">Archived</option>
-              </select>
+                <span>Status</span>
+                <select value={assetStatusFilter} onChange={(event) => setAssetStatusFilter(event.target.value as Asset["status"] | "all")} className="admin-input">
+                  <option value="all">All statuses</option>
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
               </label>
             </div>
 
@@ -95,7 +95,7 @@ export function AdminListingsPage() {
               <p className="admin-toolbar-label">Visible results</p>
               <p className="admin-toolbar-value">{filteredAssets.length}</p>
               <p className="admin-toolbar-note">
-                Use this lane to review previews, pricing, creator context, and the current publish state without leaving the admin workspace.
+                This lane now uses a spreadsheet-style table so you can scan pricing, tags, creator info, and publish state more quickly.
               </p>
             </div>
           </div>
@@ -124,77 +124,117 @@ export function AdminListingsPage() {
           </div>
         </div>
 
-        <div className="mt-5 space-y-4">
+        <div className="mt-5">
           {!assetsLoading && filteredAssets.length === 0 ? <EmptyState title="No listings match this filter" body="Try a wider search or switch the status filter back to all." /> : null}
-          {filteredAssets.map((asset) => {
-            const isUpdating = pendingAssetStatusId === asset.id;
-            const previewUrl = asset.previews?.[0]?.preview_url;
 
-            return (
-              <article key={asset.id} className="admin-record-card">
-                <div className="admin-record-layout">
-                  <div className="admin-record-media-shell">
-                    {previewUrl ? (
-                      <img src={previewUrl} alt={asset.title} className="admin-record-media" />
-                    ) : (
-                      <div className="admin-record-media admin-record-media-fallback">No preview</div>
-                    )}
-                  </div>
+          {filteredAssets.length > 0 ? (
+            <div className="admin-data-table-shell">
+              <table className="admin-data-table admin-data-table-wide">
+                <thead>
+                  <tr>
+                    <th>Listing</th>
+                    <th>Creator</th>
+                    <th>Category</th>
+                    <th>Tags</th>
+                    <th>Pricing</th>
+                    <th>Created</th>
+                    <th>Publish state</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAssets.map((asset) => {
+                    const isUpdating = pendingAssetStatusId === asset.id;
+                    const previewUrl = asset.previews?.[0]?.preview_url;
 
-                  <div className="admin-record-primary">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link to={`/asset/${asset.id}`} className="font-display text-xl font-semibold text-ink hover:text-cobalt-700">
-                        {asset.title}
-                      </Link>
-                      <span className={assetStatusChip(asset.status)}>{asset.status}</span>
-                      <span className="admin-chip admin-chip-sand">{asset.category}</span>
-                    </div>
-                    <p className="mt-2 max-w-3xl text-sm text-sand-700">{asset.description || "No listing description yet."}</p>
-
-                    <div className="mt-4 admin-detail-grid">
-                      <div className="admin-record-mini">
-                        <p className="admin-record-mini-label">Creator</p>
-                        <p className="admin-record-mini-value">{asset.profile?.display_name ?? "Unknown creator"}</p>
-                      </div>
-                      <div className="admin-record-mini">
-                        <p className="admin-record-mini-label">Created</p>
-                        <p className="admin-record-mini-value">{new Date(asset.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <div className="admin-record-mini">
-                        <p className="admin-record-mini-label">Tags</p>
-                        <p className="admin-record-mini-value">{asset.tags.length > 0 ? `${asset.tags.length} attached` : "No tags"}</p>
-                      </div>
-                    </div>
-
-                    {asset.tags.length > 0 ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {asset.tags.slice(0, 6).map((tag) => (
-                          <span key={tag} className="admin-chip admin-chip-sand">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="admin-record-actions">
-                    <PriceTag amountKobo={asset.price_kobo} currency={asset.currency} pricingModel={asset.pricing_model} minimumPriceKobo={asset.minimum_price_kobo} />
-                    <label className="admin-input-group w-full">
-                      <span>Publish state</span>
-                      <select value={asset.status} disabled={isUpdating} onChange={(event) => setAssetStatus(asset.id, event.target.value as Asset["status"])} className="admin-input">
-                        <option value="draft">Draft</option>
-                        <option value="published">Published</option>
-                        <option value="archived">Archived</option>
-                      </select>
-                    </label>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+                    return (
+                      <tr key={asset.id}>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <div className="flex min-w-0 items-start gap-3">
+                              {previewUrl ? (
+                                <img src={previewUrl} alt={asset.title} className="h-14 w-14 rounded-2xl border border-sand-200 object-cover" />
+                              ) : (
+                                <div className="grid h-14 w-14 place-items-center rounded-2xl border border-dashed border-sand-300 bg-sand-50 text-[10px] font-semibold uppercase tracking-[0.14em] text-sand-500">
+                                  No preview
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <Link to={`/asset/${asset.id}`} className="admin-data-table-main admin-data-table-main-link">
+                                  {asset.title}
+                                </Link>
+                                <span className="admin-data-table-meta">{asset.description?.trim() || "No listing description yet."}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{asset.profile?.display_name ?? "Unknown creator"}</span>
+                            <span className="admin-data-table-meta">{asset.profile?.creator_category ?? "Creator profile unavailable"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-stack">
+                            <span className="admin-chip admin-chip-sand">{asset.category}</span>
+                            <span className={assetStatusChip(asset.status)}>{asset.status}</span>
+                          </div>
+                        </td>
+                        <td>
+                          {asset.tags.length > 0 ? (
+                            <div className="admin-table-chip-row">
+                              {asset.tags.slice(0, 3).map((tag) => (
+                                <span key={tag} className="admin-chip admin-chip-sand">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="admin-data-table-meta">No tags</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{formatListingPrice(asset)}</span>
+                            <span className="admin-data-table-meta">{asset.pricing_model.replace(/_/g, " ")}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{formatDate(asset.created_at)}</span>
+                            <span className="admin-data-table-meta">{asset.tags.length > 0 ? `${asset.tags.length} tag${asset.tags.length === 1 ? "" : "s"}` : "No tags attached"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <label className="admin-input-group min-w-[11rem]">
+                            <span>State</span>
+                            <select value={asset.status} disabled={isUpdating} onChange={(event) => setAssetStatus(asset.id, event.target.value as Asset["status"])} className="admin-input">
+                              <option value="draft">Draft</option>
+                              <option value="published">Published</option>
+                              <option value="archived">Archived</option>
+                            </select>
+                          </label>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </div>
       </section>
     </section>
   );
 }
 
+function formatListingPrice(asset: Asset) {
+  if (asset.pricing_model === "free" || asset.price_kobo <= 0) {
+    return "Free";
+  }
+
+  if (asset.pricing_model === "pay_what_you_want") {
+    return `From ${formatCurrency(asset.minimum_price_kobo, asset.currency)}`;
+  }
+
+  return formatCurrency(asset.price_kobo, asset.currency);
+}

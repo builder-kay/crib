@@ -5,7 +5,7 @@ import { ActionConfirmationModal } from "@/components/ActionConfirmationModal";
 import { useToast } from "@/components/Toast";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { getUserContactEmail, getUserIdentityLabel, getUserMobileNumber, maskPhoneNumber } from "@/lib/auth";
-import { getAdminAssets, getAdminCreators, getAdminOrders, getAdminOverview, updateAssetStatus } from "@/lib/api";
+import { getAdminAssetSnapshots, getAdminAssets, getAdminCreators, getAdminOrders, getAdminOverview, updateAssetStatus } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
 import { describeProfileVerificationField, getVerificationStatusLabel } from "@/lib/profileVerification";
 import type { AdminCreatorRecord, AdminOrderRecord, AdminOverview, Asset, Order } from "@/lib/types";
@@ -106,30 +106,49 @@ export function AdminPage() {
   const location = useLocation();
   const { pushToast } = useToast();
   const [confirmSignOutOpen, setConfirmSignOutOpen] = useState(false);
-  const [adminSearch, setAdminSearch] = useState("");
+
+  const activeNavItem = useMemo(
+    () =>
+      adminNavItems.find((item) =>
+        location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+      ) ?? adminNavItems[0],
+    [location.pathname]
+  );
+
+  const assetsQueryMode = activeNavItem.id === "listings" ? "full" : activeNavItem.id === "overview" ? "snapshot" : null;
+  const ordersQueryLimit = activeNavItem.id === "orders" ? 18 : activeNavItem.id === "overview" ? 4 : null;
+  const shouldLoadCreators = activeNavItem.id === "creators";
 
   const overviewQuery = useQuery({
     queryKey: ["admin-overview"],
     queryFn: getAdminOverview,
-    enabled: Boolean(user?.id)
+    enabled: Boolean(user?.id),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false
   });
 
   const assetsQuery = useQuery({
-    queryKey: ["admin-assets"],
-    queryFn: getAdminAssets,
-    enabled: Boolean(user?.id)
+    queryKey: ["admin-assets", assetsQueryMode ?? "idle"],
+    queryFn: () => (assetsQueryMode === "full" ? getAdminAssets() : getAdminAssetSnapshots(4)),
+    enabled: Boolean(user?.id && assetsQueryMode),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false
   });
 
   const ordersQuery = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => getAdminOrders(18),
-    enabled: Boolean(user?.id)
+    queryKey: ["admin-orders", ordersQueryLimit ?? "idle"],
+    queryFn: () => getAdminOrders(ordersQueryLimit ?? 4),
+    enabled: Boolean(user?.id && ordersQueryLimit),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false
   });
 
   const creatorsQuery = useQuery({
     queryKey: ["admin-creators"],
     queryFn: () => getAdminCreators(),
-    enabled: Boolean(user?.id)
+    enabled: Boolean(user?.id && shouldLoadCreators),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false
   });
 
   const statusMutation = useMutation({
@@ -169,25 +188,18 @@ export function AdminPage() {
     return phone ? maskPhoneNumber(phone) : "Back-office access";
   }, [user]);
   const accountInitial = useMemo(() => accountLabel.charAt(0).toUpperCase() || "A", [accountLabel]);
-  const pendingVerificationCount = useMemo(
-    () => (creatorsQuery.data ?? []).filter((creator) => creator.verification_request?.status === "pending").length,
-    [creatorsQuery.data]
-  );
+  const pendingVerificationCount = overviewQuery.data?.pending_verification_requests ?? 0;
 
   const navBadges = useMemo<Record<AdminNavItem["id"], string | null>>(
     () => ({
       overview: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_profiles ?? 0}`,
-      listings: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_assets ?? assetsQuery.data?.length ?? 0}`,
-      orders: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_orders ?? ordersQuery.data?.length ?? 0}`,
-      creators: creatorsQuery.isLoading ? "..." : pendingVerificationCount > 0 ? `${pendingVerificationCount} pending` : `${creatorsQuery.data?.length ?? 0}`,
+      listings: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_assets ?? 0}`,
+      orders: overviewQuery.isLoading ? "..." : `${overviewQuery.data?.total_orders ?? 0}`,
+      creators: overviewQuery.isLoading ? "..." : pendingVerificationCount > 0 ? `${pendingVerificationCount} pending` : `${overviewQuery.data?.total_profiles ?? 0}`,
       editors: "Access",
       settings: "Footer"
     }),
     [
-      assetsQuery.data?.length,
-      creatorsQuery.data?.length,
-      creatorsQuery.isLoading,
-      ordersQuery.data?.length,
       pendingVerificationCount,
       overviewQuery.data?.total_assets,
       overviewQuery.data?.total_orders,
@@ -210,19 +222,11 @@ export function AdminPage() {
       },
       {
         label: "Pending verification",
-        value: creatorsQuery.isLoading ? "..." : `${pendingVerificationCount}`,
+        value: overviewQuery.isLoading ? "..." : `${pendingVerificationCount}`,
         tone: "lagoon" as const
       }
     ],
-    [creatorsQuery.isLoading, overviewQuery.data?.escrow_pending_orders, overviewQuery.data?.scam_reported_orders, overviewQuery.isLoading, pendingVerificationCount]
-  );
-
-  const activeNavItem = useMemo(
-    () =>
-      adminNavItems.find((item) =>
-        location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
-      ) ?? adminNavItems[0],
-    [location.pathname]
+    [overviewQuery.data?.escrow_pending_orders, overviewQuery.data?.scam_reported_orders, overviewQuery.isLoading, pendingVerificationCount]
   );
 
   const contextValue = useMemo<AdminWorkspaceContextValue>(
@@ -332,11 +336,7 @@ export function AdminPage() {
                   <circle cx="11" cy="11" r="7" />
                   <path d="m20 20-3.5-3.5" />
                 </svg>
-                <input
-                  value={adminSearch}
-                  onChange={(event) => setAdminSearch(event.target.value)}
-                  placeholder={`Search inside ${activeNavItem.label.toLowerCase()}...`}
-                />
+                <input key={activeNavItem.id} defaultValue="" placeholder={`Search inside ${activeNavItem.label.toLowerCase()}...`} />
               </label>
 
               <div className="admin-topbar-actions">

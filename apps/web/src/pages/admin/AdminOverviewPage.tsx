@@ -86,11 +86,11 @@ export function AdminOverviewPage() {
         <MetricCard label="Network" value={overview ? `${overview.creator_follows}` : "Loading..."} helper={overview ? `${overview.wishlists} wishlist saves` : "Loading growth signals"} tone="forest" />
       </section>
 
-      <section className="space-y-5">
+      <section className="admin-overview-grid">
         <section className="surface-card admin-panel p-5">
           <SectionHeader eyebrow="Recent activity" title="Latest listings and orders" body="A quick pulse check across the storefront areas that usually need the fastest admin response." />
 
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 admin-subpanel-grid">
             <div className="admin-subpanel">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="font-display text-lg font-semibold text-ink">Newest listings</h3>
@@ -142,7 +142,7 @@ export function AdminOverviewPage() {
           </div>
         </section>
 
-        <div className="space-y-5">
+        <div className="admin-panel-stack">
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Operations" title="Signals worth watching" body="Marketplace admins stay focused on reviews, payouts, and general storefront health." />
             <div className="mt-4 space-y-3">
@@ -156,18 +156,26 @@ export function AdminOverviewPage() {
 
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Quick access" title="Jump straight to the lane you need" body="Each sidebar destination is its own page now, so the admin workspace stays focused and easier to navigate." />
-            <div className="mt-4 space-y-3">
-              <Link to="/admin/listings" className="admin-compact-row admin-compact-row-stack">
-                <span className="text-sm font-semibold text-ink">Listings moderation</span>
-                <span className="text-xs text-sand-600">Review uploads, descriptions, and publish states.</span>
+            <div className="mt-4 admin-link-grid">
+              <Link to="/admin/listings" className="admin-link-card">
+                <span className="admin-link-card-meta">Moderation</span>
+                <span className="admin-link-card-title">Listings moderation</span>
+                <span className="admin-link-card-copy">Review uploads, descriptions, and publish states.</span>
               </Link>
-              <Link to="/admin/orders" className="admin-compact-row admin-compact-row-stack">
-                <span className="text-sm font-semibold text-ink">Orders and escrow</span>
-                <span className="text-xs text-sand-600">Track paid, held, released, and reported orders.</span>
+              <Link to="/admin/orders" className="admin-link-card">
+                <span className="admin-link-card-meta">Escrow</span>
+                <span className="admin-link-card-title">Orders and escrow</span>
+                <span className="admin-link-card-copy">Track paid, held, released, refunded, and reported orders.</span>
               </Link>
-              <Link to="/admin/editors" className="admin-compact-row admin-compact-row-stack">
-                <span className="text-sm font-semibold text-ink">Editor access</span>
-                <span className="text-xs text-sand-600">Create separate blog logins with email or phone credentials.</span>
+              <Link to="/admin/creators" className="admin-link-card">
+                <span className="admin-link-card-meta">Seller health</span>
+                <span className="admin-link-card-title">Creators</span>
+                <span className="admin-link-card-copy">Check verification requests, payout readiness, and account standing.</span>
+              </Link>
+              <Link to="/admin/editors" className="admin-link-card">
+                <span className="admin-link-card-meta">Publishing</span>
+                <span className="admin-link-card-title">Editor access</span>
+                <span className="admin-link-card-copy">Create separate blog logins with email or phone credentials.</span>
               </Link>
             </div>
           </section>

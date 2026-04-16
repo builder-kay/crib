@@ -568,11 +568,35 @@ function mapOrderReceipt(
   };
 }
 
-async function syncDueOrderEscrows() {
-  const { error } = await supabase.rpc("release_due_order_escrows");
+const DUE_ORDER_ESCROW_SYNC_TTL_MS = 15_000;
+let dueOrderEscrowSyncPromise: Promise<void> | null = null;
+let lastDueOrderEscrowSyncAt = 0;
 
-  if (error) {
-    throw new Error(error.message);
+async function syncDueOrderEscrows() {
+  const now = Date.now();
+
+  if (dueOrderEscrowSyncPromise) {
+    return dueOrderEscrowSyncPromise;
+  }
+
+  if (lastDueOrderEscrowSyncAt > 0 && now - lastDueOrderEscrowSyncAt < DUE_ORDER_ESCROW_SYNC_TTL_MS) {
+    return;
+  }
+
+  dueOrderEscrowSyncPromise = (async () => {
+    const { error } = await supabase.rpc("release_due_order_escrows");
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    lastDueOrderEscrowSyncAt = Date.now();
+  })();
+
+  try {
+    await dueOrderEscrowSyncPromise;
+  } finally {
+    dueOrderEscrowSyncPromise = null;
   }
 }
 
@@ -708,14 +732,11 @@ function normalizeJoinedRecord<T>(value: T | T[] | null | undefined): T | null {
 
 type AdminOverviewAssetRow = {
   creator_id: string;
-  status: Asset["status"];
 };
 
-type AdminOverviewOrderRow = {
-  status: Order["status"];
+type AdminOverviewPaidOrderVolumeRow = {
   amount_kobo: number;
   currency: string;
-  escrow_status: Order["escrow_status"];
 };
 type AdminOrderRow = {
   id: string;
@@ -3455,8 +3476,20 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   const [
     profileCountResult,
     adminCountResult,
-    assetsResult,
-    ordersResult,
+    creatorIdsResult,
+    pendingVerificationResult,
+    totalAssetsResult,
+    publishedAssetsResult,
+    draftAssetsResult,
+    archivedAssetsResult,
+    totalOrdersResult,
+    paidOrdersResult,
+    pendingOrdersResult,
+    failedOrdersResult,
+    refundedOrdersResult,
+    escrowPendingOrdersResult,
+    scamReportedOrdersResult,
+    paidOrderVolumeResult,
     payoutCountResult,
     editorialCountResult,
     assetReviewsCountResult,
@@ -3466,8 +3499,20 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("admins").select("user_id", { count: "exact", head: true }),
-    supabase.from("assets").select("creator_id, status"),
-    supabase.from("orders").select("status, amount_kobo, currency, escrow_status"),
+    supabase.from("assets").select("creator_id"),
+    supabase.from("creator_verification_requests").select("creator_id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("assets").select("id", { count: "exact", head: true }),
+    supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "published"),
+    supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "draft"),
+    supabase.from("assets").select("id", { count: "exact", head: true }).eq("status", "archived"),
+    supabase.from("orders").select("id", { count: "exact", head: true }),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "paid"),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "failed"),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "refunded"),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "paid").eq("escrow_status", "awaiting_review"),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "paid").eq("escrow_status", "scam_reported"),
+    supabase.from("orders").select("amount_kobo, currency").eq("status", "paid"),
     supabase.from("creator_payout_accounts").select("creator_id", { count: "exact", head: true }).eq("status", "active"),
     supabase.from("editorial_posts").select("id", { count: "exact", head: true }),
     supabase.from("asset_reviews").select("id", { count: "exact", head: true }),
@@ -3476,107 +3521,63 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     supabase.from("creator_follows").select("creator_id", { count: "exact", head: true })
   ]);
 
-  if (profileCountResult.error) {
-    throw new Error(profileCountResult.error.message);
-  }
-  if (adminCountResult.error) {
-    throw new Error(adminCountResult.error.message);
-  }
-  if (assetsResult.error) {
-    throw new Error(assetsResult.error.message);
-  }
-  if (ordersResult.error) {
-    throw new Error(ordersResult.error.message);
-  }
-  if (payoutCountResult.error) {
-    throw new Error(payoutCountResult.error.message);
-  }
-  if (editorialCountResult.error) {
-    throw new Error(editorialCountResult.error.message);
-  }
-  if (assetReviewsCountResult.error) {
-    throw new Error(assetReviewsCountResult.error.message);
-  }
-  if (creatorReviewsCountResult.error) {
-    throw new Error(creatorReviewsCountResult.error.message);
-  }
-  if (wishlistCountResult.error) {
-    throw new Error(wishlistCountResult.error.message);
-  }
-  if (followsCountResult.error) {
-    throw new Error(followsCountResult.error.message);
-  }
-
-  const assets = (assetsResult.data ?? []) as AdminOverviewAssetRow[];
-  const orders = (ordersResult.data ?? []) as AdminOverviewOrderRow[];
-
-  const creatorIds = new Set<string>();
-  let publishedAssets = 0;
-  let draftAssets = 0;
-  let archivedAssets = 0;
-
-  for (const asset of assets) {
-    creatorIds.add(asset.creator_id);
-    if (asset.status === "published") {
-      publishedAssets += 1;
-    } else if (asset.status === "draft") {
-      draftAssets += 1;
-    } else {
-      archivedAssets += 1;
+  for (const result of [
+    profileCountResult,
+    adminCountResult,
+    creatorIdsResult,
+    pendingVerificationResult,
+    totalAssetsResult,
+    publishedAssetsResult,
+    draftAssetsResult,
+    archivedAssetsResult,
+    totalOrdersResult,
+    paidOrdersResult,
+    pendingOrdersResult,
+    failedOrdersResult,
+    refundedOrdersResult,
+    escrowPendingOrdersResult,
+    scamReportedOrdersResult,
+    paidOrderVolumeResult,
+    payoutCountResult,
+    editorialCountResult,
+    assetReviewsCountResult,
+    creatorReviewsCountResult,
+    wishlistCountResult,
+    followsCountResult
+  ]) {
+    if (result.error) {
+      throw new Error(result.error.message);
     }
   }
 
-  let paidOrders = 0;
-  let pendingOrders = 0;
-  let failedOrders = 0;
-  let refundedOrders = 0;
-  let escrowPendingOrders = 0;
-  let releasedOrders = 0;
-  let scamReportedOrders = 0;
+  const creatorIds = new Set<string>(((creatorIdsResult.data ?? []) as AdminOverviewAssetRow[]).map((asset) => asset.creator_id));
+  const paidOrders = paidOrdersResult.count ?? 0;
+  const pendingOrders = pendingOrdersResult.count ?? 0;
+  const failedOrders = failedOrdersResult.count ?? 0;
+  const refundedOrders = refundedOrdersResult.count ?? 0;
+  const escrowPendingOrders = escrowPendingOrdersResult.count ?? 0;
+  const scamReportedOrders = scamReportedOrdersResult.count ?? 0;
+  const releasedOrders = Math.max(paidOrders - escrowPendingOrders - scamReportedOrders, 0);
   const volumeByCurrency = new Map<string, { amount_kobo: number; order_count: number }>();
 
-  for (const order of orders) {
+  for (const order of (paidOrderVolumeResult.data ?? []) as AdminOverviewPaidOrderVolumeRow[]) {
     const currency = order.currency.toUpperCase();
     const current = volumeByCurrency.get(currency) ?? { amount_kobo: 0, order_count: 0 };
-
-    if (order.status === "paid") {
-      paidOrders += 1;
-      current.amount_kobo += order.amount_kobo;
-      current.order_count += 1;
-      volumeByCurrency.set(currency, current);
-
-      if (order.escrow_status === "awaiting_review") {
-        escrowPendingOrders += 1;
-      } else if (order.escrow_status === "scam_reported") {
-        scamReportedOrders += 1;
-      } else {
-        releasedOrders += 1;
-      }
-      continue;
-    }
-
-    if (order.status === "pending") {
-      pendingOrders += 1;
-      continue;
-    }
-
-    if (order.status === "failed") {
-      failedOrders += 1;
-      continue;
-    }
-
-    refundedOrders += 1;
+    current.amount_kobo += order.amount_kobo;
+    current.order_count += 1;
+    volumeByCurrency.set(currency, current);
   }
 
   return {
     total_profiles: profileCountResult.count ?? 0,
     active_creators: creatorIds.size,
     total_admins: adminCountResult.count ?? 0,
-    total_assets: assets.length,
-    published_assets: publishedAssets,
-    draft_assets: draftAssets,
-    archived_assets: archivedAssets,
-    total_orders: orders.length,
+    pending_verification_requests: pendingVerificationResult.count ?? 0,
+    total_assets: totalAssetsResult.count ?? 0,
+    published_assets: publishedAssetsResult.count ?? 0,
+    draft_assets: draftAssetsResult.count ?? 0,
+    archived_assets: archivedAssetsResult.count ?? 0,
+    total_orders: totalOrdersResult.count ?? 0,
     paid_orders: paidOrders,
     pending_orders: pendingOrders,
     failed_orders: failedOrders,
@@ -3874,6 +3875,65 @@ export async function getAdminCreators(limit?: number): Promise<AdminCreatorReco
             updated_at: payout.updated_at
           }
         : null
+    };
+  });
+}
+
+type AdminAssetSnapshotRow = {
+  id: string;
+  creator_id: string;
+  title: string;
+  category: string;
+  status: Asset["status"];
+  created_at: string;
+  profile?: AssetProfileRow | AssetProfileRow[] | null;
+};
+
+export async function getAdminAssetSnapshots(limit = 4): Promise<Asset[]> {
+  const { data, error } = await supabase
+    .from("assets")
+    .select(`id, creator_id, title, category, status, created_at, profile:profiles!assets_creator_id_fkey(${PROFILE_FIELDS_SELECT})`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as AdminAssetSnapshotRow[]).map((row) => {
+    const profile = normalizeJoinedRecord(row.profile);
+
+    return {
+      id: row.id,
+      creator_id: row.creator_id,
+      title: row.title,
+      description: "",
+      category: row.category,
+      tags: [],
+      price_kobo: 0,
+      minimum_price_kobo: 0,
+      currency: "GHS",
+      delivery_mode: "file",
+      external_delivery_url: null,
+      pricing_model: "free",
+      audio_preview_url: null,
+      audio_genre: null,
+      audio_bpm: null,
+      audio_key: null,
+      license_options: [],
+      sold_count: 0,
+      status: row.status,
+      created_at: row.created_at,
+      profile: profile
+        ? {
+            ...profile,
+            creator_category: profile.creator_category ?? "General",
+            sales_count: profile.sales_count ?? 0,
+            is_verified: Boolean(profile.is_verified)
+          }
+        : null,
+      previews: [],
+      files: []
     };
   });
 }

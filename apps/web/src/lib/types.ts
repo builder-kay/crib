@@ -299,6 +299,7 @@ export type AdminOverview = {
   total_profiles: number;
   active_creators: number;
   total_admins: number;
+  pending_verification_requests: number;
   total_assets: number;
   published_assets: number;
   draft_assets: number;

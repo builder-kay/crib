@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/components/Toast";
-import { reviewCreatorVerificationRequest } from "@/lib/api";
-import { describeProfileVerificationField } from "@/lib/profileVerification";
+import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
-import { CreatorCard, SectionHeader, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
+import { useToast } from "@/components/Toast";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { reviewCreatorVerificationRequest } from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { describeProfileVerificationField, getVerificationStatusLabel } from "@/lib/profileVerification";
+import { SectionHeader, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
 
 export function AdminCreatorsPage() {
   const { creators, creatorsLoading } = useAdminWorkspace();
@@ -51,6 +54,7 @@ export function AdminCreatorsPage() {
       pushToast(variables.decision === "approve" ? "Creator verified." : "Verification request rejected.", "success");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-creators"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-overview"] }),
         queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
         queryClient.invalidateQueries({ queryKey: ["market-assets"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-assets"] }),
@@ -136,7 +140,7 @@ export function AdminCreatorsPage() {
               <p className="admin-toolbar-label">Visible creators</p>
               <p className="admin-toolbar-value">{filteredCreators.length}</p>
               <p className="admin-toolbar-note">
-                Verification-ready profiles rise to the top here so admins can approve or reject them without leaving this lane.
+                Verification-ready profiles stay at the top, and the main seller roster now uses a table so moderation data is easier to scan.
               </p>
             </div>
           </div>
@@ -165,31 +169,160 @@ export function AdminCreatorsPage() {
           </div>
         </div>
 
-        <div className="mt-5 space-y-4">
+        <div className="mt-5">
           {!creatorsLoading && filteredCreators.length === 0 ? (
             <div>
               <EmptyState title="No creators match this search" body="Try a shorter search term or clear the filter to see everyone." />
             </div>
           ) : null}
-          {filteredCreators.map((creator) => {
-            const pendingVerificationAction =
-              reviewVerificationMutation.isPending &&
-              reviewVerificationMutation.variables &&
-              reviewVerificationMutation.variables.creatorId === creator.id
-                ? reviewVerificationMutation.variables.decision
-                : null;
 
-            return (
-              <CreatorCard
-                key={creator.id}
-                creator={creator}
-                onReviewVerification={(decision) => reviewVerificationMutation.mutate({ creatorId: creator.id, decision })}
-                pendingVerificationAction={pendingVerificationAction}
-              />
-            );
-          })}
+          {filteredCreators.length > 0 ? (
+            <div className="admin-data-table-shell">
+              <table className="admin-data-table admin-data-table-wide">
+                <thead>
+                  <tr>
+                    <th>Creator</th>
+                    <th>Category</th>
+                    <th>Verification</th>
+                    <th>Payout</th>
+                    <th>Wallet</th>
+                    <th>Metrics</th>
+                    <th>Joined</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCreators.map((creator) => {
+                    const missingFields = (creator.verification_request?.missing_fields ?? []).map((field) => describeProfileVerificationField(field));
+                    const verificationStatus = creator.verification_request?.status ?? (creator.is_verified ? "approved" : "incomplete");
+                    const pendingVerificationAction =
+                      reviewVerificationMutation.isPending &&
+                      reviewVerificationMutation.variables &&
+                      reviewVerificationMutation.variables.creatorId === creator.id
+                        ? reviewVerificationMutation.variables.decision
+                        : null;
+
+                    return (
+                      <tr key={creator.id}>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <div className="flex min-w-0 items-start gap-3">
+                              {creator.avatar_url ? (
+                                <img src={creator.avatar_url} alt={creator.display_name} className="h-12 w-12 rounded-2xl object-cover" />
+                              ) : (
+                                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-cobalt-100 text-sm font-bold text-cobalt-700">
+                                  {creator.display_name.charAt(0).toUpperCase() || "C"}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link to={`/profile/${creator.id}`} className="admin-data-table-main admin-data-table-main-link">
+                                    {creator.display_name}
+                                  </Link>
+                                  {creator.is_verified ? <VerifiedBadge size="sm" /> : null}
+                                </div>
+                                <span className="admin-data-table-meta">{creator.bio?.trim() || "No bio added yet."}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <div className="admin-table-chip-row">
+                              <span className="admin-chip admin-chip-sand">{creator.creator_category}</span>
+                              <span className={`admin-chip ${sellerStatusChipClass(creator.seller_account_status)}`}>{creator.seller_account_status}</span>
+                            </div>
+                            <span className="admin-data-table-meta">{creator.niche?.trim() || "No niche set"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{getVerificationStatusLabel(verificationStatus)}</span>
+                            <span className="admin-data-table-meta">
+                              {missingFields.length > 0 ? `Missing: ${missingFields.join(", ")}` : "Profile and payout details are complete."}
+                            </span>
+                            {creator.verification_request?.review_note ? <span className="admin-data-table-meta">Note: {creator.verification_request.review_note}</span> : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">
+                              {creator.payout_account
+                                ? `${creator.payout_account.payout_type === "mobile_money" ? "Mobile money" : "Bank"} ${creator.payout_account.status}`
+                                : "No payout setup"}
+                            </span>
+                            <span className="admin-data-table-meta">
+                              {creator.payout_account ? creator.payout_account.settlement_bank_name || creator.payout_account.country : "Creator still needs a payout account"}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{formatCurrency(creator.wallet_balance_kobo, "GHS")}</span>
+                            <span className="admin-data-table-meta">{creator.payout_account ? "Ready for withdrawal routing" : "Not withdrawal-ready yet"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-meta">{creator.asset_count} listings</span>
+                            <span className="admin-data-table-meta">{creator.published_assets} published / {creator.draft_assets} draft</span>
+                            <span className="admin-data-table-meta">{creator.sales_count} sales / {creator.follower_count} followers</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{formatDate(creator.created_at)}</span>
+                            <span className="admin-data-table-meta">
+                              {creator.latest_asset_at ? `Latest listing ${formatDate(creator.latest_asset_at)}` : "No listings yet"}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-actions">
+                            <Link to={`/profile/${creator.id}`} className="admin-action-button admin-action-button-secondary">
+                              Profile
+                            </Link>
+                            {verificationStatus === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => reviewVerificationMutation.mutate({ creatorId: creator.id, decision: "approve" })}
+                                  disabled={pendingVerificationAction !== null}
+                                  className="admin-action-button"
+                                >
+                                  {pendingVerificationAction === "approve" ? "Approving..." : "Approve"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => reviewVerificationMutation.mutate({ creatorId: creator.id, decision: "reject" })}
+                                  disabled={pendingVerificationAction !== null}
+                                  className="admin-action-button admin-action-button-rose"
+                                >
+                                  {pendingVerificationAction === "reject" ? "Rejecting..." : "Reject"}
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </div>
       </section>
     </section>
   );
+}
+
+function sellerStatusChipClass(status: "active" | "warned" | "suspended") {
+  if (status === "warned") {
+    return "admin-chip-sunset";
+  }
+  if (status === "suspended") {
+    return "admin-chip-rose";
+  }
+  return "admin-chip-forest";
 }

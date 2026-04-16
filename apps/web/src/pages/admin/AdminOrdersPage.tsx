@@ -3,9 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
-import { PriceTag } from "@/components/PriceTag";
 import { useToast } from "@/components/Toast";
-import { formatDate, formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { generateDownload, resolveAdminOrderScam } from "@/lib/api";
 import type { AdminOrderRecord, Order } from "@/lib/types";
 import { SectionHeader, StatMini, SummaryPill, orderStatusChip, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
@@ -204,7 +203,7 @@ export function AdminOrdersPage() {
               <p className="admin-toolbar-label">Filtered orders</p>
               <p className="admin-toolbar-value">{filteredOrders.length}</p>
               <p className="admin-toolbar-note">
-                Reported orders can be opened, inspected, and resolved here without leaving the moderation lane.
+                This queue now uses a scrollable operations table so payment, escrow, and admin actions stay visible together.
               </p>
             </div>
           </div>
@@ -217,109 +216,132 @@ export function AdminOrdersPage() {
           <SummaryPill label="Pending Payment" value={overview ? `${overview.pending_orders}` : "..."} tone="lagoon" />
         </div>
 
-        <div className="mt-5 space-y-4">
+        <div className="mt-5">
           {!ordersLoading && filteredOrders.length === 0 ? <EmptyState title="No orders match this view" body="Try switching the payment or escrow filters." /> : null}
-          {filteredOrders.map((order) => {
-            const hasScamCase = order.escrow_status === "scam_reported";
-            const caseResolved = order.scam_resolution_status === "genuine_released" || order.scam_resolution_status === "buyer_refunded";
-            const creatorStatus = order.asset?.creator?.seller_account_status ?? "active";
 
-            return (
-              <article key={order.id} className="admin-record-card">
-                <div className="admin-record-layout">
-                  <div className="admin-record-primary">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-display text-xl font-semibold text-ink">{order.asset?.title ?? "Order record"}</p>
-                      <span className={orderStatusChip(order.status)}>{order.status}</span>
-                      {order.status === "paid" ? <span className={escrowChip(order.escrow_status)}>{escrowLabel(order.escrow_status)}</span> : null}
-                      {order.payment ? <span className="admin-chip admin-chip-cobalt">{order.payment.status} payment</span> : null}
-                      {hasScamCase ? <span className={`admin-chip ${caseResolved ? "admin-chip-lagoon" : "admin-chip-rose"}`}>{caseResolved ? resolutionLabel(order) : "Needs admin review"}</span> : null}
-                    </div>
+          {filteredOrders.length > 0 ? (
+            <div className="admin-data-table-shell">
+              <table className="admin-data-table admin-data-table-wide">
+                <thead>
+                  <tr>
+                    <th>Listing</th>
+                    <th>Buyer</th>
+                    <th>Creator</th>
+                    <th>Amount</th>
+                    <th>Payment</th>
+                    <th>Escrow</th>
+                    <th>Dates</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order) => {
+                    const hasScamCase = order.escrow_status === "scam_reported";
+                    const caseResolved = order.scam_resolution_status === "genuine_released" || order.scam_resolution_status === "buyer_refunded";
+                    const creatorStatus = order.asset?.creator?.seller_account_status ?? "active";
+                    const inspectPending = inspectMutation.isPending && inspectMutation.variables === order.id;
 
-                    <div className="mt-4 admin-detail-grid">
-                      <StatMini label="Buyer" value={order.email} />
-                      <StatMini label="Creator" value={order.asset?.creator?.display_name ?? "Unknown creator"} />
-                      <StatMini label="Created" value={formatDate(order.created_at)} />
-                      <StatMini label="Paid at" value={order.paid_at ? formatDate(order.paid_at) : "Not paid yet"} />
-                      <StatMini label="Escrow due" value={order.escrow_due_at ? formatDate(order.escrow_due_at) : "Not started"} />
-                      <StatMini label="Opened" value={order.buyer_opened_at ? formatDate(order.buyer_opened_at) : "Not opened"} />
-                      <StatMini label="Released" value={order.escrow_released_at ? formatDate(order.escrow_released_at) : "Still held"} />
-                      <StatMini label="Reported" value={order.buyer_reported_at ? formatDate(order.buyer_reported_at) : "Not reported"} />
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="admin-chip admin-chip-sand">Commission {formatCurrency(order.commission_kobo, order.currency)}</span>
-                      <span className="admin-chip admin-chip-forest">Seller keeps {formatCurrency(order.seller_net_amount_kobo, order.currency)}</span>
-                      {order.escrow_release_reason ? <span className="admin-chip admin-chip-cobalt">Release reason: {order.escrow_release_reason.replace(/_/g, " ")}</span> : null}
-                      {order.asset?.creator ? <span className={`admin-chip ${creatorAccountChipClass(creatorStatus)}`}>Seller account: {creatorStatus}</span> : null}
-                      {order.refund_provider_status ? <span className="admin-chip admin-chip-lagoon">Refund status: {order.refund_provider_status}</span> : null}
-                    </div>
-
-                    {order.scam_report_reason ? (
-                      <p className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                        Buyer report: {order.scam_report_reason}
-                      </p>
-                    ) : null}
-
-                    {order.scam_resolution_note ? (
-                      <p className="mt-3 rounded-2xl border border-cobalt-200 bg-cobalt-50 px-4 py-3 text-sm text-cobalt-800">
-                        Admin note: {order.scam_resolution_note}
-                      </p>
-                    ) : null}
-
-                    {order.seller_issue_note ? (
-                      <p className="mt-3 rounded-2xl border border-sunset-200 bg-sunset-50 px-4 py-3 text-sm text-sunset-800">
-                        Seller note: {order.seller_issue_note}
-                      </p>
-                    ) : null}
-
-                    {order.asset?.creator?.seller_account_note && creatorStatus !== "active" ? (
-                      <p className="mt-3 rounded-2xl border border-lagoon-200 bg-lagoon-50 px-4 py-3 text-sm text-lagoon-800">
-                        Current seller account note: {order.asset.creator.seller_account_note}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="admin-record-actions">
-                    <PriceTag amountKobo={order.amount_kobo} currency={order.currency} />
-                    <p className="text-xs text-sand-500">
-                      {order.payment ? `${order.payment.provider.toUpperCase()} updated ${formatDate(order.payment.updated_at ?? order.created_at)}` : "Payment record not linked yet"}
-                    </p>
-                    {hasScamCase ? (
-                      <div className="mt-3 flex w-full flex-col gap-2">
-                        {(order.status === "paid" || order.status === "refunded") ? (
-                          <Link to={`/receipts/${order.id}`} className="admin-action-button admin-action-button-secondary">
-                            View receipt
-                          </Link>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => inspectMutation.mutate(order.id)}
-                          disabled={inspectMutation.isPending}
-                          className="admin-action-button admin-action-button-secondary"
-                        >
-                          {inspectMutation.isPending && inspectMutation.variables === order.id ? "Opening file..." : "Inspect file"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openReviewModal(order)}
-                          className={`admin-action-button ${caseResolved ? "admin-action-button-secondary" : ""}`}
-                        >
-                          {caseResolved ? "View resolution" : "Resolve report"}
-                        </button>
-                      </div>
-                    ) : order.status === "paid" || order.status === "refunded" ? (
-                      <div className="mt-3 flex w-full flex-col gap-2">
-                        <Link to={`/receipts/${order.id}`} className="admin-action-button admin-action-button-secondary">
-                          View receipt
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+                    return (
+                      <tr key={order.id}>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{order.asset?.title ?? "Order record"}</span>
+                            <span className="admin-data-table-meta">Order #{order.id.slice(0, 8)}</span>
+                            <div className="admin-table-chip-row mt-2">
+                              <span className={orderStatusChip(order.status)}>{order.status}</span>
+                              {order.status === "paid" ? <span className={escrowChip(order.escrow_status)}>{escrowLabel(order.escrow_status)}</span> : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{order.email}</span>
+                            <span className="admin-data-table-meta">{order.buyer_id ? `Buyer ID ${order.buyer_id.slice(0, 8)}` : "Guest or email-only checkout"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{order.asset?.creator?.display_name ?? "Unknown creator"}</span>
+                            <div className="admin-table-chip-row mt-2">
+                              <span className={`admin-chip ${creatorAccountChipClass(creatorStatus)}`}>Seller {creatorStatus}</span>
+                              {order.asset?.creator?.is_verified ? <span className="admin-chip admin-chip-cobalt">Verified</span> : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">{formatCurrency(order.amount_kobo, order.currency)}</span>
+                            <span className="admin-data-table-meta">Commission {formatCurrency(order.commission_kobo, order.currency)}</span>
+                            <span className="admin-data-table-meta">Seller keeps {formatCurrency(order.seller_net_amount_kobo, order.currency)}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-main">
+                              {order.payment ? `${order.payment.provider.toUpperCase()} ${order.payment.status}` : "No payment record"}
+                            </span>
+                            <span className="admin-data-table-meta">
+                              {order.payment ? `Updated ${formatDate(order.payment.updated_at ?? order.created_at)}` : "Payment record not linked yet"}
+                            </span>
+                            {order.refund_provider_status ? <span className="admin-data-table-meta">Refund {order.refund_provider_status}</span> : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <div className="admin-table-chip-row">
+                              {hasScamCase ? (
+                                <span className={`admin-chip ${caseResolved ? "admin-chip-lagoon" : "admin-chip-rose"}`}>{caseResolved ? resolutionLabel(order) : "Needs admin review"}</span>
+                              ) : null}
+                              {order.escrow_release_reason ? <span className="admin-chip admin-chip-cobalt">{order.escrow_release_reason.replace(/_/g, " ")}</span> : null}
+                            </div>
+                            {order.scam_report_reason ? <span className="admin-data-table-meta">Buyer report: {order.scam_report_reason}</span> : null}
+                            {order.scam_resolution_note ? <span className="admin-data-table-meta">Admin note: {order.scam_resolution_note}</span> : null}
+                            {order.seller_issue_note ? <span className="admin-data-table-meta">Seller note: {order.seller_issue_note}</span> : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-cell">
+                            <span className="admin-data-table-meta">Created {formatDate(order.created_at)}</span>
+                            <span className="admin-data-table-meta">Paid {order.paid_at ? formatDate(order.paid_at) : "Not paid yet"}</span>
+                            <span className="admin-data-table-meta">Due {order.escrow_due_at ? formatDate(order.escrow_due_at) : "Not started"}</span>
+                            <span className="admin-data-table-meta">Reported {order.buyer_reported_at ? formatDate(order.buyer_reported_at) : "Not reported"}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="admin-data-table-actions">
+                            {(order.status === "paid" || order.status === "refunded") ? (
+                              <Link to={`/receipts/${order.id}`} className="admin-action-button admin-action-button-secondary">
+                                Receipt
+                              </Link>
+                            ) : null}
+                            {hasScamCase ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => inspectMutation.mutate(order.id)}
+                                  disabled={inspectMutation.isPending}
+                                  className="admin-action-button admin-action-button-secondary"
+                                >
+                                  {inspectPending ? "Opening..." : "Inspect"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openReviewModal(order)}
+                                  className={`admin-action-button ${caseResolved ? "admin-action-button-secondary" : ""}`}
+                                >
+                                  {caseResolved ? "Decision" : "Resolve"}
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </div>
       </section>
 
