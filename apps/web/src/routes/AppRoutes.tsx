@@ -16,13 +16,13 @@ import {
   AuthPage,
   CommunityPage,
   CookiePreferencesPage,
-  CreatorsPage,
   DashboardLayoutPage,
   DashboardPage,
   EditorialAdminPage,
   EditorialPage,
   EditorialPostPage,
   HelpPage,
+  HirePage,
   LandingPage,
   MarketPage,
   NotFoundPage,
@@ -41,6 +41,11 @@ function RouteLoader() {
   return <PageLoader label="Loading page" fullHeight />;
 }
 
+function LegacyCreatorsRedirect() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: "/hire", search: location.search, hash: location.hash }} replace />;
+}
+
 function AppRoutesContent() {
   const location = useLocation();
   const locationState = location.state as { backgroundLocation?: RouterLocation } | null;
@@ -52,7 +57,8 @@ function AppRoutesContent() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<LandingPage />} />
           <Route path="/market" element={<MarketPage />} />
-          <Route path="/creators" element={<CreatorsPage />} />
+          <Route path="/hire" element={<HirePage />} />
+          <Route path="/creators" element={<LegacyCreatorsRedirect />} />
           <Route path="/editorial" element={<EditorialPage />} />
           <Route path="/editorial/:slug" element={<EditorialPostPage />} />
           <Route path="/asset/:id" element={<AssetDetailPage />} />

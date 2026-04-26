@@ -40,8 +40,8 @@ export function LandingPage() {
     void routePreloaders.market();
   };
 
-  const prefetchCreators = () => {
-    void routePreloaders.creators();
+  const prefetchHire = () => {
+    void routePreloaders.hire();
   };
 
   const prefetchBlog = () => {
@@ -75,12 +75,12 @@ export function LandingPage() {
                 Explore Marketplace
               </Link>
               <Link
-                to="/creators"
-                onMouseEnter={prefetchCreators}
-                onFocus={prefetchCreators}
+                to="/hire"
+                onMouseEnter={prefetchHire}
+                onFocus={prefetchHire}
                 className="rounded-full border border-sand-300 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-ink transition hover:border-cobalt-200 hover:bg-cobalt-50"
               >
-                Browse Creators
+                Hire Talent
               </Link>
               <Link
                 to="/sell"
@@ -189,12 +189,12 @@ export function LandingPage() {
               Publish first asset
             </Link>
             <Link
-              to="/creators"
-              onMouseEnter={prefetchCreators}
-              onFocus={prefetchCreators}
+              to="/hire"
+              onMouseEnter={prefetchHire}
+              onFocus={prefetchHire}
               className="rounded-full border border-white/40 bg-white/10 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white backdrop-blur-sm transition hover:bg-white/20"
             >
-              Meet creators
+              Browse hire talent
             </Link>
           </div>
         </div>

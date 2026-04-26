@@ -26,7 +26,7 @@ function createLazyPage<TModule extends Record<string, unknown>, TExport extends
 
 const landingPage = createLazyPage(() => import("@/pages/LandingPage"), "LandingPage");
 const marketPage = createLazyPage(() => import("@/pages/MarketPage"), "MarketPage");
-const creatorsPage = createLazyPage(() => import("@/pages/CreatorsPage"), "CreatorsPage");
+const hirePage = createLazyPage(() => import("@/pages/HirePage"), "HirePage");
 const editorialPage = createLazyPage(() => import("@/pages/EditorialPage"), "EditorialPage");
 const editorialPostPage = createLazyPage(() => import("@/pages/EditorialPostPage"), "EditorialPostPage");
 const assetDetailPage = createLazyPage(() => import("@/pages/AssetDetailPage"), "AssetDetailPage");
@@ -57,7 +57,7 @@ const notFoundPage = createLazyPage(() => import("@/pages/NotFoundPage"), "NotFo
 
 export const LandingPage = landingPage.Component;
 export const MarketPage = marketPage.Component;
-export const CreatorsPage = creatorsPage.Component;
+export const HirePage = hirePage.Component;
 export const EditorialPage = editorialPage.Component;
 export const EditorialPostPage = editorialPostPage.Component;
 export const AssetDetailPage = assetDetailPage.Component;
@@ -89,7 +89,8 @@ export const NotFoundPage = notFoundPage.Component;
 export const routePreloaders = {
   landing: () => landingPage.preload(),
   market: () => marketPage.preload(),
-  creators: () => creatorsPage.preload(),
+  hire: () => hirePage.preload(),
+  creators: () => hirePage.preload(),
   sell: () => uploadPage.preload(),
   blog: () => editorialPage.preload(),
   blogPost: () => editorialPostPage.preload(),

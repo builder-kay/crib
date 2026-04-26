@@ -36,7 +36,7 @@ export function AppLayout() {
     hasPreloadedRoutes.current = true;
 
     const preloadCommonRoutes = () => {
-      void Promise.all([routePreloaders.market(), routePreloaders.creators(), routePreloaders.blog(), routePreloaders.auth()]);
+      void Promise.all([routePreloaders.market(), routePreloaders.hire(), routePreloaders.blog(), routePreloaders.auth()]);
     };
 
     if (typeof window.requestIdleCallback === "function") {

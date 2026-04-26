@@ -66,8 +66,8 @@ export function NotificationsPage() {
           title="No notifications yet"
           body="Follow creators for release alerts and turn on your hire button so clients can send requests."
           action={
-            <Link to="/creators" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">
-              Browse creators
+            <Link to="/hire" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white">
+              Browse hire talent
             </Link>
           }
         />

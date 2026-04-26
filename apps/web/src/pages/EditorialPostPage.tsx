@@ -121,10 +121,10 @@ export function EditorialPostPage() {
                 All stories
               </Link>
               <Link
-                to="/creators"
+                to="/hire"
                 className="rounded-full border border-sand-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100"
               >
-                Browse creators
+                Hire talent
               </Link>
             </div>
           </div>

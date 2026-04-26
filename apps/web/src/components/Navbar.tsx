@@ -10,11 +10,11 @@ import { useAuthStore } from "@/store/authStore";
 const baseNavItems = [
 { to: "/market", label: "Ghetto" },
   { to: "/sell", label: "Sell" },
-  { to: "/creators", label: "Creators" },
+  { to: "/hire", label: "Hire" },
   { to: "/editorial", label: "Blog" }
 ];
 
-type MobilePrimaryNavId = "discover" | "sell" | "creators" | "editorial" | "dashboard";
+type MobilePrimaryNavId = "discover" | "sell" | "hire" | "editorial" | "dashboard";
 
 type NavItem = {
   to: string;
@@ -41,8 +41,8 @@ function isMobilePrimaryNavActive(pathname: string, itemId: MobilePrimaryNavId) 
   switch (itemId) {
     case "discover":
       return pathname === "/market";
-    case "creators":
-      return pathname === "/creators";
+    case "hire":
+      return pathname === "/hire" || pathname === "/creators";
     case "sell":
       return pathname === "/sell";
     case "editorial":
@@ -71,7 +71,7 @@ function MobilePrimaryNavIcon({ id }: { id: MobilePrimaryNavId }) {
           <path d="m20 20-3.5-3.5" />
         </svg>
       );
-    case "creators":
+    case "hire":
       return (
         <svg {...sharedProps}>
           <path d="M16 20v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1" />
@@ -159,7 +159,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
     const items: NavItem[] = [
       { ...baseNavItems[0], preload: routePreloaders.market },
       { ...baseNavItems[1], preload: routePreloaders.sell },
-      { ...baseNavItems[2], preload: routePreloaders.creators },
+      { ...baseNavItems[2], preload: routePreloaders.hire },
       { ...baseNavItems[3], preload: routePreloaders.blog }
     ];
     if (user) {
@@ -178,7 +178,7 @@ export function Navbar({ theme, onToggleTheme }: { theme: "light" | "dark"; onTo
     () => [
 { id: "discover", to: "/market", label: "Ghetto", preload: routePreloaders.market },
       { id: "sell", to: "/sell", label: "Sell", preload: routePreloaders.sell },
-      { id: "creators", to: "/creators", label: "Creators", preload: routePreloaders.creators },
+      { id: "hire", to: "/hire", label: "Hire", preload: routePreloaders.hire },
       { id: "editorial", to: "/editorial", label: "Blog", preload: routePreloaders.blog },
       ...(user ? [{ id: "dashboard", to: "/dashboard", label: "Dashboard", preload: routePreloaders.dashboard } satisfies MobilePrimaryNavItem] : [])
     ],
