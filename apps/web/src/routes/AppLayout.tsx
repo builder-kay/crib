@@ -59,7 +59,7 @@ export function AppLayout() {
             : isReceiptPage
               ? "mx-auto w-full max-w-[1240px] px-4 py-6 md:px-6 md:py-8"
               : isHirePage
-                ? "mx-auto w-full max-w-[1600px] px-2 py-6 sm:px-3 md:px-4 md:py-8 lg:px-5"
+                ? "mx-auto w-full max-w-[1600px] px-1 py-5 sm:px-2 md:px-4 md:py-8 lg:px-5"
               : "mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8"
         }
       >

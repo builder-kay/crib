@@ -139,7 +139,7 @@ export function HirePage() {
 
   return (
     <div className="creators-shell space-y-5">
-      <section className="creators-hire-banner relative overflow-hidden rounded-[1.9rem] px-5 py-6 sm:px-6 md:px-8 md:py-8">
+      <section className="creators-hire-banner relative overflow-hidden rounded-[1.7rem] px-4 py-5 sm:rounded-[1.9rem] sm:px-5 sm:py-6 md:px-8 md:py-8">
         <div className="pointer-events-none absolute inset-y-0 right-[-8%] w-[42%] rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute left-[8%] top-[18%] h-28 w-28 rounded-full bg-white/10 blur-3xl" />
 
@@ -156,12 +156,12 @@ export function HirePage() {
       </section>
 
       <div
-        className={`creators-filter-shell sticky top-[4.7rem] z-30 -mx-2 rounded-[1.8rem] px-2 py-2 md:top-[5.35rem] md:-mx-3 md:px-3 ${
+        className={`creators-filter-shell sticky top-[4.7rem] z-30 -mx-1 rounded-[1.45rem] px-1 py-1.5 sm:-mx-2 sm:rounded-[1.8rem] sm:px-2 sm:py-2 md:top-[5.35rem] md:-mx-3 md:px-3 ${
           filtersSubdued ? "creators-filter-shell-subdued" : ""
         }`}
       >
         <section
-          className={`surface-card creators-filter-panel p-3 sm:p-4 ${
+          className={`surface-card creators-filter-panel p-2.5 sm:p-4 ${
             filtersSubdued ? "creators-filter-panel-subdued" : ""
           } ${isMobileFilterCompact ? "creators-filter-panel-mobile-compact" : ""}`}
           onFocusCapture={() => setIsFilterPanelFocused(true)}
@@ -257,7 +257,7 @@ function CreatorCard({
   const fallbackTone = pickFallbackTone(creator.id);
 
   return (
-    <article className="hire-creator-card group mx-auto w-full max-w-[19.1rem] overflow-hidden rounded-[1.9rem] p-2.5 xl:max-w-none">
+    <article className="hire-creator-card group mx-auto w-full max-w-none overflow-hidden rounded-[1.9rem] p-2.5 md:max-w-[19.1rem] xl:max-w-none">
       <div className="hire-creator-frame relative overflow-hidden rounded-[1.65rem]">
         <div className="relative aspect-[0.72/1] overflow-hidden rounded-[1.65rem] bg-[#0d1017]">
           {heroImageUrl ? (
