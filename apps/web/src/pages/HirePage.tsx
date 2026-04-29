@@ -252,12 +252,12 @@ function CreatorCard({
   const stats = [
     { label: "Rating", value: creator.review_count > 0 ? creator.average_rating.toFixed(1) : "New", accent: true },
     { label: "Sales", value: formatCompact(creator.sales_count), accent: false },
-    { label: "Portfolio", value: formatCompact(creator.published_assets), accent: false }
+    { label: "Reviews", value: formatCompact(creator.review_count), accent: false }
   ];
   const fallbackTone = pickFallbackTone(creator.id);
 
   return (
-    <article className="hire-creator-card group mx-auto w-full max-w-none overflow-hidden rounded-[1.9rem] p-2.5 md:max-w-[19.1rem] xl:max-w-none">
+    <article className="hire-creator-card group mx-auto w-full max-w-none overflow-hidden rounded-[1.9rem] p-[0.42rem] md:max-w-[19.1rem] xl:max-w-none">
       <div className="hire-creator-frame relative overflow-hidden rounded-[1.65rem]">
         <div className="relative aspect-[0.72/1] overflow-hidden rounded-[1.65rem] bg-[#0d1017]">
           {heroImageUrl ? (
@@ -314,7 +314,7 @@ function CreatorCard({
                 ))}
               </div>
 
-              <div className="mt-5 flex items-center gap-2.5">
+              <div className="mt-5 flex items-center gap-2">
                 {isOwnProfile ? (
                   <Link to="/profile" className="hire-creator-primary inline-flex flex-1 items-center justify-center">
                     <span className="hire-creator-primary-content">Manage Profile</span>
@@ -336,8 +336,9 @@ function CreatorCard({
                 )}
 
                 <Link to={creatorProfilePath} className="hire-creator-secondary" aria-label={`View ${creator.display_name} profile`}>
-                  <svg className="h-[1.25rem] w-[1.25rem]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M7.25 5.75A1.75 1.75 0 0 1 9 4h6a1.75 1.75 0 0 1 1.75 1.75v13a.5.5 0 0 1-.8.4L12 16.2l-3.95 2.95a.5.5 0 0 1-.8-.4v-13Z" />
+                  <svg className="h-[1rem] w-[1rem] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+                    <path d="M5 20.2a7 7 0 0 1 14 0" />
                   </svg>
                 </Link>
               </div>

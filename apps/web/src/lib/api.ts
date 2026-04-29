@@ -34,6 +34,7 @@ import type {
   CreatorDashboard,
   CreatorDirectoryEntry,
   CreatorFunnelSummary,
+  HirePricingMode,
   CreatorVerificationRequest,
   CreatorVerificationStatus,
   HireRequestNotification,
@@ -81,7 +82,7 @@ type AssetProfileRow = {
 
 const PROFILE_FIELDS_SELECT = "display_name, avatar_url, niche, creator_category, sales_count, is_verified, seller_account_status, seller_account_note";
 const PROFILE_SELECT =
-  "id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note, hire_enabled, hire_terms";
+  "id, display_name, bio, avatar_url, creator_category, niche, sales_count, is_verified, socials, seller_account_status, seller_account_note, hire_enabled, hire_terms, hire_pricing_mode, hire_hourly_rate_kobo, hire_pricing_currency, hire_pricing_guide";
 const CREATOR_VERIFICATION_SELECT =
   "creator_id, status, is_profile_complete, missing_fields, submitted_at, reviewed_at, reviewed_by, review_note";
 
@@ -239,6 +240,10 @@ type CreatorProfileRow = {
   seller_account_note?: string | null;
   hire_enabled?: boolean | null;
   hire_terms?: string | null;
+  hire_pricing_mode?: string | null;
+  hire_hourly_rate_kobo?: number | null;
+  hire_pricing_currency?: string | null;
+  hire_pricing_guide?: string | null;
 };
 
 type ProfileRow = {
@@ -255,6 +260,10 @@ type ProfileRow = {
   seller_account_note?: string | null;
   hire_enabled?: boolean | null;
   hire_terms?: string | null;
+  hire_pricing_mode?: string | null;
+  hire_hourly_rate_kobo?: number | null;
+  hire_pricing_currency?: string | null;
+  hire_pricing_guide?: string | null;
 };
 
 type CreatorAssetStatRow = {
@@ -334,6 +343,8 @@ type CreatorHireRequestRow = {
   requester_display_name: string | null;
   requester_email: string | null;
   terms_snapshot: string | null;
+  pricing_guide_snapshot: string | null;
+  client_message: string | null;
   requester?:
     | { id: string; display_name: string; avatar_url: string | null }
     | Array<{ id: string; display_name: string; avatar_url: string | null }>
@@ -682,7 +693,9 @@ function mapHireRequestNotification(row: CreatorHireRequestRow): HireRequestNoti
     requester_name: (requester?.display_name ?? row.requester_display_name?.trim()) || "Client",
     requester_email: row.requester_email ?? null,
     requester_avatar_url: requester?.avatar_url ?? null,
-    terms_snapshot: row.terms_snapshot?.trim() || DEFAULT_HIRE_TERMS
+    terms_snapshot: row.terms_snapshot?.trim() || DEFAULT_HIRE_TERMS,
+    pricing_guide_snapshot: row.pricing_guide_snapshot?.trim() || null,
+    client_message: row.client_message?.trim() || ""
   };
 }
 
@@ -704,6 +717,8 @@ function mapCreatorVerificationRequest(row: CreatorVerificationRequestRow | null
 }
 
 function mapProfile(row: ProfileRow, verificationRow?: CreatorVerificationRequestRow | null): Profile {
+  const normalizedPricingMode = normalizeHirePricingMode(row.hire_pricing_mode, row.hire_pricing_guide);
+
   return {
     id: row.id,
     display_name: row.display_name,
@@ -718,8 +733,20 @@ function mapProfile(row: ProfileRow, verificationRow?: CreatorVerificationReques
     seller_account_note: row.seller_account_note ?? null,
     hire_enabled: row.hire_enabled ?? true,
     hire_terms: row.hire_terms?.trim() || DEFAULT_HIRE_TERMS,
+    hire_pricing_mode: normalizedPricingMode,
+    hire_hourly_rate_kobo: typeof row.hire_hourly_rate_kobo === "number" && Number.isFinite(row.hire_hourly_rate_kobo) ? Math.max(0, Math.round(row.hire_hourly_rate_kobo)) : null,
+    hire_pricing_currency: row.hire_pricing_currency?.trim().toUpperCase() || "GHS",
+    hire_pricing_guide: row.hire_pricing_guide?.trim() || null,
     verification: mapCreatorVerificationRequest(verificationRow)
   };
+}
+
+function normalizeHirePricingMode(value: string | null | undefined, pricingGuide: string | null | undefined): HirePricingMode {
+  if (value === "hourly" || value === "custom_list" || value === "dm_to_know") {
+    return value;
+  }
+
+  return pricingGuide?.trim() ? "custom_list" : "dm_to_know";
 }
 
 function normalizeJoinedRecord<T>(value: T | T[] | null | undefined): T | null {
@@ -1386,6 +1413,13 @@ export async function updateProfile(userId: string, input: ProfileInput) {
     instagram: input.instagram ?? "",
     x: input.x ?? ""
   };
+  const hirePricingMode = input.hire_pricing_mode;
+  const hirePricingCurrency = input.hire_pricing_currency.trim().toUpperCase() || "GHS";
+  const hireHourlyRateKobo =
+    hirePricingMode === "hourly" && typeof input.hire_hourly_rate === "number" && Number.isFinite(input.hire_hourly_rate)
+      ? Math.round(input.hire_hourly_rate * 100)
+      : null;
+  const hirePricingGuide = hirePricingMode === "custom_list" ? input.hire_pricing_guide?.trim() || null : null;
 
   const { data, error } = await supabase
     .from("profiles")
@@ -1398,7 +1432,11 @@ export async function updateProfile(userId: string, input: ProfileInput) {
         niche: input.niche ?? "",
         socials,
         hire_enabled: input.hire_enabled,
-        hire_terms: input.hire_terms.trim()
+        hire_terms: input.hire_terms.trim(),
+        hire_pricing_mode: hirePricingMode,
+        hire_hourly_rate_kobo: hireHourlyRateKobo,
+        hire_pricing_currency: hirePricingCurrency,
+        hire_pricing_guide: hirePricingGuide
       },
       { onConflict: "id" }
     )
@@ -2173,7 +2211,7 @@ export async function getHireRequestNotifications(userId: string): Promise<HireR
   const { data, error } = await supabase
     .from("creator_hire_requests")
     .select(
-      "id, created_at, read_at, delivery_status, creator_id, requester_id, requester_display_name, requester_email, terms_snapshot, requester:profiles!creator_hire_requests_requester_id_fkey(id, display_name, avatar_url)"
+      "id, created_at, read_at, delivery_status, creator_id, requester_id, requester_display_name, requester_email, terms_snapshot, pricing_guide_snapshot, client_message, requester:profiles!creator_hire_requests_requester_id_fkey(id, display_name, avatar_url)"
     )
     .eq("creator_id", userId)
     .order("created_at", { ascending: false })
@@ -2255,10 +2293,11 @@ export async function markAccountNotificationAsRead(notification: AccountNotific
   await markReleaseNotificationAsRead(notification.id, userId);
 }
 
-export async function submitCreatorHireRequest(creatorId: string): Promise<void> {
+export async function submitCreatorHireRequest(creatorId: string, clientMessage: string): Promise<void> {
   await requireAccessToken("Sign in to hire this creator.");
   const { error } = await supabase.rpc("submit_creator_hire_request", {
-    p_creator_id: creatorId
+    p_creator_id: creatorId,
+    p_client_message: clientMessage.trim()
   });
 
   if (error) {

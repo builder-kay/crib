@@ -29,8 +29,9 @@ import {
   getProfileVerificationChecklist,
   getVerificationStatusLabel
 } from "@/lib/profileVerification";
+import { formatMajorCurrency } from "@/lib/format";
 import { formatFileSize, MAX_PROFILE_AVATAR_SIZE_BYTES } from "@/lib/uploadLimits";
-import { payoutAccountSchema, profileSchema } from "@/lib/validators/asset";
+import { HIRE_PRICING_MODE_OPTIONS, payoutAccountSchema, profileSchema } from "@/lib/validators/asset";
 import { useAuthStore } from "@/store/authStore";
 
 const PAYOUT_COUNTRY_OPTIONS = [
@@ -38,6 +39,32 @@ const PAYOUT_COUNTRY_OPTIONS = [
   { value: "nigeria", label: "Nigeria" },
   { value: "kenya", label: "Kenya" },
   { value: "south africa", label: "South Africa" }
+] as const;
+
+const HIRE_PRICING_OPTIONS: Array<{
+  value: (typeof HIRE_PRICING_MODE_OPTIONS)[number];
+  eyebrow: string;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "hourly",
+    eyebrow: "Rate",
+    label: "By hour",
+    description: "Show a public hourly rate before clients send their brief."
+  },
+  {
+    value: "custom_list",
+    eyebrow: "Packages",
+    label: "Custom list",
+    description: "Share starter packages, retainers, or example pricing lines."
+  },
+  {
+    value: "dm_to_know",
+    eyebrow: "Quote",
+    label: "DM to know",
+    description: "Keep pricing private and quote after reviewing the project."
+  }
 ] as const;
 
 type ProfileTabId = "overview" | "portfolio" | "reviews" | "payout" | "edit";
@@ -165,6 +192,10 @@ export function ProfilePage() {
   const [xHandle, setXHandle] = useState("");
   const [hireEnabled, setHireEnabled] = useState(true);
   const [hireTerms, setHireTerms] = useState(DEFAULT_HIRE_TERMS);
+  const [hirePricingMode, setHirePricingMode] = useState<(typeof HIRE_PRICING_MODE_OPTIONS)[number]>("dm_to_know");
+  const [hireHourlyRate, setHireHourlyRate] = useState("");
+  const [hirePricingCurrency, setHirePricingCurrency] = useState("GHS");
+  const [hirePricingGuide, setHirePricingGuide] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ProfileTabId>("overview");
@@ -184,6 +215,10 @@ export function ProfilePage() {
     setXHandle((profileQuery.data.socials?.x as string) ?? "");
     setHireEnabled(profileQuery.data.hire_enabled ?? true);
     setHireTerms(profileQuery.data.hire_terms?.trim() || DEFAULT_HIRE_TERMS);
+    setHirePricingMode(profileQuery.data.hire_pricing_mode ?? (profileQuery.data.hire_pricing_guide?.trim() ? "custom_list" : "dm_to_know"));
+    setHireHourlyRate(majorInputFromKobo(profileQuery.data.hire_hourly_rate_kobo));
+    setHirePricingCurrency(profileQuery.data.hire_pricing_currency?.trim() || "GHS");
+    setHirePricingGuide(profileQuery.data.hire_pricing_guide?.trim() || "");
   }, [profileQuery.data]);
 
   useEffect(() => {
@@ -241,6 +276,17 @@ export function ProfilePage() {
     }
   }, [displayName, isOwnProfile, payoutBusinessName]);
 
+  const hourlyRatePreview = useMemo(() => {
+    const amount = Number(hireHourlyRate);
+    const currency = hirePricingCurrency.trim().toUpperCase() || "GHS";
+
+    if (!Number.isFinite(amount) || amount < 0.5) {
+      return null;
+    }
+
+    return formatMajorCurrency(amount, currency);
+  }, [hireHourlyRate, hirePricingCurrency]);
+
   const existingCreatorReview = useMemo(() => {
     if (!user?.id) {
       return null;
@@ -274,7 +320,11 @@ export function ProfilePage() {
         instagram: instagram.trim(),
         x: xHandle.trim(),
         hire_enabled: hireEnabled,
-        hire_terms: hireTerms.trim()
+        hire_terms: hireTerms.trim(),
+        hire_pricing_mode: hirePricingMode,
+        hire_hourly_rate: hireHourlyRate,
+        hire_pricing_currency: hirePricingCurrency.trim().toUpperCase(),
+        hire_pricing_guide: hirePricingGuide.trim()
       });
 
       if (!parsed.success) {
@@ -1238,8 +1288,85 @@ export function ProfilePage() {
                 <div className="mt-4">
                   <Field label="Terms of hire" value={hireTerms} onChange={setHireTerms} multiline required />
                 </div>
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-sand-800">Pricing visibility</p>
+                  <p className="mt-1 text-xs text-sand-500">
+                    Choose whether clients see an hourly rate, a package list, or a `DM to know` note before they reach out.
+                  </p>
+
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    {HIRE_PRICING_OPTIONS.map((option) => {
+                      const active = hirePricingMode === option.value;
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setHirePricingMode(option.value)}
+                          className={`rounded-2xl border px-4 py-4 text-left transition ${
+                            active
+                              ? "border-cobalt-300 bg-cobalt-50 shadow-[0_18px_30px_-26px_rgba(31,70,239,0.45)]"
+                              : "border-sand-200 bg-white hover:border-cobalt-200 hover:bg-cobalt-50/40"
+                          }`}
+                        >
+                          <p className={`text-[0.68rem] font-semibold uppercase tracking-[0.16em] ${active ? "text-cobalt-700" : "text-sand-500"}`}>
+                            {option.eyebrow}
+                          </p>
+                          <p className={`mt-2 text-sm font-semibold ${active ? "text-cobalt-900" : "text-ink"}`}>{option.label}</p>
+                          <p className={`mt-2 text-sm leading-6 ${active ? "text-cobalt-800" : "text-sand-600"}`}>{option.description}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {hirePricingMode === "hourly" ? (
+                    <div className="mt-4 rounded-2xl border border-cobalt-100 bg-cobalt-50/70 p-4">
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_8.5rem]">
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium text-sand-800">Hourly rate</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={hireHourlyRate}
+                            onChange={(event) => setHireHourlyRate(event.target.value)}
+                            className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium text-sand-800">Currency</span>
+                          <input
+                            value={hirePricingCurrency}
+                            onChange={(event) => setHirePricingCurrency(event.target.value.toUpperCase())}
+                            maxLength={6}
+                            className="w-full rounded-xl border border-sand-300 bg-white px-3 py-2 uppercase outline-none transition focus:border-cobalt-500 focus:ring-2 focus:ring-cobalt-100"
+                          />
+                        </label>
+                      </div>
+                      <p className="mt-2 text-xs text-cobalt-800">
+                        {hourlyRatePreview ? `Clients will see ${hourlyRatePreview}/hr in the hire modal.` : "Clients will see your hourly rate in the hire modal."}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {hirePricingMode === "custom_list" ? (
+                    <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50/70 p-4">
+                      <Field label="Custom pricing list" value={hirePricingGuide} onChange={setHirePricingGuide} multiline />
+                      <p className="mt-2 text-xs text-sand-500">
+                        Use one line per offer, for example: `Brand package - from GHS 450` or `Monthly retainer - GHS 2,000`.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {hirePricingMode === "dm_to_know" ? (
+                    <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50 px-4 py-4 text-sm leading-6 text-sand-700">
+                      Clients will see `DM to know` and will need to describe their project before you share a quote.
+                    </div>
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs text-sand-500">
-                  Clients will see these terms in a modal before they can send a hire request to your account.
+                  Clients will see these terms and your chosen pricing format in a modal before they can send a hire request to your account.
                 </p>
               </div>
 
@@ -1291,6 +1418,15 @@ export function ProfilePage() {
       ) : null}
     </div>
   );
+}
+
+function majorInputFromKobo(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "";
+  }
+
+  const majorValue = value / 100;
+  return Number.isInteger(majorValue) ? String(majorValue) : majorValue.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function ProfileTabButton({

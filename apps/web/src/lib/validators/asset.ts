@@ -32,6 +32,7 @@ export const OTHER_ASSET_CATEGORIES = ["Creative Cloud Bundles", "Other Creative
 export const PRICING_MODE_OPTIONS = ["free", "paid", "pay_what_you_want"] as const;
 export const DELIVERY_MODE_OPTIONS = ["file", "external_link"] as const;
 export const AUDIO_LICENSE_OPTIONS = ["personal_use", "commercial_use", "exclusive_rights"] as const;
+export const HIRE_PRICING_MODE_OPTIONS = ["hourly", "custom_list", "dm_to_know"] as const;
 export const AUDIO_GENRE_OPTIONS = [
   "Afrobeats",
   "Amapiano",
@@ -286,6 +287,18 @@ export const uploadAssetSchema = z
 
 export type UploadAssetInput = z.infer<typeof uploadAssetSchema>;
 
+const optionalProfileNumber = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return Number(value);
+  }
+
+  return value;
+}, z.number().finite().nonnegative().nullable().optional());
+
 export const profileSchema = z.object({
   display_name: z.string().min(2).max(80),
   bio: z.string().min(20).max(280),
@@ -295,7 +308,40 @@ export const profileSchema = z.object({
   instagram: z.string().max(120).optional().or(z.literal("")),
   x: z.string().max(120).optional().or(z.literal("")),
   hire_enabled: z.boolean().default(true),
-  hire_terms: z.string().min(40).max(2400).default(DEFAULT_HIRE_TERMS)
+  hire_terms: z.string().min(40).max(2400).default(DEFAULT_HIRE_TERMS),
+  hire_pricing_mode: z.enum(HIRE_PRICING_MODE_OPTIONS).default("dm_to_know"),
+  hire_hourly_rate: optionalProfileNumber,
+  hire_pricing_currency: z.string().min(3).max(6).default("GHS"),
+  hire_pricing_guide: z.string().max(1600).optional().or(z.literal("")).default("")
+}).superRefine((value, context) => {
+  const pricingGuide = value.hire_pricing_guide.trim();
+  const pricingCurrency = value.hire_pricing_currency.trim();
+
+  if (value.hire_pricing_mode === "hourly") {
+    if (typeof value.hire_hourly_rate !== "number" || !Number.isFinite(value.hire_hourly_rate) || value.hire_hourly_rate < 0.5) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["hire_hourly_rate"],
+        message: "Set an hourly rate of at least 0.50."
+      });
+    }
+
+    if (pricingCurrency.length < 3) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["hire_pricing_currency"],
+        message: "Add a 3-letter currency code."
+      });
+    }
+  }
+
+  if (value.hire_pricing_mode === "custom_list" && pricingGuide.length < 8) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["hire_pricing_guide"],
+      message: "Add a short pricing list clients can review."
+    });
+  }
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

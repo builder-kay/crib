@@ -1,3 +1,5 @@
+export type HirePricingMode = "hourly" | "custom_list" | "dm_to_know";
+
 export type Profile = {
   id: string;
   display_name: string;
@@ -12,6 +14,10 @@ export type Profile = {
   seller_account_note: string | null;
   hire_enabled: boolean;
   hire_terms: string;
+  hire_pricing_mode: HirePricingMode;
+  hire_hourly_rate_kobo: number | null;
+  hire_pricing_currency: string;
+  hire_pricing_guide: string | null;
   verification: CreatorVerificationRequest | null;
 };
 
@@ -266,6 +272,8 @@ export type HireRequestNotification = {
   requester_email: string | null;
   requester_avatar_url: string | null;
   terms_snapshot: string;
+  pricing_guide_snapshot: string | null;
+  client_message: string;
 };
 
 export type AccountNotification = ReleaseNotification | HireRequestNotification;

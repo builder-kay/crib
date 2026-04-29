@@ -84,6 +84,12 @@ export function NotificationsPage() {
                     <>
                       <p className="text-sm font-semibold text-ink">{notification.requester_name} wants to hire you</p>
                       <p className="mt-1 text-sm text-sand-700">They reviewed your terms and sent a hire request through Crib.</p>
+                      {notification.client_message ? (
+                        <div className="mt-3 rounded-2xl border border-sand-200 bg-sand-50/80 px-3 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-500">Client message</p>
+                          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-sand-700">{notification.client_message}</p>
+                        </div>
+                      ) : null}
                       {notification.requester_email ? (
                         <p className="mt-1 text-xs text-sand-500">Contact: {notification.requester_email}</p>
                       ) : null}
