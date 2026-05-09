@@ -3608,6 +3608,10 @@
   }
 
   @media (max-width: 767px) {
+    .creators-shell::before {
+      inset-inline: 0;
+    }
+
     .creators-filter-panel {
       overflow: hidden;
     }

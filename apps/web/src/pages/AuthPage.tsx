@@ -751,7 +751,7 @@ export function AuthPage() {
                       className={`${inputClass} mt-0 min-w-0 flex-1`}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-sand-500">
+                  <p className="mt-1 text-[11px] text-cobalt-700">
                     OTP sign-up supports {supportedCountryCopy} mobile numbers. If yours is outside those countries, use Google or email instead.
                   </p>
                 </div>
@@ -769,7 +769,7 @@ export function AuthPage() {
                     placeholder="name@example.com"
                     className={inputClass}
                   />
-                  <p className="mt-1 text-xs text-sand-500">Useful for checkout receipts and future account recovery.</p>
+                  <p className="mt-1 text-[11px] text-cobalt-700">Useful for checkout receipts and future account recovery.</p>
                 </div>
 
                 <div>
@@ -815,7 +815,7 @@ export function AuthPage() {
                       placeholder="Re-enter your password"
                       className={`${inputClass} ${registerConfirmMismatch ? "border-sunset-300 focus:border-sunset-500 focus:ring-sunset-100" : ""}`}
                     />
-                    <p className={`mt-1 text-xs ${registerConfirmMismatch ? "text-sunset-700" : "text-sand-500"}`}>
+                    <p className={`mt-1 text-[11px] ${registerConfirmMismatch ? "text-sunset-700" : "text-cobalt-700"}`}>
                       {registerConfirmPassword.length === 0
                         ? "Re-enter your password to confirm."
                         : registerConfirmMismatch
