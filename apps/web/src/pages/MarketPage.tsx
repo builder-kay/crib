@@ -24,6 +24,8 @@ export function MarketPage() {
   const [maxPrice, setMaxPrice] = useState("");
   const [fileType, setFileType] = useState("all");
   const [showIntro, setShowIntro] = useState(true);
+  const [filtersSubdued, setFiltersSubdued] = useState(false);
+  const [isFilterPanelFocused, setIsFilterPanelFocused] = useState(false);
 
   useEffect(() => {
     setSearch((previous) => (previous === querySearch ? previous : querySearch));
@@ -103,6 +105,20 @@ export function MarketPage() {
   }
 
   useEffect(() => {
+    const syncStickyFilterState = () => {
+      const nextSubdued = window.scrollY > 28;
+      setFiltersSubdued((current) => (current === nextSubdued ? current : nextSubdued));
+    };
+
+    syncStickyFilterState();
+    window.addEventListener("scroll", syncStickyFilterState, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", syncStickyFilterState);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!showIntro || typeof window === "undefined") {
       return;
     }
@@ -171,6 +187,8 @@ export function MarketPage() {
       window.sessionStorage.setItem(storageKey, JSON.stringify(Array.from(nextSeen)));
     }
   }, [displayAssets, user?.id, userContactEmail]);
+
+  const isMobileFilterCompact = filtersSubdued && !isFilterPanelFocused;
 
   return (
     <div className="discover-shell space-y-8 md:space-y-10">
@@ -283,13 +301,26 @@ export function MarketPage() {
           </div>
         </div>
 
-        <div className="sticky top-[4.7rem] z-30 -mx-2 rounded-[1.8rem] bg-sand-50/92 px-2 py-2 backdrop-blur md:top-[5.35rem] md:-mx-3 md:px-3">
+        <div
+          className={`discover-filter-shell sticky top-[4.7rem] z-30 -mx-1 rounded-[1.45rem] px-1 py-1.5 sm:-mx-2 sm:rounded-[1.8rem] sm:px-2 sm:py-2 md:top-[5.35rem] md:-mx-3 md:px-3 ${
+            filtersSubdued ? "discover-filter-shell-subdued" : ""
+          } ${isMobileFilterCompact ? "discover-filter-shell-mobile-compact" : ""}`}
+          onFocusCapture={() => setIsFilterPanelFocused(true)}
+          onBlurCapture={(event) => {
+            const nextTarget = event.relatedTarget;
+            if (!event.currentTarget.contains(nextTarget as Node | null)) {
+              setIsFilterPanelFocused(false);
+            }
+          }}
+        >
           <FilterBar
             search={search}
             category={category}
             minPrice={minPrice}
             maxPrice={maxPrice}
             fileType={fileType}
+            compactOnMobile={isMobileFilterCompact}
+            subdued={filtersSubdued}
             onSearchChange={setSearch}
             onCategoryChange={setCategory}
             onMinPriceChange={setMinPrice}
@@ -300,7 +331,7 @@ export function MarketPage() {
           />
 
           {hasActiveFilters ? (
-            <section className="flex flex-wrap items-center gap-2 px-2 pt-2 text-xs">
+            <section className="discover-active-filters flex flex-wrap items-center gap-2 px-2 pt-2 text-xs">
               <span className="font-medium uppercase tracking-[0.1em] text-sand-500">Active filters</span>
               {category !== "all" ? <FilterPill label={category} onClear={() => setCategory("all")} /> : null}
               {fileType !== "all" ? <FilterPill label={fileTypeLabel} onClear={() => setFileType("all")} /> : null}
