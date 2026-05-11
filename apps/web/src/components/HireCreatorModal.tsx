@@ -136,9 +136,9 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
               </div>
 
               <div>
-                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-cobalt-800">Hire Request</p>
-                <h3 className="mt-2 font-display text-[1.7rem] font-semibold leading-none text-ink md:text-[2rem]">Work with {creatorName}</h3>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-sand-800 md:text-[0.98rem]">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-cobalt-800 dark:text-cobalt-200">Hire Request</p>
+                <h3 className="mt-2 font-display text-[1.7rem] font-semibold leading-none text-ink dark:text-white md:text-[2rem]">Work with {creatorName}</h3>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-sand-800 dark:text-sand-200 md:text-[0.98rem]">
                   Review the creator&apos;s engagement terms, check any public pricing notes, and send a concise brief so they can assess fit quickly.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -206,8 +206,8 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
                 <div className="rounded-[1.7rem] border border-cobalt-100/80 bg-white/92 p-5 shadow-[0_20px_40px_-34px_rgba(25,46,94,0.36)] md:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-cobalt-800">Terms &amp; conditions</p>
-                      <h4 className="mt-2 text-[1.15rem] font-semibold text-ink">How {creatorName} works with clients</h4>
+                      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-cobalt-800 dark:text-cobalt-200">Terms &amp; conditions</p>
+                      <h4 className="mt-2 text-[1.15rem] font-semibold text-ink dark:text-white">How {creatorName} works with clients</h4>
                     </div>
                     <span className="rounded-full border border-cobalt-100 bg-cobalt-50 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-cobalt-800">
                       Review before sending
@@ -216,8 +216,8 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
 
                   <div className="mt-4 space-y-3">
                     {termParagraphs.map((paragraph, index) => (
-                      <div key={`${creatorId}-term-${index}`} className="rounded-2xl border border-sand-200/80 bg-[#fcfbf8] px-4 py-3">
-                        <p className="text-sm leading-6 text-sand-700">{paragraph}</p>
+                      <div key={`${creatorId}-term-${index}`} className="rounded-2xl border border-sand-200/80 bg-[#fcfbf8] px-4 py-3 dark:border-sand-700/30 dark:bg-sand-900/20">
+                        <p className="text-sm leading-6 text-sand-700 dark:text-sand-200">{paragraph}</p>
                       </div>
                     ))}
                   </div>
@@ -234,9 +234,9 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
                       </div>
 
                       <div>
-                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-cobalt-800">Hourly pricing</p>
-                        <h4 className="mt-2 text-[1.15rem] font-semibold text-ink">{formatCurrency(creatorHourlyRateKobo, creatorPricingCurrency)}/hr</h4>
-                        <p className="mt-2 text-sm leading-6 text-sand-700">
+                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-cobalt-800 dark:text-cobalt-200">Hourly pricing</p>
+                        <h4 className="mt-2 text-[1.15rem] font-semibold text-ink dark:text-white">{formatCurrency(creatorHourlyRateKobo, creatorPricingCurrency)}/hr</h4>
+                        <p className="mt-2 text-sm leading-6 text-sand-700 dark:text-sand-200">
                           {creatorName} bills by the hour. Share the project scope and timeline in your message so they can estimate the time accurately.
                         </p>
                       </div>
@@ -253,9 +253,9 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
                       </div>
 
                       <div>
-                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#7c4c17]">Optional pricing guide</p>
-                        <h4 className="mt-2 text-[1.15rem] font-semibold text-ink">Starter rates, retainers, or package notes</h4>
-                        <p className="mt-2 text-sm leading-6 text-sand-700">
+                        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#7c4c17] dark:text-amber-200">Optional pricing guide</p>
+                        <h4 className="mt-2 text-[1.15rem] font-semibold text-ink dark:text-white">Starter rates, retainers, or package notes</h4>
+                        <p className="mt-2 text-sm leading-6 text-sand-700 dark:text-sand-200">
                           These notes come directly from the creator and are meant to help you frame your brief before they reply.
                         </p>
                       </div>
@@ -263,24 +263,24 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
 
                     <div className="mt-5 grid gap-3">
                       {pricingItems.map((item, index) => (
-                        <div key={`${creatorId}-pricing-${index}`} className="rounded-2xl border border-[#efd8bc] bg-white/90 px-4 py-3">
-                          <p className="text-sm font-semibold text-ink">{item.title}</p>
-                          {item.detail ? <p className="mt-1 text-sm leading-6 text-sand-700">{item.detail}</p> : null}
+                        <div key={`${creatorId}-pricing-${index}`} className="rounded-2xl border border-[#efd8bc] bg-white/90 px-4 py-3 dark:border-amber-700/30 dark:bg-amber-900/20">
+                          <p className="text-sm font-semibold text-ink dark:text-white">{item.title}</p>
+                          {item.detail ? <p className="mt-1 text-sm leading-6 text-sand-700 dark:text-sand-200">{item.detail}</p> : null}
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : creatorPricingMode === "dm_to_know" ? (
-                  <div className="rounded-[1.7rem] border border-sand-200/80 bg-white/82 px-5 py-4 shadow-[0_18px_34px_-30px_rgba(16,19,36,0.2)]">
-                    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-sand-800">DM to know</p>
-                    <p className="mt-2 text-sm leading-6 text-sand-700">
+                  <div className="rounded-[1.7rem] border border-sand-200/80 bg-white/82 px-5 py-4 shadow-[0_18px_34px_-30px_rgba(16,19,36,0.2)] dark:border-sand-700/30 dark:bg-sand-900/20">
+                    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-sand-800 dark:text-sand-200">DM to know</p>
+                    <p className="mt-2 text-sm leading-6 text-sand-700 dark:text-sand-200">
                       {creatorName} prefers to share pricing after reviewing the brief. Introduce the project clearly so they can send back the right quote.
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-[1.7rem] border border-sand-200/80 bg-white/82 px-5 py-4 shadow-[0_18px_34px_-30px_rgba(16,19,36,0.2)]">
-                    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-sand-800">Pricing</p>
-                    <p className="mt-2 text-sm leading-6 text-sand-700">
+                  <div className="rounded-[1.7rem] border border-sand-200/80 bg-white/82 px-5 py-4 shadow-[0_18px_34px_-30px_rgba(16,19,36,0.2)] dark:border-sand-700/30 dark:bg-sand-900/20">
+                    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-sand-800 dark:text-sand-200">Pricing</p>
+                    <p className="mt-2 text-sm leading-6 text-sand-700 dark:text-sand-200">
                       {creatorName} has not shared a public pricing guide yet. Use your message to outline the scope, timeline, and budget range so they can quote accurately.
                     </p>
                   </div>
@@ -301,9 +301,9 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
                       body: "The creator receives your request inside Crib and can reply from there."
                     }
                   ].map((step) => (
-                    <div key={step.title} className="rounded-[1.35rem] border border-sand-200/80 bg-white/82 px-4 py-4 shadow-[0_16px_28px_-26px_rgba(16,19,36,0.2)]">
-                      <p className="text-sm font-semibold text-ink">{step.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-sand-700">{step.body}</p>
+                    <div key={step.title} className="rounded-[1.35rem] border border-sand-200/80 bg-white/82 px-4 py-4 shadow-[0_16px_28px_-26px_rgba(16,19,36,0.2)] dark:border-sand-700/30 dark:bg-sand-900/20">
+                      <p className="text-sm font-semibold text-ink dark:text-white">{step.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-sand-700 dark:text-sand-200">{step.body}</p>
                     </div>
                   ))}
                 </div>

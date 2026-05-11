@@ -22,10 +22,10 @@ import {
 import { useAuthStore } from "@/store/authStore";
 
 const heroStats = [
-  { label: "Checkout layer", value: "Paystack-powered", detail: "Fast buyer payments across the storefront." },
-  { label: "Delivery flow", value: "Secure file access", detail: "Signed delivery links keep paid downloads protected." },
-  { label: "Creator workspace", value: "Uploads and orders", detail: "Manage listings, buyers, and activity in one place." },
-  { label: "Account access", value: "OTP-first identity", detail: "Mobile verification keeps entry simple and trusted." }
+  { label: "Payments", value: "Paystack-powered", detail: "Get paid fast from every sale." },
+  { label: "Downloads", value: "Always protected", detail: "Secure links keep buyer downloads safe." },
+  { label: "Your workspace", value: "One place", detail: "Manage uploads, sales, and buyers here." },
+  { label: "Sign in", value: "Mobile-first", detail: "Quick, secure login with your phone." }
 ];
 
 const editorialHeroStats = [
@@ -116,21 +116,21 @@ export function AuthPage() {
     if (isEditorialLogin) {
       return mode === "reset"
         ? resetStep === "verify"
-          ? `We sent a reset code to ${resetDestination || "your phone"}. Enter it and choose a new password.`
-          : "Enter the mobile number or email tied to your editor account. We will send the reset OTP to the linked mobile number."
-        : "Sign in with the editor account assigned to you for the blog workspace.";
+          ? `We sent a code to ${resetDestination || "your phone"}. Enter it to set a new password.`
+          : "Enter the phone or email for your editor account to reset your password."
+        : "Sign in with your editor account.";
     }
 
     if (mode === "register") {
       return registerStep === "verify"
-        ? `We sent a one-time code to ${registerDestination || "your phone"}. Enter it to finish creating your account.`
+        ? `Confirm the code we sent to ${registerDestination || "your phone"} to finish creating your account.`
         : "";
     }
 
     if (mode === "reset") {
       return resetStep === "verify"
-        ? `We sent a reset code to ${resetDestination || "your phone"}. Enter it and choose a new password.`
-        : "Enter the mobile number or email tied to your account. We will send the reset OTP to the linked mobile number.";
+        ? `We sent a code to ${resetDestination || "your phone"}. Enter it to set a new password.`
+        : "Enter the phone or email linked to your account to reset your password.";
     }
 
     return "";
@@ -138,18 +138,18 @@ export function AuthPage() {
 
   const heroTitle = useMemo(() => {
     if (isEditorialLogin) {
-      return "Step into the blog workspace.";
+      return "Editor workspace.";
     }
 
     if (mode === "register") {
-      return "Build a creative storefront buyers can trust.";
+      return "Start selling your work.";
     }
 
     if (mode === "reset") {
-      return "Get back into your workspace without the friction.";
+      return "Reset your password.";
     }
 
-    return "Return to your creative workspace.";
+    return "Welcome back.";
   }, [isEditorialLogin, mode]);
 
   const heroCopy = useMemo(() => {
@@ -158,14 +158,14 @@ export function AuthPage() {
     }
 
     if (mode === "register") {
-      return "Create your account, verify with a one-time code, and start selling editable assets, beat packs, and creative systems from one polished profile.";
+      return "Create your account with one text, then start selling your assets, beats, and designs.";
     }
 
     if (mode === "reset") {
-      return "Use the mobile number linked to the account, confirm the OTP, and set a fresh password so you can get back to your storefront quickly.";
+      return "Confirm your phone, set a new password, and get back to selling.";
     }
 
-    return "Pick up where you left off with one secure account for uploads, orders, creator discovery, and profile visibility.";
+    return "Get back to your uploads, orders, and sales.";
   }, [isEditorialLogin, mode]);
 
   const activeHeroStats = isEditorialLogin ? editorialHeroStats : heroStats;
