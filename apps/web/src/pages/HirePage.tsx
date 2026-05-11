@@ -88,7 +88,7 @@ export function HirePage() {
   const [category, setCategory] = useState("all");
   const [spotlight, setSpotlight] = useState<HireSpotlight>("all");
   const [filtersSubdued, setFiltersSubdued] = useState(false);
-  const [isFilterPanelFocused, setIsFilterPanelFocused] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   const deferredSearch = useDeferredValue(search);
   const creatorsQuery = useQuery({
@@ -135,7 +135,7 @@ export function HirePage() {
     };
   }, []);
 
-  const isMobileFilterCompact = filtersSubdued && !isFilterPanelFocused;
+  const isMobileFilterCompact = !isMobileFilterOpen;
 
   return (
     <div className="creators-shell space-y-5">
@@ -156,7 +156,7 @@ export function HirePage() {
       </section>
 
       <div
-        className={`creators-filter-shell sticky top-[4.7rem] z-30 -mx-1 rounded-[1.45rem] px-1 py-1.5 sm:-mx-2 sm:rounded-[1.8rem] sm:px-2 sm:py-2 md:top-[5.35rem] md:-mx-3 md:px-3 ${
+        className={`creators-filter-shell sticky top-[4.7rem] z-30 -mx-1 rounded-[1.45rem] px-1 py-1.5 sm:-mx-2 sm:rounded-[1.8rem] sm:px-2 sm:py-2 md:static md:-mx-3 md:px-3 ${
           filtersSubdued ? "creators-filter-shell-subdued" : ""
         }`}
       >
@@ -164,20 +164,23 @@ export function HirePage() {
           className={`surface-card creators-filter-panel p-2.5 sm:p-4 ${
             filtersSubdued ? "creators-filter-panel-subdued" : ""
           } ${isMobileFilterCompact ? "creators-filter-panel-mobile-compact" : ""}`}
-          onFocusCapture={() => setIsFilterPanelFocused(true)}
-          onBlurCapture={(event) => {
-            const nextTarget = event.relatedTarget;
-            if (!event.currentTarget.contains(nextTarget as Node | null)) {
-              setIsFilterPanelFocused(false);
-            }
-          }}
         >
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 flex items-center gap-2">
               <SearchInput value={search} onChange={setSearch} placeholder="Search talent, niches, categories, or styles..." />
+              <button
+                type="button"
+                onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sand-200 bg-white text-sand-700 transition hover:border-cobalt-200 hover:bg-cobalt-50 md:hidden"
+                aria-label={isMobileFilterOpen ? "Hide filter options" : "Show filter options"}
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </button>
             </div>
 
-            <div className="creators-filter-controls flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:flex-nowrap">
+            <div className={`creators-filter-controls flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:flex-nowrap ${isMobileFilterCompact ? "hidden" : ""}`}>
               <select
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
@@ -190,13 +193,13 @@ export function HirePage() {
                 ))}
               </select>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex overflow-x-auto gap-2 pr-2">
                 {spotlightFilters.map((filter) => (
                   <button
                     key={filter.key}
                     type="button"
                     onClick={() => setSpotlight(filter.key)}
-                    className={`creators-segment-button ${spotlight === filter.key ? "creators-segment-button-active" : ""}`}
+                    className={`creators-segment-button flex-shrink-0 ${spotlight === filter.key ? "creators-segment-button-active" : ""}`}
                   >
                     <span>{filter.label}</span>
                     <span className="creators-segment-count">{formatCompact(filter.count)}</span>

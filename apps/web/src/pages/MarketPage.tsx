@@ -25,7 +25,7 @@ export function MarketPage() {
   const [fileType, setFileType] = useState("all");
   const [showIntro, setShowIntro] = useState(true);
   const [filtersSubdued, setFiltersSubdued] = useState(false);
-  const [isFilterPanelFocused, setIsFilterPanelFocused] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
   useEffect(() => {
     setSearch((previous) => (previous === querySearch ? previous : querySearch));
@@ -108,6 +108,11 @@ export function MarketPage() {
     const syncStickyFilterState = () => {
       const nextSubdued = window.scrollY > 28;
       setFiltersSubdued((current) => (current === nextSubdued ? current : nextSubdued));
+      
+      // Auto-collapse mobile filters when scrolling
+      if (window.scrollY > 28) {
+        setIsMobileFilterOpen(false);
+      }
     };
 
     syncStickyFilterState();
@@ -188,7 +193,7 @@ export function MarketPage() {
     }
   }, [displayAssets, user?.id, userContactEmail]);
 
-  const isMobileFilterCompact = filtersSubdued && !isFilterPanelFocused;
+  const isMobileFilterCompact = !isMobileFilterOpen;
 
   return (
     <div className="discover-shell space-y-8 md:space-y-10">
@@ -230,88 +235,17 @@ export function MarketPage() {
         <div className="surface-card discover-mode-bar p-5 md:p-6">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cobalt-600">Marketplace</p>
-            <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Start with assets built for real workflows.</h2>
+            <h2 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Discover assets designed for real creative workflows.</h2>
             <p className="mt-2 text-sm leading-6 text-sand-700 md:text-base md:leading-7">
               Explore locally designed Canva, Figma, Adobe, and audio-ready listings, then narrow by tool, format, price, or creator until the right fit shows up fast.
             </p>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-500">Browse by tool</p>
-          <div className="overflow-x-auto pb-1">
-            <div className="flex w-max items-center gap-2 pr-2">
-              <button
-                type="button"
-                onClick={() => setCategory("all")}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                  category === "all"
-                    ? "border-cobalt-600 bg-cobalt-600 text-white"
-                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-                }`}
-              >
-                Explore all
-              </button>
-              <button
-                type="button"
-                onClick={() => setCategory("Figma Templates")}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                  category === "Figma Templates"
-                    ? "border-cobalt-600 bg-cobalt-600 text-white"
-                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-                }`}
-              >
-                Figma
-              </button>
-              <button
-                type="button"
-                onClick={() => setCategory("Canva Templates")}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                  category === "Canva Templates"
-                    ? "border-cobalt-600 bg-cobalt-600 text-white"
-                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-                }`}
-              >
-                Canva
-              </button>
-              <button
-                type="button"
-                onClick={() => setCategory("Audio / Beats")}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                  category === "Audio / Beats"
-                    ? "border-cobalt-600 bg-cobalt-600 text-white"
-                    : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-                }`}
-              >
-                Audio / Beats
-              </button>
-              <select
-                value={selectedAdobeCategory}
-                onChange={(event) => setCategory(event.target.value || "all")}
-                className="shrink-0 rounded-full border border-sand-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-sand-700 outline-none transition hover:border-cobalt-200 focus:border-cobalt-300"
-              >
-                <option value="">Adobe apps</option>
-                {ADOBE_APP_CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
         <div
-          className={`discover-filter-shell sticky top-[4.7rem] z-30 -mx-1 rounded-[1.45rem] px-1 py-1.5 sm:-mx-2 sm:rounded-[1.8rem] sm:px-2 sm:py-2 md:top-[5.35rem] md:-mx-3 md:px-3 ${
+          className={`discover-filter-shell sticky top-[4.7rem] z-30 -mx-1 rounded-[1.45rem] px-1 py-1.5 sm:-mx-2 sm:rounded-[1.8rem] sm:px-2 sm:py-2 md:static md:-mx-3 md:px-3 ${
             filtersSubdued ? "discover-filter-shell-subdued" : ""
           } ${isMobileFilterCompact ? "discover-filter-shell-mobile-compact" : ""}`}
-          onFocusCapture={() => setIsFilterPanelFocused(true)}
-          onBlurCapture={(event) => {
-            const nextTarget = event.relatedTarget;
-            if (!event.currentTarget.contains(nextTarget as Node | null)) {
-              setIsFilterPanelFocused(false);
-            }
-          }}
         >
           <FilterBar
             search={search}
@@ -320,6 +254,8 @@ export function MarketPage() {
             maxPrice={maxPrice}
             fileType={fileType}
             compactOnMobile={isMobileFilterCompact}
+            mobileOpen={isMobileFilterOpen}
+            onMobileOpenChange={setIsMobileFilterOpen}
             subdued={filtersSubdued}
             onSearchChange={setSearch}
             onCategoryChange={setCategory}

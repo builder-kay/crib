@@ -12,7 +12,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = pu5blic
 as $$
 declare
   v_admin_id uuid := auth.uid();
