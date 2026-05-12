@@ -121,10 +121,10 @@ export function HireCreatorModal({ open, creatorId, creatorName, onClose }: Hire
       maxWidthClassName="max-w-5xl"
       panelClassName="hire-creator-modal-panel overflow-hidden p-0 sm:-translate-y-3 lg:-translate-y-5"
     >
-      <div className="hire-creator-modal-shell relative isolate overflow-hidden bg-[linear-gradient(180deg,#faf8f3_0%,#f7fbff_48%,#ffffff_100%)]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_top_left,rgba(39,107,255,0.18),transparent_42%),radial-gradient(circle_at_top_right,rgba(255,170,84,0.2),transparent_38%)]" />
+      <div className="hire-creator-modal-shell relative isolate overflow-hidden bg-[linear-gradient(180deg,#faf8f3_0%,#f7fbff_48%,#ffffff_100%)] dark:bg-[linear-gradient(180deg,#1a2a48_0%,#162449_48%,#0f1728_100%)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_top_left,rgba(39,107,255,0.18),transparent_42%),radial-gradient(circle_at_top_right,rgba(255,170,84,0.2),transparent_38%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(39,107,255,0.08),transparent_42%),radial-gradient(circle_at_top_right,rgba(255,170,84,0.05),transparent_38%)]" />
 
-        <div className="sticky top-0 z-20 border-b border-sand-200/80 bg-[#faf8f3]/88 px-5 py-5 backdrop-blur-[14px] md:px-6 md:py-6">
+        <div className="sticky top-0 z-20 border-b border-sand-200/80 dark:border-sand-700/40 bg-[#faf8f3]/88 dark:bg-[#1a2a48]/88 px-5 py-5 backdrop-blur-[14px] md:px-6 md:py-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[1.2rem] border border-white/80 bg-[#111723] text-lg font-semibold text-white shadow-[0_18px_30px_-22px_rgba(13,23,42,0.6)]">

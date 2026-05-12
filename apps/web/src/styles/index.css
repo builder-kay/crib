@@ -3919,6 +3919,22 @@
     background-clip: padding-box;
   }
 
+  html.theme-dark .hire-creator-modal-shell {
+    background: linear-gradient(180deg, #1a2a48 0%, #162449 48%, #0f1728 100%);
+  }
+
+  html.theme-dark .hire-creator-modal-shell::after {
+    background:
+      linear-gradient(180deg, rgba(15, 23, 40, 0.2) 0%, rgba(15, 23, 40, 0) 16%, rgba(15, 23, 40, 0.08) 100%),
+      radial-gradient(circle at 88% 14%, rgba(31, 70, 239, 0.04) 0%, rgba(31, 70, 239, 0) 30%);
+    opacity: 0.8;
+  }
+
+  html.theme-dark .hire-creator-modal-shell > div:first-child {
+    background-color: #1a2a48;
+    border-color: #2a3a58;
+  }
+
   html.theme-dark .image-gallery-modal-panel {
     border-color: #2b3c5a;
     background: linear-gradient(145deg, rgba(10, 18, 31, 0.99) 0%, rgba(14, 24, 41, 0.99) 56%, rgba(21, 20, 30, 0.97) 100%);
