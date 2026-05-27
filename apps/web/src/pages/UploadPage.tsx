@@ -612,7 +612,7 @@ export function UploadPage() {
                 ) : requiresLink ? (
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),260px]">
                     <Field
-                      label={templateType === "canva" ? "Canva template link" : templateType === "figma" ? "Figma file link" : "Access link"}
+                      label={templateType === "canva" ? "Canva share link" : templateType === "figma" ? "Figma file link" : "Access link"}
                       value={externalDeliveryUrl}
                       onChange={setExternalDeliveryUrl}
                       type="url"

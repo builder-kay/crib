@@ -124,7 +124,7 @@ export const uploadAssetSchema = z
         });
       }
 
-      if (!externalUrl || !hostIncludes(externalUrl, "canva.com")) {
+      if (!externalUrl || !(hostIncludes(externalUrl, "canva.com") || hostIncludes(externalUrl, "canva.design"))) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["external_delivery_url"],
