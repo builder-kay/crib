@@ -14,6 +14,7 @@
     "seed:stress": "node scripts/seed-stress-creators.mjs",
     "payouts:test": "node scripts/configure-test-payouts.mjs",
     "seed:stress:fix-emails": "node scripts/fix-stress-user-emails.mjs",
-    "seed:stress:cleanup": "node scripts/cleanup-stress-data.mjs"
+    "seed:stress:cleanup": "node scripts/cleanup-stress-data.mjs",
+    "cleanup:production": "echo 'Run migration 202605260001_remove_seed_demo_data.sql and the empty seed.sql to complete production cleanup.'"
   }
 }
