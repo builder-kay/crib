@@ -2091,11 +2091,10 @@
   }
 
   .discover-filter-panel {
-    transition: opacity 220ms ease, border-color 220ms ease, background-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+    transition: border-color 220ms ease, background-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
   }
 
   .discover-filter-panel-subdued {
-    opacity: 0.32;
     border-color: rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.03);
     box-shadow: 0 6px 14px -24px rgba(16, 19, 36, 0.08);
@@ -2103,7 +2102,6 @@
 
   .discover-filter-panel-subdued:hover,
   .discover-filter-panel-subdued:focus-within {
-    opacity: 1;
     border-color: rgba(255, 255, 255, 0.42);
     background: rgba(255, 255, 255, 0.08);
     box-shadow: 0 12px 26px -28px rgba(16, 19, 36, 0.18);
@@ -3670,7 +3668,7 @@
     background-image: none;
     backdrop-filter: none;
     box-shadow: 0 12px 26px -28px rgba(16, 19, 36, 0.18);
-    transition: opacity 220ms ease, border-color 220ms ease, background-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+    transition: border-color 220ms ease, background-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
   }
 
   .creators-filter-shell {
@@ -3683,7 +3681,6 @@
   }
 
   .creators-filter-panel-subdued {
-    opacity: 0.32;
     border-color: rgba(255, 255, 255, 0.18);
     background: rgba(255, 255, 255, 0.03);
     box-shadow: 0 6px 14px -24px rgba(16, 19, 36, 0.08);
@@ -3691,7 +3688,6 @@
 
   .creators-filter-panel-subdued:hover,
   .creators-filter-panel-subdued:focus-within {
-    opacity: 1;
     border-color: rgba(255, 255, 255, 0.42);
     background: rgba(255, 255, 255, 0.08);
     box-shadow: 0 12px 26px -28px rgba(16, 19, 36, 0.18);
@@ -4184,7 +4180,6 @@
   }
 
   html.theme-dark .creators-filter-panel-subdued {
-    opacity: 0.3;
     border-color: rgba(124, 146, 190, 0.14) !important;
     background: rgba(9, 16, 29, 0.08) !important;
     box-shadow: 0 6px 14px -24px rgba(5, 10, 20, 0.2) !important;
@@ -4192,7 +4187,6 @@
 
   html.theme-dark .creators-filter-panel-subdued:hover,
   html.theme-dark .creators-filter-panel-subdued:focus-within {
-    opacity: 1;
     border-color: rgba(124, 146, 190, 0.28) !important;
     background: rgba(9, 16, 29, 0.22) !important;
     box-shadow: 0 12px 24px -28px rgba(5, 10, 20, 0.42) !important;
@@ -4203,7 +4197,6 @@
   }
 
   html.theme-dark .discover-filter-panel-subdued {
-    opacity: 0.3;
     border-color: rgba(124, 146, 190, 0.14) !important;
     background: rgba(9, 16, 29, 0.08) !important;
     box-shadow: 0 6px 14px -24px rgba(5, 10, 20, 0.2) !important;
@@ -4211,7 +4204,6 @@
 
   html.theme-dark .discover-filter-panel-subdued:hover,
   html.theme-dark .discover-filter-panel-subdued:focus-within {
-    opacity: 1;
     border-color: rgba(124, 146, 190, 0.28) !important;
     background: rgba(9, 16, 29, 0.22) !important;
     box-shadow: 0 12px 24px -28px rgba(5, 10, 20, 0.42) !important;
