@@ -307,7 +307,7 @@ export function getAssetDeliveryLabel(asset: AssetCatalogInput) {
     }
 
     if (category.includes("canva")) {
-      return "Canva template link";
+      return "Canva share link";
     }
 
     return "Private access link";

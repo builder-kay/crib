@@ -157,7 +157,7 @@ function inferDeliveryMode(order: OrderSnapshotRow, asset: AssetSummaryRow | nul
 function inferExternalLinkLabel(url: string) {
   const normalized = url.toLowerCase();
   if (normalized.includes("canva.com")) {
-    return "Canva template";
+    return "Canva link";
   }
   if (normalized.includes("figma.com")) {
     return "Figma file";
@@ -173,7 +173,7 @@ function buildExternalDeliveryName(title: string | null | undefined, url: string
 function buildExternalActionLabel(url: string) {
   const normalized = url.toLowerCase();
   if (normalized.includes("canva.com")) {
-    return "Open Canva template";
+    return "Open Canva link";
   }
   if (normalized.includes("figma.com")) {
     return "Open Figma file";

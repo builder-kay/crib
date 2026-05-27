@@ -120,7 +120,7 @@ export const uploadAssetSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["delivery_mode"],
-          message: "Canva templates are delivered as template links."
+          message: "Canva listings are delivered as share links."
         });
       }
 
@@ -128,7 +128,7 @@ export const uploadAssetSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["external_delivery_url"],
-          message: "Paste a valid Canva template link."
+          message: "Paste a valid Canva share link."
         });
       }
     }
