@@ -305,6 +305,8 @@ export function UploadPage() {
   const activeStepIndex = steps.findIndex((step) => step.id === activeStepId);
   const safeActiveStepIndex = activeStepIndex >= 0 ? activeStepIndex : 0;
   const activeStep = steps[safeActiveStepIndex];
+  const completedStepCount = steps.filter((step) => step.done).length;
+  const progressPercent = Math.round((completedStepCount / steps.length) * 100);
   const isFirstStep = safeActiveStepIndex === 0;
   const isLastStep = safeActiveStepIndex === steps.length - 1;
   const controlToneClass =
@@ -433,29 +435,39 @@ export function UploadPage() {
 
   return (
     <div className="upload-shell space-y-5">
-      <header className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-600">Creator Studio</p>
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="font-display text-3xl font-bold text-ink md:text-4xl">Upload Creative Asset</h1>
-            <p className="mt-2 max-w-3xl text-sm text-sand-700 md:text-base">
-              Start with the asset type, choose how buyers receive it, then finish the metadata and cover visuals before you publish.
-            </p>
-          </div>
+      <header className="upload-studio-hero">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt-600">Creator Studio</p>
+          <h1 className="mt-2 font-display text-3xl font-bold text-ink md:text-4xl">Publish a Creative Asset</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-sand-700 md:text-base">
+            Start with the asset type, choose how buyers receive it, then finish the metadata and cover visuals before you publish.
+          </p>
+        </div>
 
-          <span className="chip-spectrum">{`Step ${safeActiveStepIndex + 1} of ${steps.length}`}</span>
+        <div className="upload-publish-progress-card">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-sand-600">{`Step ${safeActiveStepIndex + 1} of ${steps.length}`}</span>
+            <strong className="text-sm text-ink">{`${progressPercent}% ready`}</strong>
+          </div>
+          <div className="upload-progress-track mt-3">
+            <div className="upload-progress-bar" style={{ width: `${progressPercent}%` }} />
+          </div>
+          <p className="mt-3 text-xs leading-5 text-sand-600">{`${completedStepCount} of ${steps.length} sections ready to publish.`}</p>
         </div>
       </header>
 
       <form
-        className="grid gap-5 lg:grid-cols-[280px,minmax(0,1fr)]"
+        className="upload-publish-layout grid gap-5 lg:grid-cols-[292px,minmax(0,1fr)]"
         onSubmit={(event) => {
           event.preventDefault();
           uploadMutation.mutate();
         }}
       >
         <aside className="surface-card upload-step-sidebar p-4 md:p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-700">Steps</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-700">Publishing flow</p>
+            <span className="upload-sidebar-count">{`${completedStepCount}/${steps.length}`}</span>
+          </div>
 
           <div className="mt-4 space-y-2">
             {steps.map((step, index) => (
@@ -477,8 +489,8 @@ export function UploadPage() {
           </div>
         </aside>
 
-        <section className="surface-card p-5 md:p-6">
-          <div className="flex flex-col gap-2 border-b border-sand-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <section className="surface-card upload-wizard-panel upload-publish-panel p-5 md:p-6">
+          <div className="upload-publish-panel-header flex flex-col gap-2 pb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt-700">{`Step ${safeActiveStepIndex + 1}`}</p>
               <h2 className="mt-1 font-display text-2xl font-semibold text-ink">{activeStep.title}</h2>
@@ -508,7 +520,7 @@ export function UploadPage() {
                   })}
                 </div>
 
-                <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                <div className="upload-flow-summary p-4">
                   <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),280px]">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Selected flow</p>
@@ -516,7 +528,7 @@ export function UploadPage() {
                       <p className="mt-2 text-sm text-sand-700">{activeTemplate.deliverySummary}</p>
                     </div>
 
-                    <div className="space-y-2 rounded-2xl border border-white bg-white/90 p-3">
+                    <div className="upload-flow-settings space-y-2 p-3">
                       <label className="block">
                         <span className="mb-1 block text-sm font-medium text-sand-800">Marketplace lane</span>
                         <select
@@ -569,7 +581,7 @@ export function UploadPage() {
 
             {activeStep.id === "content" ? (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-lagoon-100 bg-lagoon-50 p-4">
+                <div className="upload-delivery-note p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-lagoon-700">Delivery setup</p>
                   <h3 className="mt-1 font-display text-xl font-semibold text-ink">{activeTemplate.contentLabel}</h3>
                   <p className="mt-2 text-sm text-sand-700">{activeTemplate.contentHint}</p>
@@ -868,7 +880,7 @@ export function UploadPage() {
             ) : null}
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-sand-200 pt-4">
+          <div className="upload-publish-actions mt-6 flex flex-wrap items-center justify-between gap-3 pt-4">
             <button type="button" onClick={goToPreviousStep} disabled={isFirstStep} className="upload-nav-button upload-nav-button-secondary">
               Previous
             </button>
