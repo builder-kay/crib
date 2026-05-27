@@ -16,7 +16,6 @@
  "paths": {
  "@/*": ["src/*"]
  },
- "ignoreDeprecations": "5.0",
  "types": ["vite/client"]
  },
  "include": ["src"],
