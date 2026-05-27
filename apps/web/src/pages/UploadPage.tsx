@@ -81,7 +81,7 @@ const TEMPLATE_TYPE_CONTENT = {
     label: "Canva",
     description: "Best for social packs, flyers, decks, media kits, and editable marketing layouts.",
     contentLabel: "Paste your Canva share link",
-    contentHint: "In Canva, click Share and copy the link with access set to anyone with the link.",
+    contentHint: "In Canva, click Share and copy the public link with access set to anyone with the link. A canva.link URL is valid.",
     deliverySummary: "No file hosting required. Buyers receive the Canva link after checkout.",
     categories: CANVA_ASSET_CATEGORIES
   },

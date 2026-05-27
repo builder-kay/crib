@@ -94,7 +94,9 @@ function isCanvaHost(url: string) {
       hostname === "canva.app" ||
       hostname.endsWith(".canva.app") ||
       hostname === "canva.me" ||
-      hostname.endsWith(".canva.me")
+      hostname.endsWith(".canva.me") ||
+      hostname === "canva.link" ||
+      hostname.endsWith(".canva.link")
     );
   } catch {
     return false;
@@ -146,7 +148,7 @@ export const uploadAssetSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["external_delivery_url"],
-          message: "Paste a valid Canva share link from canva.com or canva.design."
+          message: "Paste a valid Canva share link from canva.com, canva.design, or canva.link."
         });
       }
     }
