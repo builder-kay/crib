@@ -43,6 +43,14 @@ export function FilterBar({
     () => (ADOBE_APP_CATEGORIES as readonly string[]).includes(category) ? category : "",
     [category]
   );
+  const quickToolFilters = [
+    { value: "all", label: "Explore all", kicker: "Every format" },
+    { value: "Figma Templates", label: "Figma", kicker: "UI kits" },
+    { value: "Canva Templates", label: "Canva", kicker: "Social packs" },
+    { value: "Audio / Beats", label: "Audio", kicker: "Beats" }
+  ];
+  const activeToolLabel =
+    quickToolFilters.find((item) => item.value === category)?.label ?? (selectedAdobeCategory ? "Adobe" : "Custom");
 
   const showMobileFilters = mobileOpen;
   const showMobileToggle = compactOnMobile || mobileOpen;
@@ -53,58 +61,32 @@ export function FilterBar({
         subdued ? "discover-filter-panel-subdued" : ""
       } ${compactOnMobile && !mobileOpen ? "discover-filter-panel-mobile-compact" : ""}`}
     >
-      <div className={`${showMobileFilters ? "block" : "hidden"} md:block space-y-3 mb-3 md:mb-4`}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sand-500">Browse by tool</p>
-        <div className="overflow-hidden pb-1">
-          <div className="flex w-full flex-wrap items-center gap-2 pr-2">
-            <button
-              type="button"
-              onClick={() => onCategoryChange("all")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                category === "all"
-                  ? "border-cobalt-600 bg-cobalt-600 text-white"
-                  : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-              }`}
-            >
-              Explore all
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategoryChange("Figma Templates")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                category === "Figma Templates"
-                  ? "border-cobalt-600 bg-cobalt-600 text-white"
-                  : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-              }`}
-            >
-              Figma
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategoryChange("Canva Templates")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                category === "Canva Templates"
-                  ? "border-cobalt-600 bg-cobalt-600 text-white"
-                  : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-              }`}
-            >
-              Canva
-            </button>
-            <button
-              type="button"
-              onClick={() => onCategoryChange("Audio / Beats")}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
-                category === "Audio / Beats"
-                  ? "border-cobalt-600 bg-cobalt-600 text-white"
-                  : "border border-sand-200 bg-white text-sand-700 hover:border-cobalt-200 hover:bg-cobalt-50"
-              }`}
-            >
-              Audio / Beats
-            </button>
+      <div className="discover-filter-topline">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cobalt-700">Creative filter</p>
+          <p className="mt-1 text-sm font-semibold text-ink">Shape the marketplace around your next build.</p>
+        </div>
+        <span className="discover-filter-live-badge">{activeToolLabel}</span>
+      </div>
+
+      <div className={`${showMobileFilters ? "block" : "hidden"} md:block mt-3 space-y-3`}>
+        <div className="discover-tool-strip">
+          <div className="flex w-full flex-wrap items-stretch gap-2">
+            {quickToolFilters.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => onCategoryChange(item.value)}
+                className={`discover-tool-chip ${category === item.value ? "discover-tool-chip-active" : ""}`}
+              >
+                <span>{item.label}</span>
+                <small>{item.kicker}</small>
+              </button>
+            ))}
             <select
               value={selectedAdobeCategory}
               onChange={(event) => onCategoryChange(event.target.value || "all")}
-              className="shrink-0 rounded-full border border-sand-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-sand-700 outline-none transition hover:border-cobalt-200 focus:border-cobalt-300"
+              className={`discover-adobe-select ${selectedAdobeCategory ? "discover-adobe-select-active" : ""}`}
             >
               <option value="">Adobe apps</option>
               {ADOBE_APP_CATEGORIES.map((item) => (
@@ -117,14 +99,14 @@ export function FilterBar({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[2fr,1.2fr,1.5fr,1fr,auto]">
+      <div className="mt-3 grid gap-3 md:grid-cols-[2fr,1.2fr,1.5fr,1fr,auto]">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <SearchInput value={search} onChange={onSearchChange} placeholder="Search assets, beats, creators, apps, or styles..." />
           {showMobileToggle ? (
             <button
               type="button"
               onClick={() => onMobileOpenChange?.(!mobileOpen)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-sand-200 bg-white text-sand-700 transition hover:border-cobalt-200 hover:bg-cobalt-50 md:hidden"
+              className="discover-filter-toggle md:hidden"
               aria-label={mobileOpen ? "Hide filter options" : "Show filter options"}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -138,7 +120,7 @@ export function FilterBar({
           <select
             value={category}
             onChange={(event) => onCategoryChange(event.target.value)}
-            className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
+            className="discover-filter-select"
           >
             <option value="all">All asset categories</option>
             {ASSET_CATEGORIES.map((item) => (
@@ -148,7 +130,7 @@ export function FilterBar({
             ))}
           </select>
 
-          <div className="flex items-center gap-2 rounded-full border border-sand-200 bg-white px-3 py-2">
+          <div className="discover-price-field">
             <input
               type="number"
               min={0}
@@ -157,7 +139,7 @@ export function FilterBar({
               placeholder="Min price"
               className="w-full bg-transparent text-sm outline-none placeholder:text-sand-400"
             />
-            <span className="text-sand-400">-</span>
+            <span className="text-sand-400">to</span>
             <input
               type="number"
               min={0}
@@ -171,7 +153,7 @@ export function FilterBar({
           <select
             value={fileType}
             onChange={(event) => onFileTypeChange(event.target.value)}
-            className="rounded-full border border-sand-200 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-cobalt-400"
+            className="discover-filter-select"
           >
             {MARKET_FILE_FILTERS.map((item) => (
               <option key={item.value} value={item.value}>
@@ -185,7 +167,7 @@ export function FilterBar({
               type="button"
               onClick={onResetFilters}
               disabled={!canResetFilters}
-              className="rounded-full border border-sand-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-ink transition hover:bg-sand-100 disabled:cursor-not-allowed disabled:opacity-50 md:self-center md:whitespace-nowrap"
+              className="discover-reset-button"
             >
               Reset filters
             </button>
