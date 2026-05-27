@@ -64,12 +64,12 @@ export function FilterBar({
       <div className="discover-filter-topline">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cobalt-700">Creative filter</p>
-          <p className="mt-1 text-sm font-semibold text-ink">Shape the marketplace around your next build.</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">Shape the marketplace around your next build.</p>
         </div>
         <span className="discover-filter-live-badge">{activeToolLabel}</span>
       </div>
 
-      <div className={`${showMobileFilters ? "block" : "hidden"} md:block mt-3 space-y-3`}>
+      <div className={`${showMobileFilters ? "block" : "hidden"} md:block mt-2 space-y-2`}>
         <div className="discover-tool-strip">
           <div className="flex w-full flex-wrap items-stretch gap-2">
             {quickToolFilters.map((item) => (
@@ -99,7 +99,7 @@ export function FilterBar({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3 md:grid-cols-[2fr,1.2fr,1.5fr,1fr,auto]">
+      <div className="mt-2 grid gap-2 md:grid-cols-[2fr,1.2fr,1.5fr,1fr,auto]">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <SearchInput value={search} onChange={onSearchChange} placeholder="Search assets, beats, creators, apps, or styles..." />
           {showMobileToggle ? (

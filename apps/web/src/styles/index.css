@@ -2263,20 +2263,20 @@
     border-radius: 1rem;
     border: 1px solid rgba(216, 227, 243, 0.82);
     background: rgba(255, 255, 255, 0.72);
-    padding: 0.45rem;
+    padding: 0.35rem;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
   }
 
   .discover-tool-chip {
     display: inline-flex;
-    min-height: 3.05rem;
+    min-height: 2.55rem;
     flex: 1 1 8rem;
     flex-direction: column;
     justify-content: center;
     border-radius: 0.8rem;
     border: 1px solid transparent;
     background: transparent;
-    padding: 0.65rem 0.85rem;
+    padding: 0.48rem 0.75rem;
     text-align: left;
     transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
   }
@@ -2327,10 +2327,10 @@
   }
 
   .discover-adobe-select {
-    min-height: 3.05rem;
+    min-height: 2.55rem;
     flex: 1 1 9rem;
     border-radius: 0.8rem;
-    padding: 0.65rem 0.85rem;
+    padding: 0.48rem 0.75rem;
     font-size: 0.78rem;
     font-weight: 800;
     outline: none;
@@ -2344,7 +2344,7 @@
 
   .discover-filter-select {
     border-radius: 0.9rem;
-    padding: 0.66rem 0.85rem;
+    padding: 0.52rem 0.78rem;
     font-size: 0.9rem;
     outline: none;
   }
@@ -2354,13 +2354,13 @@
     align-items: center;
     gap: 0.5rem;
     border-radius: 0.9rem;
-    padding: 0.66rem 0.85rem;
+    padding: 0.52rem 0.78rem;
   }
 
   .discover-reset-button {
     align-self: center;
     border-radius: 0.9rem;
-    padding: 0.72rem 0.95rem;
+    padding: 0.58rem 0.86rem;
     font-size: 0.72rem;
     font-weight: 800;
     color: #20304c;
@@ -2371,8 +2371,8 @@
 
   .discover-filter-toggle {
     display: inline-flex;
-    height: 2.65rem;
-    width: 2.65rem;
+    height: 2.4rem;
+    width: 2.4rem;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
