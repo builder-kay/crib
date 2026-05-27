@@ -145,7 +145,7 @@ const PRICING_OPTIONS = [
   },
   {
     value: "paid",
-    label: "Paid",
+    label: "Fixed price",
     description: "Use one fixed price for every buyer. Best for premium assets and bundles."
   },
   {
@@ -377,14 +377,17 @@ export function UploadPage() {
         );
       }
 
+      const submissionPrice = pricingModel === "free" ? "0" : price;
+      const submissionMinimumPrice = pricingModel === "free" ? "0" : pricingModel === "paid" ? submissionPrice : minimumPrice;
+
       const parsed = uploadAssetSchema.safeParse({
         title,
         description,
         asset_type: templateType,
         category,
         tags,
-        price,
-        minimum_price: pricingModel === "paid" ? price : minimumPrice,
+        price: submissionPrice,
+        minimum_price: submissionMinimumPrice,
         currency,
         pricing_model: pricingModel,
         delivery_mode: deliveryMode,
@@ -758,12 +761,11 @@ export function UploadPage() {
                         description={option.description}
                         onClick={() => {
                           setPricingModel(option.value);
-                          if (option.value === "free") {
-                            setPrice("0");
-                            setMinimumPrice("0");
-                          }
                           if (option.value === "paid") {
                             setMinimumPrice(price || "0");
+                          }
+                          if (option.value === "pay_what_you_want" && Number(price) < Number(minimumPrice)) {
+                            setPrice(minimumPrice || "0");
                           }
                         }}
                       />
@@ -771,53 +773,55 @@ export function UploadPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <Field
-                    label={pricingModel === "pay_what_you_want" ? "Suggested price" : "Price"}
-                    type="number"
-                    value={price}
-                    onChange={(value) => {
-                      setPrice(value);
-                      if (pricingModel === "paid") {
+                {pricingModel === "free" ? (
+                  <div className="rounded-2xl border border-forest-100 bg-forest-50 p-4 text-sm text-forest-900">
+                    <p className="font-semibold text-forest-950">Free listing</p>
+                    <p className="mt-2">
+                      Buyers can claim this asset without paying. Crib still creates an order and receipt so they can reopen the delivery later.
+                    </p>
+                  </div>
+                ) : pricingModel === "paid" ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Fixed price"
+                      type="number"
+                      value={price}
+                      onChange={(value) => {
+                        setPrice(value);
                         setMinimumPrice(value);
-                      }
-                    }}
-                    required
-                    controlClassName={controlToneClass}
-                    helperText={
-                      pricingModel === "free"
-                        ? "Set to 0 for free listings."
-                        : pricingModel === "pay_what_you_want"
-                          ? "This is the default amount buyers see first."
-                          : "This is the fixed amount every buyer pays."
-                    }
-                  />
+                      }}
+                      required
+                      controlClassName={controlToneClass}
+                      helperText="Every buyer pays this exact amount before delivery unlocks."
+                    />
 
-                  <Field
-                    label="Minimum buyer amount"
-                    type="number"
-                    value={pricingModel === "paid" ? price : minimumPrice}
-                    onChange={setMinimumPrice}
-                    required
-                    controlClassName={controlToneClass}
-                    helperText={pricingModel === "paid" ? "For fixed pricing, this matches the listed price." : "Set the floor buyers must pay before checkout."}
-                  />
+                    <CurrencyField value={currency} onChange={setCurrency} controlClassName={controlToneClass} />
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <Field
+                      label="Suggested price"
+                      type="number"
+                      value={price}
+                      onChange={setPrice}
+                      required
+                      controlClassName={controlToneClass}
+                      helperText="This is the default amount buyers see first."
+                    />
 
-                  <label className="block">
-                    <span className="mb-1 block text-sm font-medium text-sand-800">Currency</span>
-                    <select
-                      value={currency}
-                      onChange={(event) => setCurrency(event.target.value)}
-                      className={`w-full rounded-xl px-3 py-2 outline-none transition ${controlToneClass}`}
-                    >
-                      {AFRICAN_CURRENCIES.map((option) => (
-                        <option key={option.code} value={option.code}>
-                          {`${option.code} - ${option.label} (${option.countries})`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                    <Field
+                      label="Minimum buyer amount"
+                      type="number"
+                      value={minimumPrice}
+                      onChange={setMinimumPrice}
+                      required
+                      controlClassName={controlToneClass}
+                      helperText="Set the floor buyers must pay before checkout. Use 0 to allow true pay-what-you-want."
+                    />
+
+                    <CurrencyField value={currency} onChange={setCurrency} controlClassName={controlToneClass} />
+                  </div>
+                )}
 
                 <div className="upload-profit-panel">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sunset-700">Earnings estimate</p>
@@ -986,4 +990,29 @@ function Field({
   );
 }
 
-
+function CurrencyField({
+  value,
+  onChange,
+  controlClassName
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  controlClassName: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-sand-800">Currency</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={`w-full rounded-xl px-3 py-2 outline-none transition ${controlClassName}`}
+      >
+        {AFRICAN_CURRENCIES.map((option) => (
+          <option key={option.code} value={option.code}>
+            {`${option.code} - ${option.label} (${option.countries})`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
