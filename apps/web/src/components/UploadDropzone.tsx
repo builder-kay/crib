@@ -11,6 +11,8 @@ type UploadDropzoneProps = {
   badge?: string;
   emptyStateHint?: string;
   tone?: "cobalt" | "lagoon";
+  variant?: "default" | "thumbnail";
+  pickerLabel?: string;
 };
 
 export function UploadDropzone({
@@ -22,21 +24,24 @@ export function UploadDropzone({
   helperText,
   badge,
   emptyStateHint,
-  tone = "cobalt"
+  tone = "cobalt",
+  variant = "default",
+  pickerLabel
 }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const toneAccentClass = tone === "lagoon" ? "text-cobalt-700" : "text-cobalt-700";
   const toneSurfaceClass = tone === "lagoon" ? "bg-white/75 border-cobalt-100" : "bg-white/80 border-cobalt-100";
+  const isThumbnailVariant = variant === "thumbnail";
 
   const openPicker = () => inputRef.current?.click();
 
   return (
-    <div className={`upload-dropzone upload-dropzone-${tone}`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className={`upload-dropzone upload-dropzone-${tone} ${isThumbnailVariant ? "upload-dropzone-thumbnail" : ""}`}>
+      <div className={isThumbnailVariant ? "upload-dropzone-thumbnail-header" : "flex flex-wrap items-start justify-between gap-4"}>
         <div className="max-w-2xl">
           {badge ? <p className="upload-dropzone-badge text-cobalt-700">{badge}</p> : null}
-          <div className="mt-2 flex items-center gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cobalt-600 text-white shadow-lg shadow-cobalt-200/70">
+          <div className={isThumbnailVariant ? "mt-4 flex flex-col items-center gap-3 text-center" : "mt-2 flex items-center gap-3"}>
+            <span className={isThumbnailVariant ? "upload-dropzone-thumbnail-icon" : "grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-cobalt-600 text-white shadow-lg shadow-cobalt-200/70"}>
               <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 16.5V6" />
                 <path d="m8.5 9.5 3.5-3.5 3.5 3.5" />
@@ -50,8 +55,12 @@ export function UploadDropzone({
           </div>
         </div>
 
-        <button type="button" onClick={openPicker} className="upload-dropzone-picker bg-cobalt-600 text-white shadow-sm shadow-cobalt-200 hover:bg-cobalt-700">
-          Choose file{multiple ? "s" : ""}
+        <button
+          type="button"
+          onClick={openPicker}
+          className={`upload-dropzone-picker bg-cobalt-600 text-white shadow-sm shadow-cobalt-200 hover:bg-cobalt-700 ${isThumbnailVariant ? "upload-dropzone-picker-thumbnail" : ""}`}
+        >
+          {pickerLabel ?? `Choose file${multiple ? "s" : ""}`}
         </button>
       </div>
 
@@ -69,7 +78,7 @@ export function UploadDropzone({
 
       <div className="mt-4 space-y-3">
         {files.length === 0 ? (
-          <div className={`upload-dropzone-empty rounded-[1.5rem] border px-4 py-5 ${toneSurfaceClass}`}>
+          <div className={`upload-dropzone-empty rounded-[1.5rem] border px-4 py-5 ${toneSurfaceClass} ${isThumbnailVariant ? "upload-dropzone-empty-thumbnail" : ""}`}>
             <p className="text-sm font-semibold text-cobalt-700">No files selected yet.</p>
             <p className="mt-1 text-sm leading-6 text-sand-700">
               {emptyStateHint ?? `Choose ${multiple ? "files" : "a file"} to attach to this listing.`}

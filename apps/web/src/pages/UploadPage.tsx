@@ -377,7 +377,7 @@ export function UploadPage() {
         );
       }
 
-      const submissionPrice = pricingModel === "free" ? "0" : price;
+      const submissionPrice = pricingModel === "free" ? "0" : pricingModel === "pay_what_you_want" ? minimumPrice : price;
       const submissionMinimumPrice = pricingModel === "free" ? "0" : pricingModel === "paid" ? submissionPrice : minimumPrice;
 
       const parsed = uploadAssetSchema.safeParse({
@@ -764,9 +764,6 @@ export function UploadPage() {
                           if (option.value === "paid") {
                             setMinimumPrice(price || "0");
                           }
-                          if (option.value === "pay_what_you_want" && Number(price) < Number(minimumPrice)) {
-                            setPrice(minimumPrice || "0");
-                          }
                         }}
                       />
                     ))}
@@ -798,17 +795,7 @@ export function UploadPage() {
                     <CurrencyField value={currency} onChange={setCurrency} controlClassName={controlToneClass} />
                   </div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    <Field
-                      label="Suggested price"
-                      type="number"
-                      value={price}
-                      onChange={setPrice}
-                      required
-                      controlClassName={controlToneClass}
-                      helperText="This is the default amount buyers see first."
-                    />
-
+                  <div className="grid gap-4 md:grid-cols-2">
                     <Field
                       label="Minimum buyer amount"
                       type="number"
@@ -839,20 +826,26 @@ export function UploadPage() {
             ) : null}
 
             {activeStep.id === "thumbnail" ? (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-cobalt-100 bg-cobalt-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Thumbnail first</p>
-                  <h3 className="mt-1 font-display text-xl font-semibold text-ink">
+              <div className="upload-thumbnail-step space-y-4">
+                <div className="upload-thumbnail-intro">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt-700">Thumbnail first</p>
+                    <h3 className="mt-1 font-display text-xl font-semibold text-ink">
                     {isAudioAsset ? "Upload the visuals that sell the beat" : "Upload the visuals that sell the asset"}
-                  </h3>
-                  <p className="mt-2 text-sm text-sand-700">
-                    {isAudioAsset
-                      ? "Your first preview becomes the lead cover image beside the audio player, so use your strongest beat artwork or promo still."
-                      : "Your first preview becomes the lead thumbnail buyers notice in the marketplace, so use your strongest mockup or cleanest cover image."}
-                  </p>
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-sand-700">
+                      {isAudioAsset
+                        ? "Your first preview becomes the lead cover image beside the audio player, so use your strongest beat artwork or promo still."
+                        : "Your first preview becomes the lead thumbnail buyers notice in the marketplace, so use your strongest mockup or cleanest cover image."}
+                    </p>
+                  </div>
+                  <div className="upload-thumbnail-spec">
+                    <span>Lead image</span>
+                    <strong>1st upload</strong>
+                  </div>
                 </div>
 
-                <div className="upload-files-dropzone-card upload-files-dropzone-card-lagoon">
+                <div className="upload-files-dropzone-card upload-files-dropzone-card-lagoon upload-thumbnail-dropzone-card">
                   <UploadDropzone
                     label="Thumbnail and preview images"
                     accept="image/*"
@@ -861,12 +854,14 @@ export function UploadPage() {
                     multiple
                     helperText={`Required. Up to ${MAX_PREVIEW_FILES} images, ${formatFileSize(MAX_PREVIEW_FILE_SIZE_BYTES)} each.`}
                     badge="Required"
+                    pickerLabel="Upload images"
                     emptyStateHint={
                       isAudioAsset
                         ? "Upload cover art first, then any extra visuals that show the vibe, session layout, or licensing artwork."
                         : "Upload the thumbnail buyers see first, then any extra previews that show pages, screens, or layers."
                     }
                     tone="lagoon"
+                    variant="thumbnail"
                   />
                 </div>
               </div>
