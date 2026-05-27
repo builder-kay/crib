@@ -83,6 +83,24 @@ function hostIncludes(value: string, expected: string) {
   }
 }
 
+function isCanvaHost(url: string) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return (
+      hostname === "canva.com" ||
+      hostname.endsWith(".canva.com") ||
+      hostname === "canva.design" ||
+      hostname.endsWith(".canva.design") ||
+      hostname === "canva.app" ||
+      hostname.endsWith(".canva.app") ||
+      hostname === "canva.me" ||
+      hostname.endsWith(".canva.me")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export const uploadAssetSchema = z
   .object({
     title: z.string().min(3).max(120),
@@ -124,11 +142,11 @@ export const uploadAssetSchema = z
         });
       }
 
-      if (!externalUrl || !(hostIncludes(externalUrl, "canva.com") || hostIncludes(externalUrl, "canva.design"))) {
+      if (!externalUrl || !isCanvaHost(externalUrl)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["external_delivery_url"],
-          message: "Paste a valid Canva share link."
+          message: "Paste a valid Canva share link from canva.com or canva.design."
         });
       }
     }
