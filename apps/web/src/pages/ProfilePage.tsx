@@ -374,6 +374,7 @@ export function ProfilePage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["profile", profileId] }),
         queryClient.invalidateQueries({ queryKey: ["creator-directory"] }),
+        queryClient.invalidateQueries({ queryKey: ["hire-creator-profile", profileId] }),
         queryClient.invalidateQueries({ queryKey: ["market-assets"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-creators"] })
       ]);

@@ -250,7 +250,7 @@ function CreatorCard({
     ? authenticatedCreatorProfilePath
     : `/auth?redirect=${encodeURIComponent(authenticatedCreatorProfilePath)}`;
   const isOwnProfile = Boolean(viewerId && viewerId === creator.id);
-  const heroImageUrl = creator.featured_preview_urls[0] ?? "";
+  const heroImageUrl = creator.avatar_url ?? creator.featured_preview_urls[0] ?? "";
   const workPath = `/market?q=${encodeURIComponent(creator.display_name)}`;
   const stats = [
     { label: "Rating", value: creator.review_count > 0 ? creator.average_rating.toFixed(1) : "New", accent: true },
@@ -266,7 +266,7 @@ function CreatorCard({
           {heroImageUrl ? (
             <img
               src={heroImageUrl}
-              alt={`${creator.display_name} portfolio preview`}
+              alt={`${creator.display_name} profile`}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
             />
           ) : (
