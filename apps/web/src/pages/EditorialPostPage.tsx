@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { SEO } from "@/components/SEO";
 import { getEditorialPostsFromDb } from "@/lib/api";
 import { getEditorialPosts as getFallbackEditorialPosts, type EditorialPost } from "@/lib/editorial";
 
@@ -37,6 +38,36 @@ export function EditorialPostPage() {
 
   return (
     <div className="space-y-6 md:space-y-7">
+      <SEO
+        title={`${post.title} - Crib Blog`}
+        description={post.excerpt.slice(0, 155)}
+        path={`/editorial/${post.slug}`}
+        image={post.cover_image}
+        type="article"
+        priority={1}
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "BlogPosting",
+          headline: post.title,
+          description: post.excerpt,
+          image: post.cover_image,
+          datePublished: post.published_at,
+          author: {
+            "@type": "Person",
+            name: post.author.name
+          },
+          publisher: {
+            "@type": "Organization",
+            name: "Crib",
+            logo: {
+              "@type": "ImageObject",
+              url: `${window.location.origin}/crib-logo.png`
+            }
+          },
+          mainEntityOfPage: `${window.location.origin}/editorial/${post.slug}`
+        }}
+      />
+
       {postsQuery.isError ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Live blog feed is unavailable right now. Showing fallback story content.

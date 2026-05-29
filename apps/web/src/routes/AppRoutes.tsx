@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes, type Location as RouterLocation, useLocation } from "react-router-dom";
 import { PageLoader } from "@/components/PageLoader";
+import { RouteSEO } from "@/components/SEO";
 import { AppLayout } from "@/routes/AppLayout";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
 import { AdminProtectedRoute } from "@/routes/AdminProtectedRoute";
@@ -53,6 +54,7 @@ function AppRoutesContent() {
 
   return (
     <>
+      <RouteSEO />
       <Routes location={backgroundLocation ?? location}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<LandingPage />} />

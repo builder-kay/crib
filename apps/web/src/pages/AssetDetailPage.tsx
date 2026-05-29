@@ -5,6 +5,7 @@ import { AudioPreviewPlayer } from "@/components/AudioPreviewPlayer";
 import { ImageGalleryModal } from "@/components/ImageGalleryModal";
 import { Modal } from "@/components/Modal";
 import { PriceTag } from "@/components/PriceTag";
+import { SEO } from "@/components/SEO";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -455,9 +456,50 @@ export function AssetDetailPage() {
   const averageRating = asset.average_rating ?? 0;
   const reviews = assetReviewsQuery.data ?? [];
   const isWishlisted = (wishlistQuery.data ?? []).includes(asset.id);
+  const seoDescription =
+    asset.description.trim() ||
+    `${asset.title} is a ${asset.category} digital asset by ${creatorName} on Crib.`;
+  const seoPrice = Math.max(asset.price_kobo, asset.minimum_price_kobo) / 100;
 
   return (
     <div className="space-y-4">
+      <SEO
+        title={`${asset.title} by ${creatorName} - Crib`}
+        description={seoDescription.slice(0, 155)}
+        path={`/asset/${asset.id}`}
+        image={primaryPreview}
+        type="product"
+        noIndex={asset.status !== "published"}
+        priority={1}
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: asset.title,
+          description: seoDescription,
+          image: primaryPreview,
+          category: asset.category,
+          brand: {
+            "@type": "Brand",
+            name: "Crib"
+          },
+          offers: {
+            "@type": "Offer",
+            price: seoPrice.toFixed(2),
+            priceCurrency: asset.currency,
+            availability: asset.status === "published" ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            url: `${window.location.origin}/asset/${asset.id}`
+          },
+          aggregateRating:
+            reviewCount > 0
+              ? {
+                  "@type": "AggregateRating",
+                  ratingValue: averageRating.toFixed(1),
+                  reviewCount
+                }
+              : undefined
+        }}
+      />
+
       <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-sand-600">
         <Link to="/market" className="hover:text-cobalt-700">
           Discover

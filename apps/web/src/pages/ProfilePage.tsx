@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { AssetGrid } from "@/components/AssetGrid";
 import { EmptyState } from "@/components/EmptyState";
 import { HireCreatorModal } from "@/components/HireCreatorModal";
+import { SEO } from "@/components/SEO";
 import { StarRating } from "@/components/StarRating";
 import { useToast } from "@/components/Toast";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
@@ -596,6 +597,9 @@ export function ProfilePage() {
   const creatorRatingSummary = creatorRatingSummaryQuery.data ?? { average_rating: 0, review_count: 0 };
   const creatorReviews = creatorReviewsQuery.data ?? [];
   const canLeaveCreatorReview = Boolean(user?.id) && !isOwnProfile && purchaseEligibilityQuery.data === true;
+  const profileSeoDescription =
+    profileQuery.data?.bio?.trim() ||
+    `${profileName} is a ${creatorCategoryLabel} creator on Crib with ${listedWorksLabel}.`;
   const profileTabs = useMemo<ProfileTabOption[]>(() => {
     const baseTabs: ProfileTabOption[] = [
       { id: "overview", label: "Overview" },
@@ -622,6 +626,26 @@ export function ProfilePage() {
 
   return (
     <div className="profile-shell space-y-6">
+      <SEO
+        title={`${profileName} - ${creatorCategoryLabel} Creator on Crib`}
+        description={profileSeoDescription.slice(0, 155)}
+        path={`/profile/${profileId}`}
+        image={activeAvatarUrl || null}
+        type="profile"
+        noIndex={isOwnProfile && !routeProfileId}
+        priority={1}
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Person",
+          name: profileName,
+          description: profileSeoDescription,
+          image: activeAvatarUrl || undefined,
+          jobTitle: creatorCategoryLabel,
+          url: `${window.location.origin}/profile/${profileId}`,
+          sameAs: [websiteUrl, instagramUrl, xUrl].filter(Boolean)
+        }}
+      />
+
       <header className="surface-card-vivid profile-hero-panel relative overflow-hidden p-5 md:p-6">
         <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-cobalt-100/70 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-20 left-24 h-52 w-52 rounded-full bg-lagoon-100/50 blur-3xl" />
