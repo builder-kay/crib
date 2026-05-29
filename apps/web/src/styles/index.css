@@ -3439,6 +3439,14 @@
     min-width: 0;
   }
 
+  .admin-settings-grid,
+  .admin-settings-preview-grid {
+    display: grid;
+    gap: 1.25rem;
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .admin-subpanel-grid {
     display: grid;
     gap: 1rem;
@@ -3892,6 +3900,11 @@
     .admin-subpanel-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .admin-settings-grid,
+    .admin-settings-preview-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
 
   @media (min-width: 1100px) {
@@ -3912,7 +3925,11 @@
     }
 
     .admin-overview-grid {
-      grid-template-columns: minmax(0, 1.55fr) minmax(19rem, 1fr);
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-panel-stack {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .admin-hero-rail-summary-grid {

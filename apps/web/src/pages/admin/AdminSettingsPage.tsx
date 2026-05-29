@@ -210,7 +210,7 @@ export function AdminSettingsPage() {
         </div>
       </header>
 
-      <div className="space-y-5">
+      <div className="admin-settings-grid">
         <section className="surface-card admin-panel p-5">
           <SectionHeader
             eyebrow="Admin Login"
@@ -400,7 +400,7 @@ export function AdminSettingsPage() {
           </form>
         </section>
 
-        <div className="space-y-5">
+        <div className="admin-settings-preview-grid">
           <section className="surface-card admin-panel p-5">
             <SectionHeader eyebrow="Live preview" title="See what the footer will use" body="As soon as you save, these values become the source of truth for the public footer socials and support actions." />
             <div className="mt-4 space-y-3">
