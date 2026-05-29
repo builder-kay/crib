@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ActionConfirmationModal } from "@/components/ActionConfirmationModal";
-import { getPlatformSocialSettings, updatePlatformSocialSettings } from "@/lib/api";
+import { getPlatformSocialSettings, updateAdminAccount, updatePlatformSocialSettings } from "@/lib/api";
+import { getUserContactEmail } from "@/lib/auth";
 import { buildAdminWhatsAppSupportUrl, buildPlatformSocialUrl, formatAdminWhatsAppNumber, formatPlatformSocialHandle } from "@/lib/platform";
 import { useToast } from "@/components/Toast";
 import { SectionHeader, SummaryPill, useAdminWorkspace } from "@/pages/admin/AdminWorkspace";
+import { useAuthStore } from "@/store/authStore";
 
 export function AdminSettingsPage() {
   const { overview } = useAdminWorkspace();
+  const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
   const { pushToast } = useToast();
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
   const [instagramHandle, setInstagramHandle] = useState("");
   const [xHandle, setXHandle] = useState("");
   const [tiktokHandle, setTiktokHandle] = useState("");
@@ -20,6 +26,11 @@ export function AdminSettingsPage() {
   const [adminWhatsAppNumber, setAdminWhatsAppNumber] = useState("");
   const [adminWhatsAppMessage, setAdminWhatsAppMessage] = useState("");
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [confirmAccountSaveOpen, setConfirmAccountSaveOpen] = useState(false);
+
+  useEffect(() => {
+    setAdminEmail(getUserContactEmail(user) ?? "");
+  }, [user]);
 
   const platformSettingsQuery = useQuery({
     queryKey: ["platform-social-settings"],
@@ -86,6 +97,38 @@ export function AdminSettingsPage() {
     },
     onError: (error) => {
       pushToast(error instanceof Error ? error.message : "Could not update platform settings", "error");
+    }
+  });
+
+  const accountMutation = useMutation({
+    mutationFn: () => {
+      if (adminPassword || adminPasswordConfirm) {
+        if (adminPassword !== adminPasswordConfirm) {
+          throw new Error("Password confirmation does not match.");
+        }
+      }
+
+      return updateAdminAccount({
+        email: adminEmail,
+        password: adminPassword
+      });
+    },
+    onSuccess: (result) => {
+      setAdminEmail(result.email ?? "");
+      setAdminPassword("");
+      setAdminPasswordConfirm("");
+      pushToast(
+        result.emailChanged && result.passwordChanged
+          ? "Admin email and password updated"
+          : result.emailChanged
+            ? "Admin email updated"
+            : "Admin password updated",
+        "success"
+      );
+      void queryClient.invalidateQueries({ queryKey: ["is-admin", user?.id] });
+    },
+    onError: (error) => {
+      pushToast(error instanceof Error ? error.message : "Could not update admin account", "error");
     }
   });
 
@@ -168,6 +211,66 @@ export function AdminSettingsPage() {
       </header>
 
       <div className="space-y-5">
+        <section className="surface-card admin-panel p-5">
+          <SectionHeader
+            eyebrow="Admin Login"
+            title="Update this admin account"
+            body="Change the email and password used by the signed-in marketplace admin account. Leave the password fields blank if you only want to update the email."
+          />
+
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setConfirmAccountSaveOpen(true);
+            }}
+          >
+            <label className="admin-input-group">
+              <span>Admin email</span>
+              <input
+                type="email"
+                value={adminEmail}
+                onChange={(event) => setAdminEmail(event.target.value)}
+                placeholder="adminoriginal@gmail.com"
+                className="admin-input"
+                autoComplete="email"
+              />
+            </label>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="admin-input-group">
+                <span>New password</span>
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(event) => setAdminPassword(event.target.value)}
+                  placeholder="At least 8 characters"
+                  className="admin-input"
+                  autoComplete="new-password"
+                />
+              </label>
+
+              <label className="admin-input-group">
+                <span>Confirm password</span>
+                <input
+                  type="password"
+                  value={adminPasswordConfirm}
+                  onChange={(event) => setAdminPasswordConfirm(event.target.value)}
+                  placeholder="Repeat new password"
+                  className="admin-input"
+                  autoComplete="new-password"
+                />
+              </label>
+            </div>
+
+            <button type="submit" disabled={accountMutation.isPending} className="admin-action-button admin-action-button-full">
+              {accountMutation.isPending ? "Saving admin account..." : "Save admin login"}
+            </button>
+
+            <p className="text-xs text-sand-600">After an email change, Supabase may require confirmation depending on your Auth settings.</p>
+          </form>
+        </section>
+
         <section className="surface-card admin-panel p-5">
           <SectionHeader
             eyebrow="Footer and support"
@@ -325,6 +428,37 @@ export function AdminSettingsPage() {
           </section>
         </div>
       </div>
+
+      <ActionConfirmationModal
+        open={confirmAccountSaveOpen}
+        tone="cobalt"
+        eyebrow="Save Admin Login"
+        title="Update this marketplace admin login?"
+        description="This will update the signed-in admin account with the credential changes entered above."
+        confirmLabel="Save login"
+        isPending={accountMutation.isPending}
+        onClose={() => {
+          if (!accountMutation.isPending) {
+            setConfirmAccountSaveOpen(false);
+          }
+        }}
+        onConfirm={() => {
+          setConfirmAccountSaveOpen(false);
+          accountMutation.mutate();
+        }}
+        details={
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Email</p>
+              <p className="action-confirm-stat-value">{adminEmail.trim() || "No email entered"}</p>
+            </div>
+            <div className="action-confirm-stat">
+              <p className="action-confirm-stat-label">Password</p>
+              <p className="action-confirm-stat-value">{adminPassword ? "Will be changed" : "Unchanged"}</p>
+            </div>
+          </div>
+        }
+      />
 
       <ActionConfirmationModal
         open={confirmSaveOpen}

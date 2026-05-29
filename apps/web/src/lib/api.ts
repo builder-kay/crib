@@ -1147,6 +1147,17 @@ export type ResolveAdminOrderScamResult = {
   seller_account_status: "active" | "warned" | "suspended";
 };
 
+export type UpdateAdminAccountInput = {
+  email?: string;
+  password?: string;
+};
+
+export type UpdateAdminAccountResult = {
+  email: string | null;
+  emailChanged: boolean;
+  passwordChanged: boolean;
+};
+
 export async function resolveAuthIdentifier(identifier: string): Promise<ResolveAuthIdentifierResult> {
   const response = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/resolve-auth-identifier`, {
     method: "POST",
@@ -1844,6 +1855,51 @@ export async function getPublishedAssets(filters: MarketFilters = {}, viewerId?:
   });
 
   return filtered.map((entry) => entry.asset);
+}
+
+export async function updateAdminAccount(input: UpdateAdminAccountInput): Promise<UpdateAdminAccountResult> {
+  const nextEmail = input.email?.trim().toLowerCase() ?? "";
+  const nextPassword = input.password ?? "";
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!nextEmail && !nextPassword) {
+    throw new Error("Enter a new email or password to update.");
+  }
+
+  if (nextEmail && (!looksLikeEmailIdentifier(nextEmail) || !emailPattern.test(nextEmail))) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  if (nextPassword && nextPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters.");
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentEmail = sessionData.session?.user.email?.toLowerCase() ?? "";
+  const updatePayload: { email?: string; password?: string } = {};
+
+  if (nextEmail && nextEmail !== currentEmail) {
+    updatePayload.email = nextEmail;
+  }
+
+  if (nextPassword) {
+    updatePayload.password = nextPassword;
+  }
+
+  if (Object.keys(updatePayload).length === 0) {
+    throw new Error("No account changes to save.");
+  }
+
+  const { data, error } = await supabase.auth.updateUser(updatePayload);
+  if (error) {
+    throw error;
+  }
+
+  return {
+    email: (data.user.email ?? nextEmail) || currentEmail || null,
+    emailChanged: Boolean(updatePayload.email),
+    passwordChanged: Boolean(updatePayload.password)
+  };
 }
 
 export async function getAssetById(assetId: string): Promise<Asset> {
